@@ -8,12 +8,12 @@ use std::collections::VecDeque;
 use bevy::prelude::*;
 use lobshot_protocol::{MemberId, RoomCode, RoomView, ServerMsg, Stage};
 use lobshot_sim::{
-    game::{Effect, Event, Game},
+    game::{Effect, Event, Game, Team},
     log::Log,
     map::{MapAssets, MapRef},
 };
 
-use crate::{assets::Masks, net::Inbound, web};
+use crate::{assets::Masks, game::TurnClock, net::Inbound, sound::SoundLog, ui::ButtonSpots, web};
 
 /// Which screen is up.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -64,6 +64,12 @@ impl Session {
     pub fn my_seat(&self) -> Option<u8> {
         let me = self.me?;
         self.seats.iter().position(|&id| id == me).and_then(|seat| u8::try_from(seat).ok())
+    }
+
+    /// This player's team in `game`, if they play in it.
+    #[must_use]
+    pub fn my_team(&self, game: &Game) -> Option<Team> {
+        self.my_seat().and_then(|seat| game.players().get(usize::from(seat))).map(|player| player.team)
     }
 
     /// The name of whoever plays `seat`.
@@ -171,6 +177,11 @@ pub struct Loading {
     pub log: Log,
     pub queued: Vec<(u32, Event, u64)>,
 }
+
+/// The systems that apply events to the match and announce each as `Played`. Playback runs after
+/// them, so it never finds the game ahead of the scenes it has queued.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ApplyEvents;
 
 /// An accepted event and its effects, in order, to show.
 #[derive(Message, Debug, Clone)]
@@ -285,9 +296,17 @@ pub fn finish_loading(loading: Option<Res<Loading>>, mut masks: Masks, mut comma
     next.set(Screen::Game);
 }
 
-/// Lets the browser smoke test see the screen and the game's progress.
-fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>) {
-    web::publish(&format!("{:?}", screen.get()), game.map(|game| game.confirmed.turns()), session.my_seat());
+/// Lets the browser smoke test see the screen, the game's progress (applied, and shown), the
+/// sounds, and where to click.
+fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, clock: Res<TurnClock>, sounds: Res<SoundLog>, buttons: Res<ButtonSpots>) {
+    web::publish(&web::Published {
+        screen: format!("{:?}", screen.get()),
+        turns: game.map(|game| game.confirmed.turns()),
+        started: clock.starts,
+        seat: session.my_seat(),
+        sounds: &sounds,
+        buttons: &buttons,
+    });
 }
 
 pub struct ModelPlugin;
@@ -297,6 +316,6 @@ impl Plugin for ModelPlugin {
         app.init_state::<Screen>()
             .init_resource::<Session>()
             .add_message::<Played>()
-            .add_systems(Update, ((receive, finish_loading).chain(), publish));
+            .add_systems(Update, ((receive, finish_loading).chain().in_set(ApplyEvents), publish));
     }
 }

@@ -20,8 +20,8 @@ A Cargo workspace; shared metadata, dependency versions and lints live once in t
 | `crates/server` | `lobshot-server` | axum. The `lobshot` binary: serves `dist/`, `/r/{code}`, `POST /api/rooms`, `/ws/{code}`; one task per room (`room/` is a plain state machine, `room/task.rs` its async shell). |
 | `crates/client` | `lobshot-client` | Bevy, **wasm32 only**, built by trunk. Outside `default-members`. Screens, the game world, HUD, input with walk prediction, and practice mode. |
 | `crates/lab` | `lobshot-lab` | Headless games for balance runs and LLM agents (M4). |
-| `xtask/` | `xtask` | `cargo xtask art` (SVG to PNG, masks, map manifests) and `cargo xtask dist` (trunk, then `.br`/`.gz` siblings). |
-| `assets/` | | CC0 art sources (SVG, RON). `assets/gen/` is the rendered output (gitignored). |
+| `xtask/` | `xtask` | `cargo xtask art` (SVG to PNG, masks, map manifests, sounds) and `cargo xtask dist` (trunk, then `.br`/`.gz` siblings). |
+| `assets/` | | CC0 sources: art (SVG, RON) and sounds (Ogg Vorbis). `assets/gen/` is the build output (gitignored). |
 
 ## Commands
 
@@ -29,7 +29,7 @@ A Cargo workspace; shared metadata, dependency versions and lints live once in t
 cargo make ci           # fmt-check + clippy (native and wasm32, -D warnings) + nextest + determinism: the gate, run verbatim in CI
 cargo make test         # nextest (native crates)
 cargo make determinism  # sim's tests on wasm32 under wasmtime: replays must match native bit for bit
-cargo make art          # render assets/ into assets/gen/
+cargo make art          # render assets/ into assets/gen/ (art, plus the sounds, checked)
 cargo make dist         # the release client bundle in dist/ (art first)
 cargo make dev          # a quick wasm-dev bundle, then the server on http://127.0.0.1:8080
 cargo make browser      # the browser smoke test: release bundle, headless Chrome, real server

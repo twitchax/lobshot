@@ -7,6 +7,7 @@
 //! - Riders: each at `ART_SCALE`, seat-centered.
 //! - Maps: the background, and per variant the terrain art and the collision mask, both from one
 //!   land geometry (`land.rs`), plus the generated manifest with sizes and mask hashes.
+//! - Sounds: copied unchanged, once checked to be Ogg Vorbis.
 
 mod compose;
 mod land;
@@ -16,6 +17,7 @@ mod out;
 mod preview;
 mod raster;
 mod rng;
+mod sound;
 
 use std::path::{Path, PathBuf};
 
@@ -64,6 +66,7 @@ pub fn build(sources: &Path, out_dir: &Path) -> Res<Built> {
     let rigs = mobile::build_mobiles(sources, &mut out)?;
     let riders = mobile::build_riders(sources, &mut out)?;
     let maps = map::build_maps(sources, &mut out)?;
+    sound::build_sounds(sources, &mut out)?;
     out.prune()?;
     Ok(Built { written: sizes(&out), rigs, riders, maps })
 }
@@ -109,11 +112,11 @@ mod unit {
 
     use super::*;
 
-    /// The real mobiles and riders beside a small map, so a full build takes a moment.
+    /// The real mobiles, riders and sounds beside a small map, so a full build takes a moment.
     fn fixture() -> TempDir {
         let dir = TempDir::new().unwrap();
         let assets = dir.path();
-        for (from, to) in [("mobiles/coilback", "mobiles/coilback"), ("riders", "riders")] {
+        for (from, to) in [("mobiles/coilback", "mobiles/coilback"), ("riders", "riders"), ("sounds", "sounds")] {
             std::fs::create_dir_all(assets.join(to)).unwrap();
             for entry in std::fs::read_dir(sources().join(from)).unwrap() {
                 let path = entry.unwrap().path();

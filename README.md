@@ -28,7 +28,7 @@ Then open http://localhost:8080. Rooms live in memory: a restart ends the games 
 
 ```bash
 cargo make dev       # a quick client bundle, then serve it on http://127.0.0.1:8080
-cargo make art       # render the SVG art in assets/ (review sheets land in target/art-preview/)
+cargo make art       # render assets/ (SVG art, plus the sounds) into assets/gen/; review sheets in target/art-preview/
 cargo make dist      # the release bundle in dist/, precompressed
 cargo make ci        # fmt-check + clippy (native and wasm32) + nextest + wasm32 replays: the gate CI runs
 cargo make browser   # the browser smoke test: the release bundle in headless Chrome
@@ -40,6 +40,7 @@ Needs the toolchain from `rust-toolchain.toml` (rustup installs it), plus trunk 
 
 ## License
 
-Code: [MIT](LICENSE). Art and other files in `assets/`: [CC0](assets/LICENSE).
+Code: [MIT](LICENSE). Art and other files in `assets/`: [CC0](assets/LICENSE). Sound effects by
+[Kenney](https://www.kenney.nl), also CC0 ([credits](assets/sounds/CREDITS.md)).
 
 lobshot is not affiliated with GunBound, Softnyx or DragonBound.

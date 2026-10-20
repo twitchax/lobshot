@@ -53,6 +53,27 @@
         outline: none;
       }
     </style>
+    <!-- Browsers start an AudioContext suspended until the page gets a click or key press, and
+         Bevy creates its context at startup, before either. Keep every context the page makes
+         and resume them on each gesture (a no-op once they run). -->
+    <script>
+      (() => {
+        const Native = window.AudioContext || window.webkitAudioContext;
+        if (!Native) return;
+        const contexts = [];
+        window.AudioContext = new Proxy(Native, {
+          construct(target, args) {
+            const context = new target(...args);
+            contexts.push(context);
+            return context;
+          },
+        });
+        const resume = () => {
+          for (const context of contexts) if (context.state === "suspended") context.resume();
+        };
+        for (const gesture of ["pointerdown", "keydown", "touchend"]) addEventListener(gesture, resume, true);
+      })();
+    </script>
   </head>
   <body>
     <canvas id="lobshot"></canvas>

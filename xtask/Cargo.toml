@@ -21,6 +21,7 @@ ron.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+lewton.workspace = true
 pretty_assertions.workspace = true
 tempfile.workspace = true
 

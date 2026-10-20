@@ -15,7 +15,7 @@ use super::{
     input::Act,
     playback::{Timeline, TurnClock},
 };
-use crate::model::{Match, Played, Screen, Session};
+use crate::model::{ApplyEvents, Match, Played, Screen, Session};
 
 const ME: MemberId = MemberId(1);
 const BOT: MemberId = MemberId(2);
@@ -204,6 +204,6 @@ impl Plugin for PracticePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(Screen::Game), start)
             .add_systems(OnExit(Screen::Game), finish)
-            .add_systems(Update, referee.run_if(in_state(Screen::Game)));
+            .add_systems(Update, referee.in_set(ApplyEvents).run_if(in_state(Screen::Game)));
     }
 }

@@ -11,10 +11,12 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
+use lobshot_assets::Sound;
 use lobshot_protocol::pacing::{self, FALL_SECONDS};
 use lobshot_sim::{
-    game::{Effect, Event, Leg, Team},
+    game::{Death, Effect, Event, Leg, Team},
     movement::Footing,
+    tuning::TURN_TIME_LIMIT,
     units::{TICKS_PER_SECOND, Vec2 as SimVec2},
 };
 
@@ -23,7 +25,8 @@ use super::{
     world::{MapArt, MobileView, Shown, depth},
 };
 use crate::{
-    model::{Match, Played, Screen},
+    model::{ApplyEvents, Match, Played, Screen, Session},
+    sound::Play,
     ui::theme,
 };
 
@@ -47,6 +50,27 @@ impl Timeline {
 pub struct TurnClock {
     pub seat: Option<u8>,
     pub started: f64,
+    /// Turns started so far: one per turn shown, so a new turn is a new count.
+    pub starts: u32,
+}
+
+impl TurnClock {
+    fn start(&mut self, seat: u8, now: f64) {
+        self.seat = Some(seat);
+        self.started = now;
+        self.starts += 1;
+    }
+
+    /// Whole seconds left at `now`, rounded up: a fresh 20 s turn reads 20 until a second passes.
+    #[must_use]
+    pub fn seconds_left(&self, session: &Session, now: f64) -> u32 {
+        let limit = session.room.as_ref().map_or(f64::from(TURN_TIME_LIMIT.value.0) / 100.0, |room| f64::from(room.options.turn_seconds));
+        let left = (limit - (now - self.started)).max(0.0);
+        // A turn's limit is tens of seconds, never negative here: exact in a u32.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let seconds = left.ceil() as u32;
+        seconds
+    }
 }
 
 /// How a game ended.
@@ -71,6 +95,7 @@ enum Cue {
     Fall { seat: u8, to: Footing },
     Turn { seat: u8 },
     Over { winner: Option<Team> },
+    Sound(Sound),
 }
 
 struct Scene {
@@ -170,11 +195,27 @@ fn stage(played: Played, dot: &Dot, views: &mut Query<(&MobileView, &mut Shown)>
                     ))
                     .id();
                 shell = Some((legs, duration, entity));
+                cues.push((at, Cue::Sound(Sound::Fire)));
             }
-            Effect::Exploded { at: center, radius, .. } => cues.push((at, Cue::Explode { at: center, radius })),
-            Effect::Damaged { seat, amount } => cues.push((at, Cue::Damage { seat, amount })),
-            Effect::Died { seat, .. } => cues.push((at, Cue::Die { seat })),
-            Effect::Fell { seat, to } => cues.push((at, Cue::Fall { seat, to })),
+            Effect::Exploded { at: center, radius, .. } => {
+                cues.push((at, Cue::Explode { at: center, radius }));
+                cues.push((at, Cue::Sound(Sound::Blast)));
+            }
+            Effect::Damaged { seat, amount } => {
+                cues.push((at, Cue::Damage { seat, amount }));
+                cues.push((at, Cue::Sound(Sound::Hit)));
+            }
+            Effect::Died { seat, death } => {
+                cues.push((at, Cue::Die { seat }));
+                // A player leaving isn't an explosion.
+                if death != Death::Forfeited {
+                    cues.push((at, Cue::Sound(Sound::Death)));
+                }
+            }
+            Effect::Fell { seat, to } => {
+                cues.push((at, Cue::Fall { seat, to }));
+                cues.push((at + FALL_SECONDS, Cue::Sound(Sound::Land)));
+            }
             Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
             Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
             Effect::Walked { .. } | Effect::WindChanged(_) | Effect::Forecast(_) | Effect::WeatherChanged { .. } => {}
@@ -201,6 +242,7 @@ struct Stagehands<'w> {
     focus: ResMut<'w, Focus>,
     clock: ResMut<'w, TurnClock>,
     outcome: ResMut<'w, Outcome>,
+    sounds: MessageWriter<'w, Play>,
 }
 
 fn play(
@@ -242,20 +284,7 @@ fn play(
                 if let Some(art) = hands.art.as_deref() {
                     art.carve(&mut hands.images, *at, *radius);
                 }
-                // Blast radii are tens of pixels.
-                #[allow(clippy::cast_possible_truncation)]
-                let size = (*radius * 2.4) as f32;
-                commands.spawn((
-                    GameRoot,
-                    Fx { age: 0.0, life: 0.45, rise: 0.0 },
-                    Sprite {
-                        image: dot.0.clone(),
-                        color: Color::srgb_u8(0xff, 0xb3, 0x47),
-                        custom_size: Some(Vec2::splat(size)),
-                        ..default()
-                    },
-                    Transform::from_translation(world(*at).extend(depth::SHOTS + 1.0)),
-                ));
+                commands.spawn(puff(&dot, *at, *radius));
             }
             Cue::Damage { seat, amount } => {
                 for (view, mut shown) in &mut views {
@@ -290,8 +319,7 @@ fn play(
                 }
             }
             Cue::Turn { seat } => {
-                hands.clock.seat = Some(*seat);
-                hands.clock.started = time.elapsed_secs_f64();
+                hands.clock.start(*seat, time.elapsed_secs_f64());
                 for (view, shown) in &views {
                     if view.seat == *seat {
                         hands.focus.0 = Some(shown.foot);
@@ -299,6 +327,9 @@ fn play(
                 }
             }
             Cue::Over { winner } => hands.outcome.0 = Some(winner.map_or(Ending::Draw, Ending::Winner)),
+            Cue::Sound(sound) => {
+                hands.sounds.write(Play(*sound));
+            }
         }
         scene.next += 1;
     }
@@ -316,6 +347,24 @@ fn play(
     if now >= scene.end && scene.next >= scene.cues.len() {
         timeline.scene = None;
     }
+}
+
+/// A blast's flash, fading as it grows.
+fn puff(dot: &Dot, at: SimVec2, radius: f64) -> impl Bundle {
+    // Blast radii are tens of pixels.
+    #[allow(clippy::cast_possible_truncation)]
+    let size = (radius * 2.4) as f32;
+    (
+        GameRoot,
+        Fx { age: 0.0, life: 0.45, rise: 0.0 },
+        Sprite {
+            image: dot.0.clone(),
+            color: Color::srgb_u8(0xff, 0xb3, 0x47),
+            custom_size: Some(Vec2::splat(size)),
+            ..default()
+        },
+        Transform::from_translation(world(at).extend(depth::SHOTS + 1.0)),
+    )
 }
 
 /// A fading effect: a blast puff or a damage number.
@@ -348,8 +397,11 @@ fn adopt_turn(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time>
     }
     let current = super::world::current_seat(&game);
     if clock.seat != current {
-        clock.seat = current;
-        clock.started = time.elapsed_secs_f64();
+        match current {
+            Some(seat) => clock.start(seat, time.elapsed_secs_f64()),
+            // The game is over: no one's turn, and nothing started.
+            None => clock.seat = None,
+        }
         if let Some((_, shown)) = views.iter().find(|(view, _)| Some(view.seat) == current) {
             focus.0 = Some(shown.foot);
         }
@@ -371,6 +423,6 @@ impl Plugin for PlaybackPlugin {
             .init_resource::<Outcome>()
             .add_systems(Startup, make_dot)
             .add_systems(OnExit(Screen::Game), reset)
-            .add_systems(Update, (enqueue, play, adopt_turn, fade).chain().run_if(in_state(Screen::Game)));
+            .add_systems(Update, (enqueue, play, adopt_turn, fade).chain().after(ApplyEvents).run_if(in_state(Screen::Game)));
     }
 }

@@ -1,10 +1,10 @@
 //! The asset layout and manifests, in one place for the writer (`cargo xtask art`) and the readers
 //! (the client draws them, the server loads map masks and spawns).
 //!
-//! Sources live in `assets/` (SVG and hand-written RON, CC0). `cargo xtask art` renders them into
-//! `assets/gen/` (gitignored), which trunk copies into the bundle at `assets/`. Paths below are
-//! relative to that root. Every rendered image is drawn at `ART_SCALE`, and its center is its
-//! SVG's origin (a part's pivot, a rider's seat), so a sprite anchors at its center.
+//! Sources live in `assets/` (SVG, hand-written RON and Ogg sounds, CC0). `cargo xtask art`
+//! renders them into `assets/gen/` (gitignored), which trunk copies into the bundle at `assets/`.
+//! Paths below are relative to that root. Every rendered image is drawn at `ART_SCALE`, and its
+//! center is its SVG's origin (a part's pivot, a rider's seat), so a sprite anchors at its center.
 
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,74 @@ pub fn terrain_path(map: &str, variant: &str) -> String {
 #[must_use]
 pub fn mask_path(map: &str, variant: &str) -> String {
     format!("maps/{map}/{variant}/mask.bin")
+}
+
+/// A sound effect: one CC0 Ogg Vorbis file each, copied unchanged from `assets/sounds/`, whose
+/// `CREDITS.md` says where each came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Sound {
+    /// A shot leaves the cannon.
+    Fire,
+    /// A shell explodes.
+    Blast,
+    /// A mobile takes damage.
+    Hit,
+    /// A mobile is destroyed.
+    Death,
+    /// A mobile lands after a fall.
+    Land,
+    /// Your turn begins.
+    Turn,
+    /// Each of your turn's last seconds.
+    Tick,
+    /// A button press.
+    Click,
+    /// A chat line arrives.
+    Chat,
+    /// Your team won.
+    Win,
+    /// Your team lost.
+    Lose,
+}
+
+impl Sound {
+    pub const ALL: [Self; 11] = [
+        Self::Fire,
+        Self::Blast,
+        Self::Hit,
+        Self::Death,
+        Self::Land,
+        Self::Turn,
+        Self::Tick,
+        Self::Click,
+        Self::Chat,
+        Self::Win,
+        Self::Lose,
+    ];
+
+    /// The file stem, and the name the browser smoke test reads (`blast`).
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Fire => "fire",
+            Self::Blast => "blast",
+            Self::Hit => "hit",
+            Self::Death => "death",
+            Self::Land => "land",
+            Self::Turn => "turn",
+            Self::Tick => "tick",
+            Self::Click => "click",
+            Self::Chat => "chat",
+            Self::Win => "win",
+            Self::Lose => "lose",
+        }
+    }
+}
+
+/// A sound effect's file, the same in the sources (`assets/`) and the output.
+#[must_use]
+pub fn sound_path(sound: Sound) -> String {
+    format!("sounds/{}.ogg", sound.name())
 }
 
 fn png_name(file: &str) -> String {
@@ -192,6 +260,15 @@ mod unit {
         assert_eq!(part_path(MobileKind::Coilback, "wheel_big.svg"), "mobiles/coilback/wheel_big.png");
         assert_eq!(mask_path("tidewall", "A"), "maps/tidewall/A/mask.bin");
         assert_eq!(rider_path("pip"), "riders/pip.png");
+        assert_eq!(sound_path(Sound::Blast), "sounds/blast.ogg");
+    }
+
+    #[test]
+    fn every_sound_has_its_own_file() {
+        let mut paths: Vec<String> = Sound::ALL.iter().map(|&sound| sound_path(sound)).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), Sound::ALL.len());
     }
 
     #[test]

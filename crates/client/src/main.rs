@@ -13,6 +13,7 @@ mod game;
 mod model;
 mod net;
 mod screens;
+mod sound;
 mod ui;
 mod web;
 
@@ -40,6 +41,14 @@ fn main() -> AppExit {
                 }),
         )
         .init_resource::<web::TextInput>()
-        .add_plugins((assets::AssetsPlugin, net::NetPlugin, model::ModelPlugin, ui::UiPlugin, screens::ScreensPlugin, game::GamePlugin))
+        .add_plugins((
+            assets::AssetsPlugin,
+            net::NetPlugin,
+            model::ModelPlugin,
+            sound::SoundPlugin,
+            ui::UiPlugin,
+            screens::ScreensPlugin,
+            game::GamePlugin,
+        ))
         .run()
 }

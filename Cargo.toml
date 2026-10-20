@@ -21,6 +21,8 @@ lobshot-assets = { path = "crates/assets", version = "0.1.0" }
 anyhow = "1"
 # Pure-Rust math: the same bits on native and wasm32, unlike platform libm (sim determinism).
 libm = "0.2"
+# The Vorbis decoder Bevy's audio uses (through rodio); xtask decodes every sound with it.
+lewton = "0.10"
 # The wire and replay format: compact, deterministic, serde-driven.
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }

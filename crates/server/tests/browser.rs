@@ -1,11 +1,15 @@
-//! The browser smoke test (PRD-0003 uat-003): the real client, built by trunk, in headless Chrome
-//! against the real binary. The page loads, the canvas renders, the socket connects, and the
-//! client follows a game to its second turn.
+//! The browser smoke tests (PRD-0003 uat-003): the real client, built by trunk, in headless Chrome
+//! against the real binary. The client publishes what it's doing, and where its buttons are, as
+//! `window.lobshot` (`crates/client/src/web.rs`), which the tests read.
 //!
-//! The browser is a spectator, so the test needn't click Bevy's canvas UI: a protocol client hosts
-//! (on the `flat` map, against a server bot) and plays its turns with SearchBot, and the browser,
-//! joining first while both seats are taken, watches. The client publishes what it's doing as
-//! `window.lobshot` (`crates/client/src/web.rs`), which the test reads.
+//! - Online, as a spectator: a protocol client hosts (on the `flat` map, against a server bot) and
+//!   plays its turns with SearchBot, and the browser, joining first while both seats are taken,
+//!   watches. The page loads, the canvas renders, the socket connects, every sound loads, and the
+//!   client follows the game to its second turn, sounding the shots it shows.
+//! - Practice: the browser clicks "Practice vs bot" and lets its turn run out, which chimes and
+//!   ticks.
+//!
+//! In both, each turn's clock starts only once the shot before it has shown.
 //!
 //! Ignored by default: it needs Chrome and a client bundle. `cargo make browser` builds the
 //! release bundle and runs it; `LOBSHOT_BROWSER_DIST` points it at another bundle (the quicker
@@ -25,10 +29,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use headless_chrome::{Browser, LaunchOptions};
+use headless_chrome::{Browser, LaunchOptions, browser::tab::point::Point};
 use serde_json::Value;
 use tempfile::TempDir;
 
+use lobshot_assets::Sound;
 use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::create_room;
 use lobshot_sim::game::Team;
@@ -87,6 +92,26 @@ fn bundle() -> PathBuf {
     dist
 }
 
+/// Headless Chrome, rendering WebGL2 in software.
+fn launch() -> Browser {
+    Browser::new(
+        LaunchOptions::default_builder()
+            .headless(true)
+            // No `--disable-gpu`: Bevy needs WebGL2, which SwiftShader provides without a GPU.
+            .enable_gpu(true)
+            // Audio runs before any click, so every sound the page plays is decoded and mixed.
+            .args(vec![
+                OsStr::new("--use-angle=swiftshader"),
+                OsStr::new("--enable-unsafe-swiftshader"),
+                OsStr::new("--autoplay-policy=no-user-gesture-required"),
+            ])
+            .window_size(Some((1024, 768)))
+            .build()
+            .unwrap(),
+    )
+    .expect("Chrome launches")
+}
+
 /// What the page says it's doing, from `window.lobshot`.
 fn page_state(tab: &headless_chrome::Tab) -> Option<Value> {
     let answer = tab.evaluate("JSON.stringify(window.lobshot || null)", false).ok()?;
@@ -102,6 +127,42 @@ fn wait_for(tab: &headless_chrome::Tab, what: &str, mut done: impl FnMut(&Value)
         }
         assert!(started.elapsed() < PATIENCE, "the page never reached {what}; last state {:?}", page_state(tab));
         std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Where the page's button for `action` (`Practice`) is, from `window.lobshot.buttons`.
+fn spot(state: &Value, action: &str) -> Option<Point> {
+    let button = state["buttons"].as_array()?.iter().find(|button| button["action"] == action)?;
+    Some(Point {
+        x: button["x"].as_f64()?,
+        y: button["y"].as_f64()?,
+    })
+}
+
+/// Clicks the button for `action` until `done` accepts the page's state. Bevy presses only a
+/// hovered button, and hover follows the pointer a frame late, so a first click can miss.
+fn click_until(tab: &headless_chrome::Tab, action: &str, what: &str, mut done: impl FnMut(&Value) -> bool) -> Value {
+    let state = wait_for(tab, &format!("a {action} button"), |state| spot(state, action).is_some());
+    let point = spot(&state, action).unwrap();
+    tab.move_mouse_to_point(point).unwrap();
+    let started = Instant::now();
+    loop {
+        tab.click_point(point).unwrap();
+        for _ in 0..10 {
+            if let Some(state) = page_state(tab).filter(|state| done(state)) {
+                return state;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        assert!(started.elapsed() < PATIENCE, "clicking {action} never reached {what}; last state {:?}", page_state(tab));
+    }
+}
+
+/// The turn clock starts each turn once, when the shot before it has shown, so it never counts
+/// more turns started than the game has played, plus the first.
+fn clock_on_time(state: &Value) {
+    if let (Some(turns), Some(started)) = (state["turns"].as_i64(), state["started"].as_i64()) {
+        assert!(started <= turns + 1, "the clock started a turn before its shot had shown: {state}");
     }
 }
 
@@ -128,17 +189,7 @@ async fn e2e_browser_spectator_follows_a_game() {
     host.send(&ClientMsg::AddBot { team: Team::B }).await;
 
     // The browser joins next, as a spectator: both seats are taken.
-    let browser = Browser::new(
-        LaunchOptions::default_builder()
-            .headless(true)
-            // No `--disable-gpu`: Bevy needs WebGL2, which SwiftShader provides without a GPU.
-            .enable_gpu(true)
-            .args(vec![OsStr::new("--use-angle=swiftshader"), OsStr::new("--enable-unsafe-swiftshader")])
-            .window_size(Some((1024, 768)))
-            .build()
-            .unwrap(),
-    )
-    .expect("Chrome launches");
+    let browser = launch();
     let tab = browser.new_tab().unwrap();
     let origin = format!("http://{addr}");
     let room_url = format!("{origin}/r/{code}");
@@ -159,12 +210,52 @@ async fn e2e_browser_spectator_follows_a_game() {
     host.recv_until(|msg| matches!(msg, ServerMsg::Room(view) if matches!(view.stage, Stage::Playing { .. }))).await;
     let game = tokio::spawn(async move { play_out(&mut host, host_id, None, 1).await });
 
-    // The page follows: it reaches the game screen and sees the second turn.
-    let state = tokio::task::spawn_blocking(move || wait_for(&tab, "the second turn", |state| state["screen"] == "Game" && state["turns"].as_i64().is_some_and(|turns| turns >= 2)))
-        .await
-        .unwrap();
+    // The page follows: it reaches the game screen, sees the second turn, and sounds a shot fired
+    // and landing, its clock on time all along.
+    let state = tokio::task::spawn_blocking(move || {
+        wait_for(&tab, "the second turn", |state| {
+            clock_on_time(state);
+            state["screen"] == "Game" && state["turns"].as_i64().is_some_and(|turns| turns >= 2)
+        });
+        wait_for(&tab, "a shot's sounds", |state| {
+            clock_on_time(state);
+            ["fire", "blast"].iter().all(|sound| state["sounds"]["played"][sound].as_u64() >= Some(1))
+        })
+    })
+    .await
+    .unwrap();
     assert!(state["seat"].is_null(), "the browser watches without a seat: {state}");
+    assert_eq!(state["sounds"]["loaded"].as_u64(), Some(Sound::ALL.len() as u64), "every sound loads: {state}");
     game.abort();
+    drop(browser);
+    drop(server);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs Chrome and a client bundle; run `cargo make browser`"]
+async fn e2e_browser_practice_turns_start_after_the_shot_before() {
+    let dist = bundle();
+    let cwd = TempDir::new().unwrap();
+    let server = start(&dist, cwd.path());
+    let browser = launch();
+    let tab = browser.new_tab().unwrap();
+    let origin = format!("http://{}", server.addr);
+
+    // Practice is refereed in the page, so its turns pass on the page's own schedule. The player
+    // never acts, so their turn runs out: it chimes, then ticks through its last seconds.
+    let state = tokio::task::spawn_blocking(move || {
+        tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
+        click_until(&tab, "Practice", "a practice game", |state| state["screen"] == "Game");
+        wait_for(&tab, "the player's turn running out, and the next", |state| {
+            clock_on_time(state);
+            state["turns"].as_i64() >= Some(2) && state["sounds"]["played"]["tick"].as_u64() >= Some(5)
+        })
+    })
+    .await
+    .unwrap();
+    assert_eq!(state["seat"], 0, "the player sits first: {state}");
+    let played = &state["sounds"]["played"];
+    assert!(played["click"].as_u64() >= Some(1) && played["turn"].as_u64() >= Some(1), "{state}");
     drop(browser);
     drop(server);
 }

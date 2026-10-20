@@ -41,10 +41,10 @@ web-sys = { workspace = true, features = [
     "Response",
 ] }
 
-# The 2D renderer, Bevy UI with its headless widgets and pointer picking, text, PNG and the web
-# platform. `default-features = false` keeps the 3D renderer, gamepads, audio and desktop backends
-# out of the bundle (audio joins with the sound effects). WebGL2 has the widest browser support,
-# and WebGPU adds nothing for 2D.
+# The 2D renderer, Bevy UI with its headless widgets and pointer picking, text, PNG, audio (Ogg
+# Vorbis only) and the web platform. `default-features = false` keeps the 3D renderer, gamepads,
+# other audio formats and desktop backends out of the bundle. WebGL2 has the widest browser
+# support, and WebGPU adds nothing for 2D.
 [dependencies.bevy]
 version = "0.20"
 default-features = false
@@ -59,6 +59,7 @@ features = [
     "ui_picking",
     "default_font",
     "png",
+    "audio",
     "bevy_winit",
     "web",
     "webgl2",

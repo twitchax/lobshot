@@ -7,6 +7,8 @@ use bevy::prelude::*;
 use lobshot_protocol::RoomCode;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
+use crate::{sound::SoundLog, ui::ButtonSpots};
+
 /// Where the page is: the title screen (`/`), or a room (`/r/{code}`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Page {
@@ -175,16 +177,52 @@ impl TextInput {
     }
 }
 
-/// Publishes what the client is doing as `window.lobshot` (`{ screen, turns, seat }`), for the
-/// browser smoke test to watch. Cheap enough to do every frame.
-pub fn publish(screen: &str, turns: Option<i64>, seat: Option<u8>) {
+/// What the client is doing, as `window.lobshot` shows it.
+pub struct Published<'a> {
+    pub screen: String,
+    /// Turns the game has played.
+    pub turns: Option<i64>,
+    /// Turns the clock has begun: one per turn shown.
+    pub started: u32,
+    pub seat: Option<u8>,
+    pub sounds: &'a SoundLog,
+    pub buttons: &'a ButtonSpots,
+}
+
+/// Publishes what the client is doing as `window.lobshot` (`{ screen, turns, started, seat,
+/// sounds: { loaded, played: { blast: 2, .. } }, buttons: [{ action, x, y }] }`), for the browser
+/// smoke test to watch and click. Cheap enough to do every frame.
+pub fn publish(now: &Published) {
     let Some(window) = web_sys::window() else { return };
+    let set = |object: &js_sys::Object, key: &str, value: &JsValue| {
+        let _ = js_sys::Reflect::set(object, &key.into(), value);
+    };
     let state = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&state, &"screen".into(), &screen.into());
+    set(&state, "screen", &now.screen.as_str().into());
     // Turn counts stay far below 2^53, exact as a JS number.
     #[allow(clippy::cast_precision_loss)]
-    let turns = turns.map_or(JsValue::NULL, |turns| JsValue::from_f64(turns as f64));
-    let _ = js_sys::Reflect::set(&state, &"turns".into(), &turns);
-    let _ = js_sys::Reflect::set(&state, &"seat".into(), &seat.map_or(JsValue::NULL, JsValue::from));
-    let _ = js_sys::Reflect::set(&window, &"lobshot".into(), &state);
+    let turns = now.turns.map_or(JsValue::NULL, |turns| JsValue::from_f64(turns as f64));
+    set(&state, "turns", &turns);
+    set(&state, "started", &now.started.into());
+    set(&state, "seat", &now.seat.map_or(JsValue::NULL, JsValue::from));
+
+    let played = js_sys::Object::new();
+    for (&name, &count) in &now.sounds.played {
+        set(&played, name, &count.into());
+    }
+    let sounds = js_sys::Object::new();
+    set(&sounds, "loaded", &now.sounds.loaded.into());
+    set(&sounds, "played", &played);
+    set(&state, "sounds", &sounds);
+
+    let buttons = js_sys::Array::new();
+    for (action, at) in &now.buttons.0 {
+        let button = js_sys::Object::new();
+        set(&button, "action", &action.as_str().into());
+        set(&button, "x", &at.x.into());
+        set(&button, "y", &at.y.into());
+        buttons.push(&button);
+    }
+    set(&state, "buttons", &buttons);
+    set(&window, "lobshot", &state);
 }

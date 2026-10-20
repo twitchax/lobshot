@@ -25,3 +25,5 @@ why the version moved the way it did.
 - `cargo xtask art`: SVG to pivot-centered PNGs, terrain masks and map manifests, deterministic.
   Coilback, Pip and Tidewall A are finished.
 - A browser smoke test (`cargo make browser`) driving headless Chrome against the real server.
+- Sound effects (Kenney, CC0): shots, blasts, hits, falls, your turn, the clock's last seconds, the
+  result, buttons and chat.

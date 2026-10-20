@@ -1,4 +1,5 @@
-//! The game screen: the world (map, mobiles, shots), the HUD, input, and practice against a bot.
+//! The game screen: the world (map, mobiles, shots), the HUD, input, sounds, and practice against a
+//! bot.
 //!
 //! The world is drawn in sim coordinates turned upright (`world()`), through a camera that always
 //! shows GunBound's 800×600 view, letterboxed to 4:3 so a "screen" stays a fixed ruler. A
@@ -8,6 +9,7 @@ mod hud;
 mod input;
 mod playback;
 mod practice;
+mod sounds;
 mod world;
 
 use bevy::{
@@ -20,7 +22,7 @@ use lobshot_sim::units::Vec2 as SimVec2;
 
 use crate::{model::Screen, ui::theme};
 
-pub use playback::Timeline;
+pub use playback::{Timeline, TurnClock};
 
 /// The view: one GunBound screen, 800×600.
 pub const VIEW: Vec2 = Vec2::new(800.0, 600.0);
@@ -165,6 +167,13 @@ impl Plugin for GamePlugin {
             .add_systems(Startup, cameras)
             .add_systems(Update, (letterbox, (follow, wrap_up).run_if(in_state(Screen::Game))))
             .add_systems(OnExit(Screen::Game), leave)
-            .add_plugins((world::WorldPlugin, playback::PlaybackPlugin, hud::HudPlugin, input::InputPlugin, practice::PracticePlugin));
+            .add_plugins((
+                world::WorldPlugin,
+                playback::PlaybackPlugin,
+                hud::HudPlugin,
+                input::InputPlugin,
+                practice::PracticePlugin,
+                sounds::SoundsPlugin,
+            ));
     }
 }

@@ -3,7 +3,7 @@
 //! the aim arc, with its true-angle wedge, around your mobile.
 
 use bevy::{ecs::system::SystemParam, prelude::*};
-use lobshot_sim::{game::Shot, tuning::TURN_TIME_LIMIT, weather::WeatherKind};
+use lobshot_sim::{game::Shot, weather::WeatherKind};
 
 use super::{
     GameRoot,
@@ -293,11 +293,7 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
         transform.rotation = Rot2::degrees(-f32::from(wind.direction));
     }
 
-    let limit = session.room.as_ref().map_or(f64::from(TURN_TIME_LIMIT.value.0) / 100.0, |room| f64::from(room.options.turn_seconds));
-    let left = (limit - (time.elapsed_secs_f64() - clock.started)).max(0.0);
-    // Whole seconds left, at most 20.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let seconds = left.ceil() as u32;
+    let seconds = clock.seconds_left(&session, time.elapsed_secs_f64());
     let whose = clock.seat.map_or_else(String::new, |seat| {
         if Some(seat) == session.my_seat() {
             return "Your turn".to_owned();
@@ -412,8 +408,7 @@ fn banner(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>
     let message = if game.desynced {
         "Out of sync with the server. Reload the page to rejoin.".to_owned()
     } else if let Some(ending) = outcome.0 {
-        let mine = session.my_seat().and_then(|seat| game.predicted.players().get(usize::from(seat))).map(|p| p.team);
-        let result = match (ending, mine) {
+        let result = match (ending, session.my_team(&game.predicted)) {
             (Ending::Winner(team), Some(mine)) if team == mine => "You win!".to_owned(),
             (Ending::Winner(_), Some(_)) => "You lose.".to_owned(),
             (Ending::Winner(team), None) => format!("Team {team:?} wins."),

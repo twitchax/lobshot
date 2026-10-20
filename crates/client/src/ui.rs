@@ -108,6 +108,20 @@ pub fn panel(node: Node) -> impl Bundle {
     )
 }
 
+/// Each shown button's center in CSS pixels, by its action (`Practice`), for the browser smoke test
+/// to click.
+#[derive(Resource, Default)]
+pub struct ButtonSpots(pub Vec<(String, Vec2)>);
+
+fn locate_buttons(buttons: Query<(&UiAction, &ComputedNode, &UiGlobalTransform, &InheritedVisibility)>, mut spots: ResMut<ButtonSpots>) {
+    spots.0.clear();
+    for (action, node, transform, shown) in &buttons {
+        if shown.get() {
+            spots.0.push((format!("{action:?}"), transform.translation * node.inverse_scale_factor()));
+        }
+    }
+}
+
 fn shade_buttons(mut buttons: Query<(&Hovered, Has<Pressed>, &mut BackgroundColor), With<UiAction>>) {
     for (hovered, pressed, mut color) in &mut buttons {
         let shade = if pressed {
@@ -128,6 +142,10 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         // The widgets' plugins (button activation, focus) come with `DefaultPlugins`.
-        app.add_message::<Clicked>().add_observer(route).add_systems(Update, shade_buttons);
+        app.add_message::<Clicked>()
+            .init_resource::<ButtonSpots>()
+            .add_observer(route)
+            .add_systems(Update, shade_buttons)
+            .add_systems(PostUpdate, locate_buttons.after(bevy::ui::UiSystems::Layout));
     }
 }

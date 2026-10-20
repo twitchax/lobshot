@@ -158,7 +158,11 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   turn times, the bot's turns). Also how the client is tested without a server.
 - **Dev loop:** `cargo make dev` builds a `wasm-dev` bundle (Bevy optimized, no debug info; ~30 s
   rebuilds) and serves it. The release bundle (`cargo make dist`) takes minutes.
-- **Audio:** CC0 sound effects (Kenney, Freesound's CC0 filter). Music later, CC0 or AI.
+- **Audio:** CC0 sound effects (Kenney, Freesound's CC0 filter) through Bevy's audio, Ogg Vorbis
+  only. `assets/sounds/` holds one file per `lobshot_assets::Sound`, credited in its `CREDITS.md`;
+  `cargo xtask art` checks each decodes and ships it. Shots, blasts, hits and falls sound on the
+  scene's pacing schedule, with what they show. The page resumes audio on the first click or key
+  press, since browsers start it suspended. Music later, CC0 or AI.
 
 ## Art
 
@@ -197,9 +201,12 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   native-vs-wasm hash test.
 - Server: end-to-end tests that spawn the real binary in a `TempDir` and drive full games with fake
   WebSocket clients and bots.
-- Browser: one smoke test (page loads, canvas renders, socket connects, a game reaches turn 2),
+- Browser: two smoke tests, one online as a spectator (page loads, canvas renders, socket
+  connects, a game reaches turn 2), one in practice (clicks into a game, the turn runs out),
   driving the installed Chrome over CDP from Rust (`headless_chrome`): no Node toolchain and no
-  browser download. The client publishes its state as `window.lobshot` for it.
+  browser download. The client publishes its state, and where its buttons are, as
+  `window.lobshot` for them. Both check that each turn's clock starts only once the shot before it
+  has shown.
 - Balance: the `lab` win-rate gate, once the roster passes ~5 mobiles.
 
 ## Performance goals
