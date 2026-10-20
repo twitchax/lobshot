@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1000" viewBox="0 0 1800 1000">
+  <!-- Tidewall background: a sunset harbor seen from among the floating islands. The whole map
+       (1800 x 1000), shared by every variant. Soft and low in contrast so the terrain reads in
+       front of it, and no per-pixel grain, which would bloat the PNG. The sun sits low on the
+       left, so its light agrees with the sprites' (upper left). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5566ab"/>
+      <stop offset="0.28" stop-color="#8c80c0"/>
+      <stop offset="0.5" stop-color="#d79bab"/>
+      <stop offset="0.62" stop-color="#f6b394"/>
+      <stop offset="0.71" stop-color="#ffd7a6"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="520" cy="664" r="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff4d0" stop-opacity="0.95"/>
+      <stop offset="0.16" stop-color="#ffe0a8" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#ffc8a0" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffc8a0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="708" x2="0" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8c9a0"/>
+      <stop offset="0.16" stop-color="#cfa3b6"/>
+      <stop offset="1" stop-color="#5f66a6"/>
+    </linearGradient>
+    <linearGradient id="haze" x1="0" y1="560" x2="0" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd8b0" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#ffd8b0" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffd8b0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mist" x1="0" y1="800" x2="0" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9c3d0" stop-opacity="0"/>
+      <stop offset="1" stop-color="#d8b4d4" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff2cc" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff2cc" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#fff2cc" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    <filter id="cloudSoft" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
+    <!-- a gentle brush wobble on organic edges only (hills), never on buildings -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.05" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1"/>
+    </filter>
+    <filter id="blotch" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.004 0.012" numOctaves="2" seed="11" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 0.86  0 0 0 0 0.8  0 0 0 2.2 -1.0"/>
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <!-- one spiral-shell spire, reused across the skyline (origin = base center) -->
+    <path id="spire" d="M -12,0 L -8,-46 L -4,-66 L 0,-74 L 4,-66 L 8,-46 L 12,0 Z"/>
+    <g id="spireRidges" fill="none" stroke-width="1.6" stroke-linecap="round">
+      <path d="M -11.4,-8 Q 0,-3 11.6,-13"/><path d="M -10.2,-22 Q 0,-17 10.4,-27"/><path d="M -9,-36 Q 0,-31 9.2,-41"/><path d="M -7.4,-50 Q 0,-46 7.6,-55"/><path d="M -5.4,-61 Q 0,-58 5.6,-65"/>
+    </g>
+    <!-- far floating islands (origin = middle of the top): a grassy table over a rough keel -->
+    <path id="farIsleA" d="M -64,0 C -40,-7 -6,-9 24,-6 C 44,-4 58,-2 66,3 C 64,12 54,16 48,26 C 42,36 40,48 30,54 C 22,60 18,74 10,88 C 4,76 -2,66 -12,60 C -22,54 -26,40 -36,32 C -46,24 -60,14 -64,0 Z"/>
+    <path id="farIsleB" d="M -50,0 C -30,-5 10,-6 52,-1 C 54,10 46,18 40,24 C 34,30 36,40 26,44 C 18,48 16,58 6,64 C 0,56 -6,50 -16,46 C -28,42 -30,30 -40,22 C -48,16 -52,8 -50,0 Z"/>
+    <path id="farIsleC" d="M -40,0 C -24,-6 12,-6 40,0 C 40,14 30,26 22,34 C 16,42 12,52 6,60 C 0,50 -4,42 -12,36 C -24,28 -38,16 -40,0 Z"/>
+    <!-- a cumulus: flat-bottomed puffs, cel shaded; lit from the low sun at the left -->
+    <g id="cumulus">
+      <path d="M -120,0 C -124,-14 -106,-24 -90,-18 C -88,-38 -60,-48 -42,-34 C -34,-58 2,-62 14,-40 C 26,-56 58,-50 62,-28 C 80,-36 104,-26 102,-8 C 118,-8 128,-2 126,0 Z" fill="#a98cbf"/>
+      <path d="M -120,0 C -124,-14 -106,-24 -90,-18 C -88,-38 -60,-48 -42,-34 C -34,-58 2,-62 14,-40 C 4,-48 -24,-46 -34,-26 C -48,-36 -74,-28 -76,-10 C -92,-14 -108,-8 -108,0 Z" fill="#f2bfb6"/>
+      <path d="M -112,-6 C -110,-14 -100,-18 -92,-14 M -82,-22 C -78,-34 -62,-40 -48,-32 M -30,-40 C -24,-52 -4,-54 6,-44" fill="none" stroke="#ffe3cc" stroke-width="3" stroke-linecap="round"/>
+      <path d="M -60,0 C -40,-6 -10,-8 20,-6 C 50,-4 80,-6 110,-2 L 126,0 Z" fill="#8e76ad"/>
+    </g>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="1800" height="1000" fill="url(#sky)"/>
+    <rect width="1800" height="1000" fill="url(#sunGlow)"/>
+    <rect width="1800" height="700" filter="url(#blotch)" opacity="0.26"/>
+    <g opacity="0.4">
+      <path d="M 520,664 L 100,-20 L 220,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 520,664 L 440,-20 L 520,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 520,664 L 760,-20 L 880,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 520,664 L 1260,-20 L 1420,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <g id="layer-high-clouds" filter="url(#softer)" opacity="0.6">
+    <ellipse cx="300" cy="110" rx="300" ry="18" fill="#b2a0d2"/>
+    <ellipse cx="960" cy="70" rx="340" ry="14" fill="#a593cc"/>
+    <ellipse cx="1520" cy="150" rx="260" ry="14" fill="#c9a7c8"/>
+    <ellipse cx="1180" cy="236" rx="220" ry="10" fill="#d6aec4"/>
+  </g>
+
+  <g id="layer-far-isles" filter="url(#hazy)">
+    <!-- other floating islands, far off: the archetype, told by the sky -->
+    <g fill="#b394c0">
+      <use href="#farIsleA" transform="translate(1180,322)"/>
+      <use href="#farIsleB" transform="translate(1600,268) scale(0.8)"/>
+      <use href="#farIsleC" transform="translate(240,250) scale(0.6)"/>
+      <use href="#farIsleC" transform="translate(760,214) scale(0.45 0.5)"/>
+      <use href="#farIsleB" transform="translate(1440,450) scale(0.5)"/>
+    </g>
+    <!-- a little shell tower and a tree on the near ones -->
+    <g fill="#a888b8">
+      <use href="#spire" transform="translate(1196,322) scale(0.5)"/>
+      <use href="#spire" transform="translate(1176,322) scale(0.32)"/>
+      <path d="M 1580,268 C 1574,256 1584,246 1592,250 C 1598,242 1610,248 1606,258 C 1612,262 1608,270 1600,268 Z"/>
+      <rect x="1590" y="262" width="3" height="7"/>
+    </g>
+    <!-- the sun-side rims on their tops -->
+    <g fill="none" stroke="#f2c6bc" stroke-width="2" stroke-linecap="round" opacity="0.85">
+      <path d="M 1118,322 C 1140,315 1170,313 1200,316"/>
+      <path d="M 1562,268 C 1580,264 1600,264 1616,266"/>
+      <path d="M 218,250 C 226,247 238,247 248,249"/>
+    </g>
+  </g>
+
+  <g id="layer-clouds" filter="url(#cloudSoft)">
+    <use href="#cumulus" transform="translate(1570,470)"/>
+    <use href="#cumulus" transform="translate(1690,500) scale(0.7)"/>
+    <use href="#cumulus" transform="translate(180,440) scale(0.85)"/>
+    <use href="#cumulus" transform="translate(900,540) scale(0.6 0.5)"/>
+    <use href="#cumulus" transform="translate(1260,410) scale(0.5)"/>
+  </g>
+
+  <g id="layer-sun">
+    <circle cx="520" cy="664" r="58" fill="#fff6d6" filter="url(#soft)" opacity="0.9"/>
+    <circle cx="520" cy="664" r="40" fill="#fffbe8"/>
+  </g>
+
+  <g id="layer-sea">
+    <rect y="706" width="1800" height="294" fill="url(#sea)"/>
+    <rect x="0" y="705" width="1800" height="3" fill="#ffe6c0" opacity="0.8" filter="url(#hazy)"/>
+    <!-- glitter under the sun -->
+    <g fill="#fff3d4" opacity="0.85">
+      <rect x="490" y="714" width="62" height="2.8" rx="1.4"/><rect x="476" y="724" width="88" height="2.6" rx="1.3"/>
+      <rect x="498" y="735" width="48" height="2.2" rx="1.1"/><rect x="466" y="746" width="74" height="2.2" rx="1.1"/>
+      <rect x="508" y="758" width="54" height="2.2" rx="1.1"/><rect x="482" y="772" width="36" height="2" rx="1"/>
+      <rect x="530" y="786" width="42" height="2" rx="1"/><rect x="492" y="802" width="26" height="2" rx="1"/>
+      <rect x="514" y="820" width="30" height="2" rx="1"/>
+    </g>
+    <g stroke="#f6d0bc" stroke-width="1.6" opacity="0.35" stroke-linecap="round">
+      <path d="M 80,740 h 50 M 230,730 h 34 M 700,752 h 60 M 860,736 h 36 M 1100,744 h 50 M 1500,738 h 56 M 1660,750 h 40 M 160,790 h 70 M 760,806 h 50 M 960,780 h 60 M 1200,820 h 70 M 1440,800 h 60 M 1640,830 h 50 M 320,860 h 60"/>
+    </g>
+  </g>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- distant sea stacks and spires on the horizon, barely darker than its glow -->
+    <g fill="#d0a6bc">
+      <path d="M 820,708 C 828,684 838,672 850,668 C 860,676 868,690 872,708 Z"/>
+      <path d="M 1060,708 C 1080,700 1112,698 1134,708 Z"/>
+      <path d="M 1380,708 C 1388,686 1402,676 1416,682 C 1430,688 1438,698 1448,708 Z"/>
+      <use href="#spire" transform="translate(880,708) scale(0.46)"/>
+      <use href="#spire" transform="translate(1458,708) scale(0.55)"/>
+      <use href="#spire" transform="translate(1476,708) scale(0.36)"/>
+    </g>
+    <g stroke="#c296b0"><use href="#spireRidges" transform="translate(880,708) scale(0.46)"/><use href="#spireRidges" transform="translate(1458,708) scale(0.55)"/></g>
+  </g>
+
+  <g id="layer-mid">
+    <!-- west headland: a town of shell spires, backlit by the sun -->
+    <path filter="url(#brush)" d="M -10,724 C 60,694 140,664 230,660 C 300,656 352,672 400,686 C 456,702 500,712 572,726 L 572,780 L -10,780 Z" fill="#a47ca8"/>
+    <g fill="#977099">
+      <use href="#spire" transform="translate(230,664) scale(1.3)"/>
+      <use href="#spire" transform="translate(190,672) scale(0.85)"/>
+      <use href="#spire" transform="translate(284,668) scale(0.95)"/>
+      <use href="#spire" transform="translate(120,686) scale(0.6)"/>
+      <path d="M 190,650 Q 210,634 230,646 Q 254,634 284,648 L 284,654 Q 254,642 230,652 Q 210,642 190,656 Z"/>
+    </g>
+    <g stroke="#83618f"><use href="#spireRidges" transform="translate(230,664) scale(1.3)"/><use href="#spireRidges" transform="translate(190,672) scale(0.85)"/><use href="#spireRidges" transform="translate(284,668) scale(0.95)"/></g>
+    <!-- rim light on the spires' sun side (right) -->
+    <g fill="#f2bcae" opacity="0.85">
+      <path d="M 235.2,568 L 240.4,578 L 245.6,610 L 250.6,664 L 243.6,664 L 239.8,610 Z"/>
+      <path d="M 287.8,598 L 291.6,606 L 295.4,625 L 299.8,668 L 294.4,668 L 291.2,625 Z"/>
+    </g>
+    <g fill="#ffe0a0"><circle cx="230" cy="570" r="6" filter="url(#soft)"/><circle cx="230" cy="570" r="2.2"/><circle cx="226" cy="626" r="1.5"/><circle cx="236" cy="604" r="1.5"/><circle cx="284" cy="634" r="1.4"/><circle cx="190" cy="646" r="1.3"/></g>
+    <!-- east headland: urchin domes -->
+    <path filter="url(#brush)" d="M 1500,780 C 1560,736 1610,726 1660,728 C 1700,730 1740,714 1770,706 C 1790,702 1800,704 1810,706 L 1810,780 Z" fill="#a17cac"/>
+    <g fill="#9572a4">
+      <path d="M 1620,730 C 1620,704 1662,704 1662,728 Z"/>
+      <path d="M 1668,724 C 1668,688 1722,688 1722,720 Z"/>
+      <path d="M 1728,714 C 1728,696 1756,696 1756,712 Z"/>
+      <rect x="1694" y="676" width="3" height="14"/>
+    </g>
+    <g fill="none" stroke="#86649a" stroke-width="1.4">
+      <path d="M 1631,729 Q 1633,712 1641,708 M 1651,728 Q 1649,712 1641,708"/>
+      <path d="M 1681,723 Q 1683,700 1695,694 M 1709,721 Q 1707,700 1695,694"/>
+    </g>
+    <!-- their sun side faces west -->
+    <g fill="#e8b0aa" opacity="0.75">
+      <path d="M 1641,708 C 1632,710 1622,716 1620,728 L 1624,728 C 1626,720 1632,713 1641,708 Z"/>
+      <path d="M 1695,692 C 1682,694 1670,704 1668,720 L 1672,720 C 1674,708 1683,698 1695,692 Z"/>
+    </g>
+    <g fill="#ffe0a0"><circle cx="1641" cy="720" r="1.6"/><circle cx="1695" cy="708" r="1.8"/><circle cx="1742" cy="706" r="1.4"/><circle cx="1695.5" cy="675" r="3.4" filter="url(#soft)"/></g>
+  </g>
+  <rect y="560" width="1800" height="260" fill="url(#haze)"/>
+
+  <g id="layer-near">
+    <!-- sea mist far below, so the gaps between islands read as depth, not void -->
+    <rect y="800" width="1800" height="200" fill="url(#mist)"/>
+    <g filter="url(#softer)" fill="#f2d2dc" opacity="0.7">
+      <ellipse cx="300" cy="975" rx="260" ry="30"/><ellipse cx="900" cy="985" rx="300" ry="26"/><ellipse cx="1500" cy="975" rx="280" ry="28"/>
+    </g>
+  </g>
+
+  <g id="layer-birds" fill="none" stroke="#6a557e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+    <path d="M 700,380 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 736,398 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 680,404 q 4,-4 7,0 q 3,-4 7,0"/>
+    <path d="M 1380,250 q 5,-5 9,0 q 4,-5 9,0"/>
+  </g>
+</svg>

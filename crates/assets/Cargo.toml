@@ -1,0 +1,22 @@
+[package]
+name = "lobshot-assets"
+description = "lobshot's asset layout and manifests: written by `cargo xtask art`, read by the server and client."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+lobshot-sim.workspace = true
+anyhow.workspace = true
+ron.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

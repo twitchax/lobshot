@@ -1,0 +1,33 @@
+# sim's own clippy config: the root `clippy.toml` plus the determinism bans. Clippy reads only the
+# nearest file, so `doc-valid-idents` repeats the root's; a repo_sync test keeps the two equal.
+doc-valid-idents = ["GunBound", "DragonBound", "OpenBound", "SearchBot", "WebGL2", "WebGPU", ".."]
+
+# A game is its event log, and native and wasm32 must replay it to the same bits (DESIGN.md,
+# "Game model"). IEEE-754 basic operations and `sqrt` are exact on both; everything below is not.
+disallowed-methods = [
+    { path = "f64::mul_add", reason = "a fused multiply-add rounds once, a*b+c twice; targets differ in which they emit" },
+    { path = "f64::sin", reason = "platform math differs between targets; use libm::sin" },
+    { path = "f64::cos", reason = "platform math differs between targets; use libm::cos" },
+    { path = "f64::tan", reason = "platform math differs between targets; use libm::tan" },
+    { path = "f64::sin_cos", reason = "platform math differs between targets; use libm::sincos" },
+    { path = "f64::asin", reason = "platform math differs between targets; use libm::asin" },
+    { path = "f64::acos", reason = "platform math differs between targets; use libm::acos" },
+    { path = "f64::atan", reason = "platform math differs between targets; use libm::atan" },
+    { path = "f64::atan2", reason = "platform math differs between targets; use libm::atan2" },
+    { path = "f64::exp", reason = "platform math differs between targets; use libm::exp" },
+    { path = "f64::ln", reason = "platform math differs between targets; use libm::log" },
+    { path = "f64::powf", reason = "platform math differs between targets; use libm::pow" },
+    { path = "f64::powi", reason = "lowers to a libcall whose rounding can differ; multiply explicitly" },
+    { path = "f64::hypot", reason = "platform math differs between targets; use libm::hypot" },
+    { path = "f64::to_degrees", reason = "use units::to_degrees so the constant and rounding are ours" },
+    { path = "f64::to_radians", reason = "use units::to_radians so the constant and rounding are ours" },
+    { path = "f32::mul_add", reason = "sim state is f64; f32 math has the same cross-target hazards" },
+    { path = "f32::sin", reason = "sim state is f64; use libm" },
+    { path = "f32::cos", reason = "sim state is f64; use libm" },
+]
+
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is random per process; use BTreeMap or Vec" },
+    { path = "std::collections::HashSet", reason = "iteration order is random per process; use BTreeSet or Vec" },
+    { path = "f32", reason = "sim state is f64 throughout; mixing widths invites rounding drift" },
+]

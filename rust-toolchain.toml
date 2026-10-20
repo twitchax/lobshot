@@ -1,0 +1,12 @@
+# The single source of truth for the toolchain. CI reads this file (setup-rust-toolchain with no
+# `toolchain:` input), the Dockerfile copies it before `cargo chef cook`, and every dev box picks it
+# up through rustup. `repo_sync` tests fail if a workflow or Dockerfile pins its own.
+[toolchain]
+# A dated nightly, never rolling `nightly`: rolling nightlies break builds on their own schedule.
+# Nightly buys `#[coverage(off)]` and the unstable rustfmt options. Bump it on purpose, then run
+# `cargo make ci`.
+channel = "nightly-2026-10-20"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+# wasm32-unknown-unknown: the client (`cargo make dist`, `cargo make clippy-wasm`).
+# wasm32-wasip1: sim's tests under wasmtime, to prove replays match native (`cargo make determinism`).
+targets = ["wasm32-unknown-unknown", "wasm32-wasip1"]

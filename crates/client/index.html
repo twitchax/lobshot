@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lobshot</title>
+    <!-- Room pages live at /r/{code}; the base makes relative asset fetches resolve from the root. -->
+    <base data-trunk-public-url />
+    <!-- No icon yet; an empty one stops the browser's favicon.ico request (a 404 in the console). -->
+    <link rel="icon" href="data:," />
+    <!-- trunk builds the crate to wasm and runs wasm-opt on release builds; `s` matches the
+         `wasm-release` profile's size-leaning, still-fast setting. The params enable the wasm
+         features rustc emits by default (bulk memory, saturating float-to-int, ...): wasm-opt
+         assumes the MVP and rejects them otherwise. -->
+    <link
+      data-trunk
+      rel="rust"
+      data-bin="lobshot-client"
+      data-wasm-opt="s"
+      data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue"
+    />
+    <!-- The rendered art (`cargo xtask art`), served at assets/ where Bevy looks for it. -->
+    <link data-trunk rel="copy-dir" href="../../assets/gen" data-target-path="assets" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #1b2333;
+      }
+      /* Bevy sizes the drawing buffer to this element (`fit_canvas_to_parent`). */
+      canvas#lobshot {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+      }
+      /* The DOM text input for chat and names: IME, paste and phone keyboards work here. */
+      .lobshot-input {
+        display: none;
+        position: fixed;
+        left: 50%;
+        bottom: 18%;
+        transform: translateX(-50%);
+        width: min(560px, 90vw);
+        padding: 10px 14px;
+        font: 18px system-ui, sans-serif;
+        color: #f4ecd8;
+        background: rgba(18, 26, 41, 0.95);
+        border: 2px solid #f2b84b;
+        border-radius: 8px;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="lobshot"></canvas>
+  </body>
+</html>

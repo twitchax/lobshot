@@ -1,0 +1,7 @@
+/target
+# The client bundle from `cargo make dist`.
+/dist
+# Rendered art from `cargo xtask art` (sources stay in assets/).
+/assets/gen
+# Coverage output from `cargo make codecov`.
+coverage.lcov

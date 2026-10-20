@@ -1,0 +1,69 @@
+lobshot art spike: Coilback (snail-shell bell-mortar on treads) + rider Pip + Tidewall map
+
+MOBILE + RIDER
+pass 1  First cut. Shell = two-center semicircle spiral, bell mortar on a ball joint, lime snail
+        head with stalk nubs, teal deck, 4-wheel tread; chibi rider in a sou'wester. Outer
+        silhouette outline via feMorphology dilate. Reads clearly at 2x, but: flat "sticker" look,
+        long flat tread with tiny wheels, weak cel shadow on shell, tooth-like aperture lip,
+        box chimney, plain hull slab, cannon a bit long/thin, rider's hand grips nothing.
+pass 2  Compact tread (54 px) with big r=8 drive wheels and dashed-stroke lugs that wrap the
+        ends; shell gets growth ridges, a world-space cel-shadow crescent (shape minus a
+        light-offset disc), rim light and bigger specular; aperture lip removed; snail gets a
+        clip-based shadow + skin spots; hull gets brass trim, rivets, seams and a headlamp;
+        box chimney -> curved exhaust horn; cannon shorter/fatter with 3-tone brass and an
+        engraved spiral on the ball joint; control lever added for the rider's hand.
+        Remaining: hull slab hides wheels and reads generic, near-black inner lines look like
+        clip-art, no contact shadows, rider torso shaded on the lit side, stiff rider pose.
+pass 3  Hull slimmed to a rounded deck so the drive wheels read; ambient-occlusion ellipse
+        under the shell and under the ball joint; soft radial light falloff layered over the
+        cel steps on shell and head; shell sutures recolored deep red (selective outline)
+        instead of near-black. Rider: bent near arm + far arm both on the lever, 4 deg lean,
+        two-tail scarf, hat band and long sou'wester brim, hair tufts, face shadow under brim,
+        torso shadow moved to the lower-right to match the light.
+        Remaining: shell/rider/deck read as stacked, not built as one machine; snail head
+        buried behind the deck; exhaust reads as a hook; hull has no focal detail.
+pass 4  Silhouette outline 1.2 -> 1.35; exhaust stack redrawn straight with a bell; snail head
+        lifted 2 px; team-colored spiral roundel on the hull (palette-swap hook); girth strap
+        from saddle to deck and a brass strut from turret cup to deck to tie shell, cannon and
+        chassis into one machine.
+        Problem found at 2x: strut crossed the snail's face, strap hugged the silhouette and
+        read as a stray bracket, buckle floated off the strap, stack bell hidden.
+pass 5  Strut moved behind the face line (now cup -> deck just ahead of the neck), strap moved
+        inside the shell with its buckle on the curve, stack set further back and tilted so the
+        bell clears the silhouette. Mobile + rider called done here.
+
+MAP (Tidewall)
+pass 1  Background: gradient sunset sky, sun glow, turbulence "blotch" sky texture, blurred
+        cloud banks with sunlit tops, sea with sun glitter, shell-spire lighthouse headland,
+        dunes, grain overlay. Terrain: three landmasses (cliff, floating island, cliff) from
+        hand-written curves; masonry pattern, mottle noise, depth darkening, inner-edge AO, moss
+        cap = land minus a down-shifted copy of land (a mask, so it follows any top edge),
+        tufts/flowers dropped onto the sampled top curves, fossils, starfish, barnacles, coral,
+        kelp, carved arch with lantern. Composer places mobiles from the terrain alpha.
+        Problems: displacement "brush" filter wrecks silhouettes (lighthouse is a blob, hills
+        look glitchy, not painted); haze leaves a hard seam; purple dune mass in the gaps;
+        moss cap smears down vertical walls and reads as slime; bricks read as a generic castle
+        wall with a visible repeat; outline too thin; ground probe hits grass tufts (collision
+        mask must come from the land path only).
+pass 2  Background rewritten: brush wobble limited to organic edges (scale 9 -> 4), buildings
+        kept clean with a hair of blur; reusable shell-spire <g> builds a three-spire town with
+        an arch and window lights, urchin domes on the right headland, sun-side rim lights,
+        god rays, haze that fades in and out (no seam), low bay rocks + sea mist so terrain gaps
+        read as depth. Terrain: hand-authored irregular block tile (96x72, wrap-aware) instead
+        of bricks, sediment strata to break the repeat, bigger fossils/stars/barnacles, outline
+        3.2 -> 4.6, cap displacement made vertical-only (R channel pinned to 0.5) so it stops
+        leaking down walls, blur+threshold to round the fringe; terrain_mask.svg (land path
+        only) emitted for collision and used by the composer's ground probe.
+        Remaining: moss fringe long and bright = slime; kelp same green as moss; clouds lumpy;
+        god rays stripy; projectile trail reads as a dotted line.
+pass 3  Cap split into a bright 7 px band + darker scalloped fringe (shorter displacement,
+        tighter blur/threshold) + AO tint under it: reads as turf, not slime. Kelp recolored
+        teal-olive and thinned. Clouds softened (displacement 14 -> 8, more blur), god rays
+        dimmed. Projectile: continuous tapered glow trail with fading puffs, placed near apex.
+        Remaining: terrain body is a uniform block texture with perfectly smooth Bezier
+        silhouettes; reads "vector", lacks form lighting from the surface down.
+pass 4  Top edges roughened along their normals (same geometry feeds terrain.svg and
+        terrain_mask.svg, so visuals and collision agree); tufts placed on the rough edge.
+        Surface-following form light (land minus a blurred down-shifted land) brightens the
+        top ~35 px of every mass. Boulders and crack lines break the block grid (boulders then
+        scaled down; at full size they read as bread loaves).

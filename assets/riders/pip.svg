@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="54" viewBox="-16 -46 32 54">
+  <!-- Rider "Pip", a tide-pool scout: a spiral cowlick like the snail's shell, dive goggles pushed
+       up on the forehead, a snorkel clipped to their strap, and a raincoat a size too big. Those
+       three read in silhouette at game size, so Pip is Pip from across the map.
+       Origin = the seat contact point (rig rider_socket). Faces +x; hands meet the lever knob at
+       about (7, -7). Light from the upper left; the figure leans 4 deg into the drive. -->
+  <defs>
+    <!-- Outline: the silhouette's alpha blurred, then thresholded low, grows it by about 0.9
+         units with round corners, and is filled dark behind the art. -->
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.55" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="headClip"><circle cx="0.8" cy="-21.5" r="8.2"/></clipPath>
+    <path id="coat" d="M -5.2,-12.8 Q 0,-14.6 4.6,-12.8 L 5.9,-1.4 Q 0,0.9 -6.3,-0.8 Z"/>
+    <clipPath id="coatClip"><use href="#coat"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round" transform="rotate(4)">
+    <!-- far arm (behind the coat), hand on the lever -->
+    <path d="M 0.5,-11.6 L 3.6,-8.8 L 6.6,-8.2" stroke="#2a1a2e" stroke-width="3.6" fill="none"/>
+    <path d="M 0.5,-11.6 L 3.6,-8.8 L 6.6,-8.2" stroke="#e6a419" stroke-width="2.2" fill="none"/>
+    <circle cx="7.3" cy="-8" r="1.4" fill="#f0b48f" stroke="#2a1a2e" stroke-width="0.6"/>
+
+    <!-- legs: thigh forward, shin down, a big rubber boot -->
+    <path d="M -2.6,-1.4 L 4.8,-1.9 L 5.6,2.6" stroke="#2a1a2e" stroke-width="4.6" fill="none"/>
+    <path d="M -2.6,-1.4 L 4.8,-1.9 L 5.6,2.6" stroke="#2f4f86" stroke-width="3" fill="none"/>
+    <path d="M -0.4,-2.6 L 4.2,-2.9" stroke="#5f80c4" stroke-width="0.8" fill="none"/>
+    <path d="M 3.2,1.6 H 8 Q 10.4,1.6 10.4,4.4 Q 10.4,6 8.6,6 H 3.2 Z" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 3.2,4.8 H 10.2" stroke="#7a1f2c" stroke-width="1"/>
+    <path d="M 4.4,2.6 Q 6.4,2.4 7.8,2.8" stroke="#ff9a9a" stroke-width="0.7" fill="none"/>
+
+    <!-- raincoat: two tones, a dark placket and toggles -->
+    <use href="#coat" fill="#ffcf3a" stroke="#2a1a2e" stroke-width="0.7"/>
+    <g clip-path="url(#coatClip)">
+      <path d="M 2.6,-14 Q 4.4,-7 3.2,1 L 7,1 L 7,-14 Z" fill="#e6a419"/>
+      <path d="M -7,-3.2 Q 0,-1.4 7,-3.2 V 2 H -7 Z" fill="#e6a419" opacity="0.7"/>
+      <path d="M 1.6,-12.4 L 2.2,0" stroke="#c9861a" stroke-width="0.8"/>
+      <path d="M -4.2,-11.4 Q -4.4,-7 -3.6,-3" stroke="#fff0a8" stroke-width="0.9" fill="none"/>
+    </g>
+    <rect x="0.6" y="-10.2" width="2.8" height="1.2" rx="0.6" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.4"/>
+    <rect x="0.8" y="-6.4" width="2.8" height="1.2" rx="0.6" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.4"/>
+    <!-- big collar and a red neckerchief knot -->
+    <path d="M -5,-13.2 Q 0,-15.4 4.8,-13.2 L 4.2,-10.8 L 1.2,-12.4 L -2.4,-10.6 Z" fill="#ffe27a" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M 1.4,-13.6 L 4.4,-13.2 L 3.6,-11.2 Z" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.5"/>
+
+    <!-- near arm, hand on the lever -->
+    <path d="M 0.8,-11 L 2.8,-7.2 L 6.2,-6.4" stroke="#2a1a2e" stroke-width="3.8" fill="none"/>
+    <path d="M 0.8,-11 L 2.8,-7.2 L 6.2,-6.4" stroke="#ffcf3a" stroke-width="2.4" fill="none"/>
+    <path d="M 4.8,-7.4 L 4.6,-5.6" stroke="#e6a419" stroke-width="1.3"/>
+    <path d="M 0.8,-10.4 L 2,-8" stroke="#fff0a8" stroke-width="0.8" fill="none"/>
+    <circle cx="7" cy="-6.2" r="1.6" fill="#ffd2b0" stroke="#2a1a2e" stroke-width="0.6"/>
+
+    <!-- the head, at chibi scale: grown about the neck so the body below keeps its pose -->
+    <g transform="translate(0.8,-13.4) scale(1.18) translate(-0.8,13.4)">
+    <!-- snorkel, clipped to the goggle strap at the back of the head -->
+    <path d="M -7.6,-23.4 C -9.6,-26 -10.4,-30.4 -9.8,-33.6 C -9.4,-36 -7.8,-37.2 -5.8,-36.8" fill="none" stroke="#2a1a2e" stroke-width="3.6"/>
+    <path d="M -7.6,-23.4 C -9.6,-26 -10.4,-30.4 -9.8,-33.6 C -9.4,-36 -7.8,-37.2 -5.8,-36.8" fill="none" stroke="#2bb3a3" stroke-width="2.2"/>
+    <path d="M -10.2,-29.2 L -10.1,-31.4" stroke="#ffcf3a" stroke-width="2.2"/>
+    <path d="M -8.8,-25.8 C -9.4,-27.8 -9.7,-29.8 -9.5,-31.4" fill="none" stroke="#8be8cf" stroke-width="0.7"/>
+    <rect x="-6.6" y="-38.4" width="3.4" height="2.9" rx="1.2" fill="#ff8a3d" stroke="#2a1a2e" stroke-width="0.7"/>
+    <!-- head -->
+    <circle cx="0.8" cy="-21.5" r="8.2" fill="#ffd2b0" stroke="#2a1a2e" stroke-width="0.7"/>
+    <g clip-path="url(#headClip)">
+      <!-- the goggles shade the brow; the jaw turns from the light -->
+      <path d="M -8,-24.6 Q 2,-22.2 10,-25 V -30 H -8 Z" fill="#e9a07c" opacity="0.65"/>
+      <path d="M 9,-20.4 Q 6.6,-14 -0.6,-13.4 L 9.6,-12 Z" fill="#e9a07c" opacity="0.6"/>
+    </g>
+    <!-- hair: an indigo bob with a spiral cowlick on top -->
+    <path d="M -6.8,-15.4 C -9.8,-19 -9.8,-26 -5.2,-29.2 C -1.6,-31.6 4.6,-31.2 7.6,-27.6 C 8.6,-26.4 9.1,-25 9.2,-23.6 C 7.8,-24.6 6.4,-24.8 5.2,-24.2 C 4.4,-23 3,-22.4 2,-22.8 C 2.2,-23.8 1.8,-24.6 1,-24.8 C 0,-23 -1.2,-21.4 -2.2,-20.4 C -2.6,-18.6 -2.4,-16.8 -1.6,-15.4 C -3.4,-14.8 -5.4,-14.8 -6.8,-15.4 Z"
+          fill="#3b3f8c" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -6.6,-20.4 C -6.4,-24.8 -3.8,-28 0.4,-28.8" stroke="#6d74c8" stroke-width="1" fill="none"/>
+    <path d="M -4.4,-16.6 C -3.4,-18.2 -3.2,-20 -3.4,-21.6" stroke="#2c2f6e" stroke-width="0.8" fill="none"/>
+    <g transform="translate(-1.2,-29.8) scale(0.72) translate(1.2,29.8)">
+      <path d="M -2,-29.8 C -3.4,-33.4 -0.8,-36.2 1.8,-35.2 C 3.6,-34.4 3.2,-31.8 1.4,-31.8 C 0.2,-31.8 -0.1,-33.2 0.9,-33.5" stroke="#2a1a2e" stroke-width="3.2" fill="none"/>
+      <path d="M -2,-29.8 C -3.4,-33.4 -0.8,-36.2 1.8,-35.2 C 3.6,-34.4 3.2,-31.8 1.4,-31.8 C 0.2,-31.8 -0.1,-33.2 0.9,-33.5" stroke="#3b3f8c" stroke-width="1.7" fill="none"/>
+    </g>
+    <!-- ear -->
+    <ellipse cx="-1.4" cy="-19.4" rx="1.3" ry="1.7" fill="#f5b590" stroke="#2a1a2e" stroke-width="0.5"/>
+    <!-- dive goggles up on the forehead: strap, then the near and far lenses -->
+    <path d="M -8.4,-23.2 C -4,-26.6 3,-27.8 9,-26.4" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M -8.4,-23.2 C -4,-26.6 3,-27.8 9,-26.4" stroke="#2bb3a3" stroke-width="1.3" fill="none"/>
+    <circle cx="3.2" cy="-27.4" r="2.9" fill="#ff8a3d" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="3.2" cy="-27.4" r="1.9" fill="#7fe0e8" stroke="#2a1a2e" stroke-width="0.4"/>
+    <path d="M 2.1,-28.3 A 1.3 1.3 0 0 1 3.3,-28.9" stroke="#ffffff" stroke-width="0.7" fill="none"/>
+    <ellipse cx="7.6" cy="-26.8" rx="1.6" ry="2.6" fill="#ff8a3d" stroke="#2a1a2e" stroke-width="0.7"/>
+    <ellipse cx="7.7" cy="-26.8" rx="0.9" ry="1.7" fill="#5cc4d0"/>
+    <!-- face: big eyes under the goggles, a set brow, freckles and a gap-tooth grin -->
+    <path d="M 2.8,-22.4 L 5.2,-22.9 M 6.6,-22.9 L 8,-22.5" stroke="#2a1a2e" stroke-width="0.6" fill="none"/>
+    <ellipse cx="4.2" cy="-19.4" rx="1.45" ry="2.2" fill="#2a1a50"/>
+    <path d="M 3,-18.4 Q 4.2,-17 5.4,-18.4 L 5.4,-18 Q 4.2,-16.8 3,-18 Z" fill="#5a6ad0"/>
+    <circle cx="4.6" cy="-20.2" r="0.6" fill="#fff"/>
+    <ellipse cx="7.3" cy="-19.5" rx="0.9" ry="1.95" fill="#2a1a50"/>
+    <circle cx="7.5" cy="-20.3" r="0.42" fill="#fff"/>
+    <g fill="#d9845f"><circle cx="2" cy="-16.9" r="0.35"/><circle cx="3.1" cy="-16.3" r="0.35"/><circle cx="1.5" cy="-15.9" r="0.3"/></g>
+    <path d="M 5,-16.5 Q 6.7,-14.6 8.3,-16.7 Q 6.7,-15.8 5,-16.5 Z" fill="#a8323c" stroke="#2a1a2e" stroke-width="0.45"/>
+    </g>
+  </g>
+</svg>

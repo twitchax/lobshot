@@ -1,0 +1,23 @@
+[package]
+name = "lobshot-sim"
+description = "lobshot's game rules: pure, deterministic, and free of any engine."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+libm.workspace = true
+postcard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

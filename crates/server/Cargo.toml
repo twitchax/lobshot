@@ -1,0 +1,40 @@
+[package]
+name = "lobshot-server"
+description = "The lobshot server: serves the client bundle, the WebSocket and the rooms."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The package is `lobshot-server`, but the one binary that serves everything is `lobshot`.
+[[bin]]
+name = "lobshot"
+path = "src/bin.rs"
+
+[dependencies]
+lobshot-sim.workspace = true
+lobshot-protocol.workspace = true
+lobshot-assets.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+tokio-tungstenite.workspace = true
+headless_chrome.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true

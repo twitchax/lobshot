@@ -1,0 +1,160 @@
+[workspace]
+members = ["crates/sim", "crates/protocol", "crates/assets", "crates/server", "crates/client", "crates/lab", "xtask"]
+# Plain `cargo build` / `cargo test` stay native: the client only builds for wasm32 (see
+# `crates/client/Cargo.toml`), and the tooling crate is reached with `--workspace`.
+default-members = ["crates/sim", "crates/protocol", "crates/assets", "crates/server", "crates/lab"]
+resolver = "3"
+
+# Shared metadata: crates inherit it with `field.workspace = true`, so a version bump is one edit.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Aaron Roney <twitchax@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/twitchax/lobshot"
+
+# Dependency versions live here once; crates opt in with `name.workspace = true`.
+[workspace.dependencies]
+lobshot-sim = { path = "crates/sim", version = "0.1.0" }
+lobshot-protocol = { path = "crates/protocol", version = "0.1.0" }
+lobshot-assets = { path = "crates/assets", version = "0.1.0" }
+anyhow = "1"
+# Pure-Rust math: the same bits on native and wasm32, unlike platform libm (sim determinism).
+libm = "0.2"
+# The wire and replay format: compact, deterministic, serde-driven.
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+# The same types as JSON, for debugging and LLM agents.
+serde_json = "1"
+# Hand-authored asset manifests (rigs, maps).
+ron = "0.12"
+# Server-side rolls: room codes, tokens, weather, wind, starting order.
+rand = "0.10"
+futures-util = "0.3"
+# A WebSocket client for the server's e2e tests.
+tokio-tungstenite = "0.30"
+# The browser smoke test drives the installed Chrome over CDP. No default features: it never
+# downloads a browser.
+headless_chrome = { version = "1", default-features = false }
+# The client's WebSocket, on the web and natively.
+ewebsock = "0.8"
+# The client's browser glue: location, localStorage, fetch, and the DOM text input.
+web-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+# xtask art: SVG to PNG.
+resvg = "0.48"
+# `ws`: the game's WebSocket.
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive", "env"] }
+# Only what the server uses: the multi-threaded runtime, sockets, signals for graceful shutdown,
+# channels between connections and room tasks, and timers (turn clock, heartbeat, room expiry).
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+# `fs` serves the client bundle (with its precompressed siblings); `set-header` sets its caching.
+tower-http = { version = "0.7", features = ["fs", "set-header"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+pretty_assertions = "1"
+tempfile = "3"
+# `oneshot` drives the router in-process, with no socket.
+tower = { version = "0.5", features = ["util"] }
+# xtask: precompressing the client bundle.
+brotli = "9"
+flate2 = "1"
+
+# Lints live here, once, and every crate opts in with `[lints] workspace = true` (conclave's
+# mechanism; it replaces crate-root `#![deny]` attributes, which drifted between lib.rs and main.rs
+# and skipped the xtask crate in razel). Groups sit at priority -1 so a specific lint can override
+# them. Gate: `cargo make clippy` (`-D warnings`).
+[workspace.lints.rust]
+unused = { level = "deny", priority = -1 }
+# `cargo llvm-cov` on nightly sets `coverage_nightly`; declare it so check-cfg stays quiet.
+unexpected_cfgs = { level = "deny", check-cfg = ["cfg(coverage_nightly)"] }
+
+[workspace.lints.clippy]
+# `all` covers conclave's `correctness` + `complexity` (plus `style`, `suspicious`, `perf`).
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# Library and binary code returns errors; only tests may unwrap or expect (each test module opens
+# with `#![allow(clippy::unwrap_used, clippy::expect_used)]`). Never allow `too_many_lines`,
+# `too_many_arguments` or `needless_pass_by_value`: split the function, introduce a struct, or
+# take a reference.
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+# Ship size and speed over link time: one codegen unit and fat LTO, symbols stripped.
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Release-like codegen without the expensive LTO / single-CGU link, for quick perf checks.
+[profile.dev-release]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 16
+debug = 1
+strip = false
+
+# Release optimizations with full debug info and no LTO, so profilers see legible symbols.
+[profile.profiling]
+inherits = "release"
+debug = 2
+lto = false
+strip = false
+
+# xtask runs in the dev profile, so its hot dependencies are optimized one by one, leaving every
+# other dev build as it was. `cargo xtask dist` runs brotli at quality 11 over a ~20 MB wasm (5.5
+# minutes unoptimized).
+[profile.dev.package.brotli]
+opt-level = 3
+
+[profile.dev.package.alloc-no-stdlib]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+# `cargo xtask art` renders a few dozen SVGs at 2x through resvg: 3 minutes unoptimized, about 23 s
+# optimized, with byte-identical output either way.
+[profile.dev.package.resvg]
+opt-level = 3
+
+[profile.dev.package.usvg]
+opt-level = 3
+
+[profile.dev.package.tiny-skia]
+opt-level = 3
+
+[profile.dev.package.tiny-skia-path]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+# The client's dev loop (`cargo make dev`): quick to build and still playable. Bevy's own code
+# optimized and no debug info (a plain debug wasm is ~370 MB and crawls); our crates barely
+# optimized, so edits rebuild fast.
+[profile.wasm-dev]
+inherits = "dev"
+debug = false
+opt-level = 1
+
+[profile.wasm-dev.package."*"]
+opt-level = 2
+
+# The client's wasm build (trunk passes `--cargo-profile wasm-release`). Size-leaning `s` rather
+# than `z`: the bundle downloads once and is cached, but the game runs every frame. The server keeps
+# the speed-optimized release profile.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"

@@ -1,0 +1,220 @@
+//! The asset layout and manifests, in one place for the writer (`cargo xtask art`) and the readers
+//! (the client draws them, the server loads map masks and spawns).
+//!
+//! Sources live in `assets/` (SVG and hand-written RON, CC0). `cargo xtask art` renders them into
+//! `assets/gen/` (gitignored), which trunk copies into the bundle at `assets/`. Paths below are
+//! relative to that root. Every rendered image is drawn at `ART_SCALE`, and its center is its
+//! SVG's origin (a part's pivot, a rider's seat), so a sprite anchors at its center.
+
+use anyhow::{Context as _, ensure};
+use serde::{Deserialize, Serialize};
+
+use lobshot_sim::{base::Res, game::MobileKind};
+
+/// Rendered images have this many pixels per world pixel.
+pub const ART_SCALE: f64 = 2.0;
+
+/// A mobile's directory name, from its lobshot name (`coilback`).
+#[must_use]
+pub fn mobile_slug(mobile: MobileKind) -> String {
+    mobile.tuning().name.to_lowercase()
+}
+
+/// A mobile's rig manifest.
+#[must_use]
+pub fn rig_path(mobile: MobileKind) -> String {
+    format!("mobiles/{}/rig.ron", mobile_slug(mobile))
+}
+
+/// A rendered rig part, from the part's `file` in the rig (`body.svg` renders to `body.png`).
+#[must_use]
+pub fn part_path(mobile: MobileKind, file: &str) -> String {
+    format!("mobiles/{}/{}", mobile_slug(mobile), png_name(file))
+}
+
+/// A rendered rider.
+#[must_use]
+pub fn rider_path(rider: &str) -> String {
+    format!("riders/{rider}.png")
+}
+
+/// A map's manifest.
+#[must_use]
+pub fn map_path(map: &str) -> String {
+    format!("maps/{map}/map.ron")
+}
+
+/// A map's background, shared by its variants.
+#[must_use]
+pub fn background_path(map: &str) -> String {
+    format!("maps/{map}/background.png")
+}
+
+/// A map variant's rendered terrain.
+#[must_use]
+pub fn terrain_path(map: &str, variant: &str) -> String {
+    format!("maps/{map}/{variant}/terrain.png")
+}
+
+/// A map variant's collision mask, in `lobshot_sim::terrain::Terrain`'s mask format.
+#[must_use]
+pub fn mask_path(map: &str, variant: &str) -> String {
+    format!("maps/{map}/{variant}/mask.bin")
+}
+
+fn png_name(file: &str) -> String {
+    let stem = file.rsplit_once('.').map_or(file, |(stem, _)| stem);
+    format!("{stem}.png")
+}
+
+/// A mobile's cutout rig: the art only. Gameplay geometry (hitbox, aim range, ground probes) lives
+/// in `lobshot_sim::tuning`; `cargo xtask art` checks the rig's cannon agrees with it.
+///
+/// Body frame: origin at the center of the ground contact, `+x` forward, `y` down, world pixels.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MobileRig {
+    pub name: String,
+    /// Drawn in `z` order, lowest first.
+    pub parts: Vec<Part>,
+    pub cannon: Cannon,
+    /// Where the rider sits.
+    pub rider_socket: Socket,
+}
+
+/// One cutout part.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Part {
+    pub id: String,
+    /// The source SVG, next to the rig; the rendered PNG has the same stem.
+    pub file: String,
+    /// Where the part's pivot sits in the body frame.
+    pub at: (f64, f64),
+    pub z: i32,
+    /// Rolls as the mobile moves (wheels).
+    #[serde(default)]
+    pub spin: bool,
+    /// Turns with the cannon's aim.
+    #[serde(default)]
+    pub aim: bool,
+}
+
+/// The cannon: which part aims, and where shots leave it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Cannon {
+    pub part: String,
+    /// In the cannon part's frame at aim 0 (pointing `+x`).
+    pub muzzle: (f64, f64),
+}
+
+/// A point to hang something on.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Socket {
+    pub at: (f64, f64),
+    pub z: i32,
+}
+
+/// A map: its variants, and where mobiles may spawn on each.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MapInfo {
+    /// The directory name (`tidewall`).
+    pub name: String,
+    /// What players see (`Tidewall`).
+    pub title: String,
+    pub variants: Vec<MapVariant>,
+}
+
+/// One variant of a map.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MapVariant {
+    /// `A` or `B`.
+    pub id: String,
+    /// Columns a mobile may spawn in; the server picks from these.
+    pub spawns: Vec<i32>,
+    /// World size in pixels, and the mask's hash. Absent in the hand-written source; `cargo
+    /// xtask art` fills them in the generated manifest.
+    #[serde(default)]
+    pub size: Option<(u32, u32)>,
+    #[serde(default)]
+    pub mask_hash: Option<u64>,
+}
+
+impl MapInfo {
+    /// Reads a manifest.
+    ///
+    /// # Errors
+    ///
+    /// Fails on malformed RON or a map with no variants.
+    pub fn from_ron(text: &str) -> Res<Self> {
+        let info: Self = ron::from_str(text).context("reading a map manifest")?;
+        ensure!(!info.variants.is_empty(), "map {} has no variants", info.name);
+        Ok(info)
+    }
+
+    #[must_use]
+    pub fn variant(&self, id: &str) -> Option<&MapVariant> {
+        self.variants.iter().find(|v| v.id == id)
+    }
+}
+
+impl MobileRig {
+    /// Reads a manifest.
+    ///
+    /// # Errors
+    ///
+    /// Fails on malformed RON, or a cannon that names no part.
+    pub fn from_ron(text: &str) -> Res<Self> {
+        let rig: Self = ron::from_str(text).context("reading a rig")?;
+        ensure!(rig.parts.iter().any(|p| p.id == rig.cannon.part), "{}'s cannon names no part {:?}", rig.name, rig.cannon.part);
+        Ok(rig)
+    }
+}
+
+/// Writes a manifest back out (the generated copies).
+///
+/// # Errors
+///
+/// Fails only if serialization does.
+pub fn to_ron<T: Serialize>(value: &T) -> Res<String> {
+    ron::ser::to_string_pretty(value, ron::ser::PrettyConfig::default()).context("writing RON")
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn paths_follow_the_layout() {
+        assert_eq!(rig_path(MobileKind::Coilback), "mobiles/coilback/rig.ron");
+        assert_eq!(part_path(MobileKind::Coilback, "wheel_big.svg"), "mobiles/coilback/wheel_big.png");
+        assert_eq!(mask_path("tidewall", "A"), "maps/tidewall/A/mask.bin");
+        assert_eq!(rider_path("pip"), "riders/pip.png");
+    }
+
+    #[test]
+    fn reads_a_hand_written_map_and_round_trips_a_generated_one() {
+        let source = r#"MapInfo(name: "pond", title: "Pond", variants: [(id: "A", spawns: [100, 700])])"#;
+        let mut info = MapInfo::from_ron(source).unwrap();
+        assert_eq!(info.variant("A").unwrap().size, None);
+        info.variants[0].size = Some((800, 600));
+        info.variants[0].mask_hash = Some(42);
+        assert_eq!(MapInfo::from_ron(&to_ron(&info).unwrap()).unwrap(), info);
+        assert!(MapInfo::from_ron(r#"MapInfo(name: "x", title: "X", variants: [])"#).is_err());
+    }
+
+    #[test]
+    fn reads_a_rig() {
+        let source = r#"MobileRig(
+            name: "Coilback",
+            parts: [(id: "body", file: "body.svg", at: (0.0, 0.0), z: 0), (id: "cannon", file: "cannon.svg", at: (7.0, -48.0), z: 3, aim: true)],
+            cannon: (part: "cannon", muzzle: (28.8, 0.0)),
+            rider_socket: (at: (-12.0, -56.0), z: 4),
+        )"#;
+        let rig = MobileRig::from_ron(source).unwrap();
+        assert!(rig.parts[1].aim && !rig.parts[0].spin);
+        assert!(MobileRig::from_ron(&source.replace(r#"part: "cannon""#, r#"part: "nope""#)).is_err());
+    }
+}

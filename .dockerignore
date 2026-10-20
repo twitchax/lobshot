@@ -1,0 +1,8 @@
+# Keep the build context small. Do not ignore benches/ or tests/: Cargo.toml declares them, and
+# cargo-chef fails on a manifest that points at missing files (rusty_socks). `dist/` and
+# `assets/gen/` are rebuilt inside the image.
+target/
+dist/
+assets/gen/
+.git/
+coverage.lcov

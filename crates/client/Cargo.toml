@@ -1,0 +1,68 @@
+[package]
+name = "lobshot-client"
+description = "The lobshot client: Bevy, compiled to wasm32 and built by trunk."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# wasm32 only for now (a native build can come later): it is outside `default-members`, the native
+# clippy and test tasks exclude it, and `cargo make clippy-wasm` lints it for its real target.
+
+[dependencies]
+lobshot-sim.workspace = true
+lobshot-protocol.workspace = true
+lobshot-assets.workspace = true
+anyhow.workspace = true
+ewebsock.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+# Only the browser APIs the client touches: the page URL and history, localStorage, fetch for
+# creating rooms, the clipboard for sharing links, and the DOM text input for chat and names.
+web-sys = { workspace = true, features = [
+    "Window",
+    "Document",
+    "Location",
+    "History",
+    "Storage",
+    "Navigator",
+    "Clipboard",
+    "Element",
+    "HtmlElement",
+    "HtmlInputElement",
+    "CssStyleDeclaration",
+    "KeyboardEvent",
+    "Request",
+    "RequestInit",
+    "Response",
+] }
+
+# The 2D renderer, Bevy UI with its headless widgets and pointer picking, text, PNG and the web
+# platform. `default-features = false` keeps the 3D renderer, gamepads, audio and desktop backends
+# out of the bundle (audio joins with the sound effects). WebGL2 has the widest browser support,
+# and WebGPU adds nothing for 2D.
+[dependencies.bevy]
+version = "0.20"
+default-features = false
+features = [
+    "std",
+    "default_app",
+    "2d_bevy_render",
+    "ui_api",
+    "ui_bevy_render",
+    "bevy_ui_widgets",
+    "bevy_picking",
+    "ui_picking",
+    "default_font",
+    "png",
+    "bevy_winit",
+    "web",
+    "webgl2",
+]
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "lobshot-protocol"
+description = "The messages between the lobshot server and its clients (browsers, bots, LLM agents)."
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+lobshot-sim.workspace = true
+anyhow.workspace = true
+postcard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

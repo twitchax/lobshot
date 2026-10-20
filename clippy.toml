@@ -1,0 +1,3 @@
+# Proper names the rules and docs cite constantly; without these, `doc_markdown` wants them in
+# backticks like code. `..` keeps clippy's default list.
+doc-valid-idents = ["GunBound", "DragonBound", "OpenBound", "SearchBot", "WebGL2", "WebGPU", ".."]

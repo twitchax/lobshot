@@ -1,0 +1,198 @@
+//! Where games are played: the built-in `flat` map, and drawn maps from the client bundle's
+//! generated assets (`<dist>/assets`, which `cargo xtask art` writes and trunk copies). The server
+//! reads a map's manifest when a game is set up, and its collision mask through `MapAssets`.
+
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Mutex, PoisonError},
+};
+
+use anyhow::{Context as _, ensure};
+
+use lobshot_assets::{MapInfo, map_path, mask_path};
+use lobshot_sim::{
+    base::{Res, Void},
+    map::{MapAssets, MapRef},
+    terrain::Terrain,
+};
+
+/// The synthetic test map's name.
+pub const FLAT: &str = "flat";
+
+/// `flat`: one field, two screens wide.
+const FLAT_WIDTH: u32 = 1600;
+const FLAT_MAP: MapRef = MapRef::Flat {
+    width: FLAT_WIDTH,
+    height: 900,
+    ground: 700,
+};
+const FLAT_SPAWNS: [i32; 8] = [200, 1400, 500, 1100, 350, 1250, 650, 950];
+
+/// Drawn maps are played on this variant until rooms can pick one.
+const VARIANT: &str = "A";
+
+/// A map ready to seat a game on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Arena {
+    pub map: MapRef,
+    pub width: u32,
+    /// Columns mobiles may spawn in.
+    pub spawns: Vec<i32>,
+}
+
+/// The maps a server can seat games on. Masks are cached once read: every game on a map starts
+/// from the same one.
+#[derive(Debug)]
+pub struct Maps {
+    root: PathBuf,
+    masks: Mutex<HashMap<(String, String), Terrain>>,
+}
+
+impl Maps {
+    /// Drawn maps come from `<dist>/assets`.
+    #[must_use]
+    pub fn new(dist: &Path) -> Self {
+        Self {
+            root: dist.join("assets"),
+            masks: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// The map a room named, ready to seat a game on.
+    ///
+    /// # Errors
+    ///
+    /// Fails on a name that isn't a map, or a drawn map whose generated manifest is missing.
+    pub fn arena(&self, name: &str) -> Res<Arena> {
+        if name == FLAT {
+            return Ok(Arena {
+                map: FLAT_MAP,
+                width: FLAT_WIDTH,
+                spawns: FLAT_SPAWNS.to_vec(),
+            });
+        }
+        check_asset_name(name, "map")?;
+        let path = self.root.join(map_path(name));
+        let text = std::fs::read_to_string(&path).with_context(|| format!("there is no map {name:?}"))?;
+        let info = MapInfo::from_ron(&text).with_context(|| format!("reading {}", path.display()))?;
+        let variant = info.variant(VARIANT).with_context(|| format!("map {name} has no variant {VARIANT}"))?;
+        // The hand-written source manifests lack these; only `cargo xtask art`'s output has them.
+        let (Some((width, _)), Some(mask_hash)) = (variant.size, variant.mask_hash) else {
+            anyhow::bail!("map {name}'s manifest is not generated: run `cargo xtask art`");
+        };
+        Ok(Arena {
+            map: MapRef::Asset {
+                name: name.to_owned(),
+                variant: VARIANT.to_owned(),
+                mask_hash,
+            },
+            width,
+            spawns: variant.spawns.clone(),
+        })
+    }
+}
+
+impl MapAssets for Maps {
+    fn mask(&self, name: &str, variant: &str) -> Res<Terrain> {
+        check_asset_name(name, "map")?;
+        check_asset_name(variant, "variant")?;
+        let key = (name.to_owned(), variant.to_owned());
+        // The cache only ever holds whole masks, so one a panicking thread left behind is sound.
+        if let Some(terrain) = self.masks.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+            return Ok(terrain.clone());
+        }
+        let path = self.root.join(mask_path(name, variant));
+        let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        let terrain = Terrain::decode_mask(&bytes).with_context(|| format!("decoding {}", path.display()))?;
+        self.masks.lock().unwrap_or_else(PoisonError::into_inner).insert(key, terrain.clone());
+        Ok(terrain)
+    }
+}
+
+/// Checks a name a client picked that becomes part of an asset path (a map, a rider): only plain
+/// directory names, never `..` or `/`.
+///
+/// # Errors
+///
+/// Fails on anything but 1 to 32 ASCII letters, digits, `_` and `-`.
+pub fn check_asset_name(name: &str, what: &str) -> Void {
+    ensure!(
+        !name.is_empty() && name.len() <= 32 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
+        "{name:?} is not a {what} name"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::tests::write_map;
+
+    fn pond() -> Terrain {
+        Terrain::from_fn(400, 300, |_, y| y >= 200).unwrap()
+    }
+
+    #[test]
+    fn flat_is_built_in() {
+        let maps = Maps::new(Path::new("no-such-dist"));
+        let arena = maps.arena(FLAT).unwrap();
+        assert_eq!(arena.map, MapRef::Flat { width: 1600, height: 900, ground: 700 });
+        assert_eq!(arena.width, 1600);
+        assert_eq!(arena.spawns, [200, 1400, 500, 1100, 350, 1250, 650, 950]);
+    }
+
+    #[test]
+    fn drawn_maps_load_variant_a_and_its_mask() {
+        let dist = TempDir::new().unwrap();
+        write_map(dist.path(), "pond", &pond(), &[50, 350]).unwrap();
+        let maps = Maps::new(dist.path());
+
+        let arena = maps.arena("pond").unwrap();
+        assert_eq!(
+            arena,
+            Arena {
+                map: MapRef::Asset {
+                    name: "pond".into(),
+                    variant: "A".into(),
+                    mask_hash: pond().mask_hash(),
+                },
+                width: 400,
+                spawns: vec![50, 350],
+            }
+        );
+        assert_eq!(arena.map.terrain(&maps).unwrap(), pond());
+
+        // Cached: the file can go and the mask still loads.
+        std::fs::remove_file(dist.path().join("assets").join(mask_path("pond", "A"))).unwrap();
+        assert_eq!(maps.mask("pond", "A").unwrap(), pond());
+    }
+
+    #[test]
+    fn missing_or_ungenerated_maps_are_refused() {
+        let dist = TempDir::new().unwrap();
+        let maps = Maps::new(dist.path());
+        assert!(format!("{:#}", maps.arena("tidewall").unwrap_err()).contains("no map"));
+
+        let source = dist.path().join("assets").join(map_path("raw"));
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, r#"MapInfo(name: "raw", title: "Raw", variants: [(id: "A", spawns: [1, 2])])"#).unwrap();
+        assert!(format!("{:#}", maps.arena("raw").unwrap_err()).contains("cargo xtask art"));
+        assert!(maps.mask("raw", "A").is_err());
+    }
+
+    #[test]
+    fn names_never_leave_the_assets_directory() {
+        let maps = Maps::new(Path::new("dist"));
+        for name in ["", "..", "../secret", "a/b", "a\\b", "x.ron", &"long".repeat(9)] {
+            assert!(maps.arena(name).is_err(), "{name:?}");
+            assert!(maps.mask(name, "A").is_err(), "{name:?}");
+        }
+        assert!(maps.mask("pond", "../A").is_err());
+    }
+}

@@ -1,0 +1,268 @@
+{
+  "setup": {
+    "map": {
+      "Flat": {
+        "width": 1600,
+        "height": 700,
+        "ground": 560
+      }
+    },
+    "seats": [
+      {
+        "team": "A",
+        "mobile": "Coilback",
+        "spawn_x": 350,
+        "facing": "Right"
+      },
+      {
+        "team": "B",
+        "mobile": "Coilback",
+        "spawn_x": 1150,
+        "facing": "Left"
+      }
+    ],
+    "order": [
+      0,
+      1
+    ],
+    "wind": {
+      "strength": 0,
+      "direction": 0
+    }
+  },
+  "events": [
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 32,
+        "power": 48,
+        "time": 300
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 32,
+        "power": 45,
+        "time": 437
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "Ss",
+        "aim": 30,
+        "power": 48,
+        "time": 574
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 32,
+        "power": 45,
+        "time": 711
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 32,
+        "power": 45,
+        "time": 848
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "Ss",
+        "aim": 30,
+        "power": 48,
+        "time": 985
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Pass": {
+        "seat": 1,
+        "time": 2000
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S2",
+        "aim": 32,
+        "power": 47,
+        "time": 1259
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "Ss",
+        "aim": 30,
+        "power": 48,
+        "time": 1396
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 32,
+        "power": 45,
+        "time": 1533
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 32,
+        "power": 46,
+        "time": 1670
+      }
+    }
+  ]
+}

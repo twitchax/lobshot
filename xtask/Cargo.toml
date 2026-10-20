@@ -1,0 +1,28 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2024"
+# Repo tooling only: never published, kept out of default-members and the coverage denominator.
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+brotli.workspace = true
+flate2.workspace = true
+lobshot-assets.workspace = true
+lobshot-sim.workspace = true
+# Placement math through pure-Rust libm, so generated geometry (and the mask hash) is the same on
+# every host.
+libm.workspace = true
+# resvg already builds it; used directly for the compression level.
+png = "0.18"
+resvg.workspace = true
+ron.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
