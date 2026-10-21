@@ -38,7 +38,9 @@ numbers come from is in `docs/research/`.
   HUD conventions (wind dial, aim arc, power bar, turn list) are genre-standard and fine. "In the
   spirit of GunBound" in a description is a factual reference; never use it as a brand.
 - Code identifiers and player-facing strings use lobshot names. GunBound names appear only in
-  `sim::tuning` source tags and `docs/research/`.
+  `sim::tuning` source tags and `docs/research/`. Items keep GunBound's plain words (Dual, Dual+,
+  Teleport, Power Up, Thunder) or take plain lobshot ones (Sacrifice, Dig, Heal, Big Heal, Wind
+  Flip, Swap).
 - Never port OpenBound's code (GPLv3) or use its assets (ripped from GunBound). Its numbers and
   physics model are documented in `docs/research/openbound.md`; reimplement from those.
 - **MIT for code, CC0 for `assets/`** (its own LICENSE file). Any future commission must release its
@@ -79,6 +81,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - **Server authoritative.** The active player sends intents (move, angle, power, shot, item). The
   server validates them against its `sim` and broadcasts the accepted ones; every client replays
   them. Per-turn state hashes catch desync; a full snapshot repairs it.
+- **Damage** hits a mobile's shield first, then its HP; shields regenerate at the start of their
+  owner's turn.
 - **Movement** is integer pixel stepping (climb, drop and step budget per mobile, in the tuning
   table). The active player's client predicts each step with the shared `sim` and streams inputs
   with a tick; the server replays and broadcasts them. Other players see the steps, smoothed.
@@ -106,7 +110,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - **Pacing:** the sim resolves a shot at once, but clients show it over seconds (flight, blasts,
   falls). Both follow one schedule (`lobshot_protocol::pacing`), and the server starts the next
   turn's clock, and a bot's think delay, only once clients have finished showing it, so watching a
-  shot never eats into the next player's turn.
+  shot never eats into the next player's turn. An event plays in stages (a Dual's two volleys, a
+  drop landing), each once the one before it is done, and scenes play one after another, so a
+  dead player's spin mid-turn delays what follows it, never the turn already running.
 - Heartbeat every ~20 s: a player lining up a shot sends nothing, and proxies drop idle sockets.
 
 ## Rooms
@@ -132,8 +138,10 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - `sim` defines a controller: given what a player can see, return intents. Bots see only what a
   player sees, with no oracle wind.
 - **Human:** a remote player on the server.
-- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage, with aim
-  noise for difficulty. Fills seats in real rooms. Runs on `spawn_blocking` with a ~1 s budget per
+- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage. Its
+  levels differ by how badly they read the wind and miss the aim and power they found
+  (`sim::tuning::bot`): Hard is exact, Normal hurts an enemy with about two shots in three. It
+  fills seats in real rooms. Runs on `spawn_blocking` with a ~1 s budget per
   turn so a room of bots cannot starve the others.
 - **ExternalAgent:** an LLM (e.g., Claude through an MCP server or CLI) playing turn by turn over
   the JSON protocol, for qualitative playtesting.
@@ -192,21 +200,25 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   `docs/research/art-spike/`; M2 fixed its flaws and replaced its scripts with `cargo xtask art`,
   whose review sheets land in `target/art-preview/`. Expect ~1–2 hours of agent time per
   additional mobile, plus review.
+- **M3 added** Lanternwing (a moth mech, Mage's behavior), Hookclaw (a hermit crab, Boomer's),
+  Sparkhorn (a rhino beetle, Lightning's) and Marblemole (a mole in a mine cart, Grub's), the item
+  icons and slot-machine drops, and four maps: Gablewick (town rooftops), Glintvein (mine
+  corridors), Rimewake (long flat sea) and Ashspine (dragon's-back ridge), plus Tidewall B.
 
 ## Testing
 
-- Unit tests in each crate.
+- Unit tests in each crate. The client builds only for the browser, so its tests run on wasm32 in
+  node under wasm-bindgen's test runner (`cargo make test-client`).
 - Physics: the GunBound-formula acceptance tests.
 - Replays: golden tests where a recorded log must reproduce the same final state hash, plus the
   native-vs-wasm hash test.
 - Server: end-to-end tests that spawn the real binary in a `TempDir` and drive full games with fake
   WebSocket clients and bots.
-- Browser: two smoke tests, one online as a spectator (page loads, canvas renders, socket
-  connects, a game reaches turn 2), one in practice (clicks into a game, the turn runs out),
-  driving the installed Chrome over CDP from Rust (`headless_chrome`): no Node toolchain and no
-  browser download. The client publishes its state, and where its buttons are, as
-  `window.lobshot` for them. Both check that each turn's clock starts only once the shot before it
-  has shown.
+- Browser: smoke tests online as a spectator (page loads, canvas renders, socket connects, a game
+  reaches turn 2) and in practice (clicks into a game, the turn runs out; an item armed, SS
+  locked), driving the installed Chrome over CDP from Rust (`headless_chrome`): no browser
+  download. The client publishes its state, and where its buttons are, as `window.lobshot` for
+  them. The first two check that each turn's clock starts only once the shot before it has shown.
 - Balance: the `lab` win-rate gate, once the roster passes ~5 mobiles.
 
 ## Performance goals
@@ -221,7 +233,7 @@ not a failure.
 
 ## Deployment
 
-At the end of M3, when a complete Solo game exists. `flyctl` is not installed yet.
+At the end of M3, when a complete Solo game exists. `fly.toml` holds the app's settings.
 
 - **Container:** multi-stage Docker. Build stage: cargo-chef dependency caching, `cargo xtask art`,
   `cargo xtask dist` (trunk with `wasm-opt`, then brotli and gzip siblings the server picks by
@@ -252,7 +264,7 @@ One PRD per milestone in `.prds/`.
   reconnect, kick; SearchBot v0; `cargo xtask art` with Coilback, Pip and Tidewall; sound effects.
 - **M3 Full Solo.** 2v2 to 4v4; all 11 items and the 6-slot loadout; SS gating; all four
   sudden-death types; the slot machine; five starter mobiles (Armor, Mage, Boomer, Lightning and
-  Grub behaviors); the bonus scoreboard; four maps. **Deployed** to `lobshot.twitchax.com`.
+  Grub behaviors); the bonus scoreboard; five maps. **Deployed** to `lobshot.twitchax.com`.
 - **M4 Lab.** Headless balance runs, the win-rate matrix and the CI band gate; the JSON/MCP
   interface for LLM agents.
 - **M5 Full roster.** The remaining 13 mobiles (Raon's mines, Aduka with Thor, JD's pull and push,

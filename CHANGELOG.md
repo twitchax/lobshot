@@ -27,3 +27,16 @@ why the version moved the way it did.
 - A browser smoke test (`cargo make browser`) driving headless Chrome against the real server.
 - Sound effects (Kenney, CC0): shots, blasts, hits, falls, your turn, the clock's last seconds, the
   result, buttons and chat.
+- Full Solo (M3): teams up to 4v4, all 11 items and the six-slot loadout, SS once every four of
+  your own turns, sudden death (Big Bomb, Double, SS Death), the dead players' slot machine,
+  shields, and an end-of-game scoreboard of damage, kills and bonuses.
+- Four more mobiles: Lanternwing, Hookclaw, Sparkhorn and Marblemole, each with its own three
+  shots, art and fitted gravity; Random picks one at the start.
+- Four more maps (Gablewick, Glintvein, Rimewake, Ashspine) and Tidewall B, each map with two
+  variants.
+- SearchBot uses items and every shot, and its levels differ by how they misread the wind and miss.
+- The client's unit tests (`cargo make test-client`), on wasm32 in node.
+
+### Changed
+
+- Protocol and log wire versions are 2: logs from M2 builds don't load.
