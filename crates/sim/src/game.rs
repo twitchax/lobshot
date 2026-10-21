@@ -1156,8 +1156,10 @@ impl Game {
             });
         }
         drops::land_due(self, effects);
+        // A game that just ended doesn't announce sudden death on its way out.
         if let Some(sudden_death) = self.sudden_death
             && self.turns == i64::from(sudden_death.turn)
+            && !self.decided()
         {
             effects.push(Effect::SuddenDeath { kind: sudden_death.kind });
         }

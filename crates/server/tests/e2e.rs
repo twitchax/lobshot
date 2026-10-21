@@ -19,7 +19,10 @@ use tempfile::TempDir;
 
 use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::{INDEX_HTML, create_room, http_get, write_bundle};
-use lobshot_sim::game::{Event, Phase, SuddenDeath, SuddenDeathKind, Team};
+use lobshot_sim::{
+    game::{Effect, Event, Game, Phase, SuddenDeath, SuddenDeathKind, Team},
+    map::NoAssets,
+};
 
 use support::{Client, play_out};
 
@@ -144,7 +147,8 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
 /// second spectator follows in JSON; each replays the log it receives and checks the server's
 /// hash after every event. Bots play at once and turns start at once, since no one watches.
 ///
-/// Sudden death is set up, not necessarily reached: SearchBot fires S2 and SS when they do more,
+/// Sudden death is set up, and checked to start at turn 40 when the game gets that far, but not
+/// necessarily reached: SearchBot fires S2 and SS when they do more,
 /// at two to three times S1's damage, so eight bots facing each other 300 px apart on `flat` end
 /// in 25 to 60 turns, past turn 40 in a quarter of games (12 seeded sim games; S1-only bots ran
 /// 44 to 78). Rooms only offer 40, 56 and 72, so this test can't start it sooner. The sim's golden
@@ -193,4 +197,17 @@ async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
 
     let items = log.events.iter().filter(|event| matches!(event, Event::UseItem { .. })).count();
     assert!(items > 0, "the bots used no items in {} turns", game.turns());
+
+    // When the game outlasts turn 40, sudden death starts exactly then.
+    let mut replay = Game::new(&log.setup, &NoAssets).unwrap();
+    let mut started = None;
+    for &event in &log.events {
+        if replay.apply(event).unwrap().iter().any(|effect| matches!(effect, Effect::SuddenDeath { .. })) {
+            started.get_or_insert(replay.turns());
+        }
+    }
+    println!("the 4v4 ran {} turns; sudden death started at {started:?}", game.turns());
+    if game.turns() > 40 {
+        assert_eq!(started, Some(40));
+    }
 }
