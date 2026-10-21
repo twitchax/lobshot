@@ -1,6 +1,6 @@
 //! Marblemole: a mole in a mine cart that bowls static-charged marbles, with GunBound Grub's
-//! behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
-//! `assets/mobiles/marblemole/rig.ron` lands.
+//! behavior. Geometry (hitbox, probes, cannon) matches
+//! its drawing in `assets/mobiles/marblemole/rig.ron`.
 
 use super::{AimRange, ArmorClass, DamageRange, MobileTuning, Rect, ShotTuning, Tuned, WeaponType, cited, fitted, picked};
 
@@ -66,7 +66,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 569.1;
+const GRAVITY: f64 = 574.3;
 
 /// S1: the weakest shot in the game (DB-mob).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 80, max: 130 }, &["DB-mob"]);

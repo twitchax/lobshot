@@ -1,6 +1,6 @@
 //! Lanternwing: a moth mech with a glowing lantern cannon, its wings aglow as its shield, with
-//! GunBound Mage's behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
-//! `assets/mobiles/lanternwing/rig.ron` lands.
+//! GunBound Mage's behavior. Geometry (hitbox, probes, cannon) matches
+//! its drawing in `assets/mobiles/lanternwing/rig.ron`.
 
 use super::{AimRange, ArmorClass, DamageRange, MobileTuning, Rect, ShotTuning, Tuned, WeaponType, cited, fitted, picked};
 
@@ -66,7 +66,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 587.1;
+const GRAVITY: f64 = 587.9;
 
 /// S1: a laser bolt with good bunge (DB-mob).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 100, max: 160 }, &["DB-mob"]);

@@ -1,6 +1,6 @@
 //! Sparkhorn: a rhino-beetle with a tesla-coil horn and a crackling bubble shield, with GunBound
-//! Lightning's behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
-//! `assets/mobiles/sparkhorn/rig.ron` lands.
+//! Lightning's behavior. Geometry (hitbox, probes, cannon) matches
+//! its drawing in `assets/mobiles/sparkhorn/rig.ron`.
 //!
 //! Its S1 and S2 land a ball that calls bolts down onto the impact; the bolts' splash is GunBound
 //! Lightning's constant part (at least 76, SW-mob, WP06), so the ball carries the rest of
@@ -70,7 +70,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 548.3;
+const GRAVITY: f64 = 550.5;
 
 /// The flat damage a bolt's splash deals each mobile within `BOLT_REACH` of its path, once a turn
 /// even with Dual (GF-max, WP06). Splash ignores armor, angle, weather and items (GF-max).

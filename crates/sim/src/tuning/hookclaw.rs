@@ -1,6 +1,6 @@
 //! Hookclaw: a hermit-crab mech that flings crescent boomerangs from its big claw, with GunBound
-//! Boomer's behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
-//! `assets/mobiles/hookclaw/rig.ron` lands.
+//! Boomer's behavior. Geometry (hitbox, probes, cannon) matches
+//! its drawing in `assets/mobiles/hookclaw/rig.ron`.
 
 use super::{AimRange, ArmorClass, DamageRange, MobileTuning, Rect, ShotTuning, Tuned, WeaponType, cited, fitted, picked};
 
@@ -77,8 +77,8 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites these lines: gravity first (in calm air), then the wind sensitivity on top of it.
-const GRAVITY: f64 = 530.7;
-const WIND_SENSITIVITY: f64 = 2.46;
+const GRAVITY: f64 = 528.8;
+const WIND_SENSITIVITY: f64 = 2.53;
 
 /// S1: a light boomerang; its hook comes from the wind (`WIND_SENSITIVITY`).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 120, max: 160 }, &["DB-mob"]);

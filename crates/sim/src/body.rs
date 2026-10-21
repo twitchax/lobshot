@@ -115,7 +115,7 @@ mod unit {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
     use super::*;
-    use crate::tuning::coilback;
+    use crate::{game::MobileKind, tuning::coilback};
 
     fn pose(facing: Facing, tilt_degrees: f64) -> Pose {
         Pose {
@@ -158,10 +158,14 @@ mod unit {
 
     #[test]
     fn the_muzzle_clears_the_hitbox_at_every_aim() {
-        let mobile = &coilback::MOBILE;
         let pose = pose(Facing::Right, 0.0);
-        for aim in mobile.s1.aim.value.min..=mobile.s1.aim.value.max {
-            assert!(!pose.hit(mobile.hitbox.value, pose.muzzle(mobile, aim)), "aim {aim}");
+        for kind in MobileKind::ALL {
+            let mobile = kind.tuning();
+            for shot in [&mobile.s1, &mobile.s2, &mobile.ss] {
+                for aim in shot.aim.value.min..=shot.aim.value.max {
+                    assert!(!pose.hit(mobile.hitbox.value, pose.muzzle(mobile, aim)), "{kind:?} at {aim}");
+                }
+            }
         }
     }
 
