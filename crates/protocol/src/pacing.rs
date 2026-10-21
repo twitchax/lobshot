@@ -98,6 +98,7 @@ mod unit {
 
     use lobshot_sim::{
         game::{Event, Game, MobileKind, Seat, Setup, Shot, Team},
+        items::Loadout,
         map::{MapRef, NoAssets},
         movement::Footing,
         units::{Centis, Facing, Power, Vec2, Wind},
@@ -112,12 +113,14 @@ mod unit {
             mobile: MobileKind::Coilback,
             spawn_x,
             facing,
+            items: Loadout::default(),
         };
         let setup = Setup {
             map: MapRef::Flat { width: 1600, height: 900, ground: 700 },
             seats: vec![seat(Team::A, 400, Facing::Right), seat(Team::B, 1100, Facing::Left)],
             order: vec![0, 1],
             wind: Wind::new(0, 0).unwrap(),
+            sudden_death: None,
         };
         let mut game = Game::new(&setup, &NoAssets).unwrap();
         while let Some(roll) = game.pending_roll() {
@@ -125,6 +128,10 @@ mod unit {
                 lobshot_sim::game::Roll::Wind => Event::Wind(Wind::new(0, 0).unwrap()),
                 lobshot_sim::game::Roll::Weather { .. } => Event::Weather(lobshot_sim::weather::Forecast {
                     kind: lobshot_sim::weather::WeatherKind::Wind,
+                    x: 0,
+                }),
+                lobshot_sim::game::Roll::Drop { .. } => Event::Drop(lobshot_sim::drops::Drop {
+                    kind: lobshot_sim::drops::DropKind::Calm,
                     x: 0,
                 }),
             };

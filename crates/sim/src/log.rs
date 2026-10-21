@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Bumped whenever an encoded log from an older build would decode differently.
-pub const WIRE_VERSION: u8 = 1;
+pub const WIRE_VERSION: u8 = 2;
 
 /// A whole game, replayable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,6 +86,7 @@ mod unit {
     use super::*;
     use crate::{
         game::{MobileKind, Seat, Shot, Team},
+        items::Loadout,
         map::{MapRef, NoAssets},
         units::{Centis, Facing, Power, Wind},
         weather::{Forecast, WeatherKind},
@@ -101,16 +102,19 @@ mod unit {
                         mobile: MobileKind::Coilback,
                         spawn_x: 300,
                         facing: Facing::Right,
+                        items: Loadout::default(),
                     },
                     Seat {
                         team: Team::B,
                         mobile: MobileKind::Coilback,
                         spawn_x: 1100,
                         facing: Facing::Left,
+                        items: Loadout::default(),
                     },
                 ],
                 order: vec![1, 0],
                 wind: Wind::new(7, 135).unwrap(),
+                sudden_death: None,
             },
             events: [Event::Weather(Forecast { kind: WeatherKind::Wind, x: 0 }); 5]
                 .into_iter()

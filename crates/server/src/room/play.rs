@@ -15,7 +15,8 @@ use rand::{RngExt as _, seq::SliceRandom as _};
 use lobshot_protocol::{Action, MemberId, ServerMsg, pacing};
 use lobshot_sim::{
     base::Void,
-    game::{Event, Game, Phase, Roll, Seat, Setup, Team},
+    drops::{Drop, DropKind},
+    game::{Event, Game, MobileKind, Phase, Roll, Seat, Setup, Team},
     log::Log,
     units::{Centis, Facing, Wind},
     weather::{Forecast, WeatherKind},
@@ -110,21 +111,34 @@ impl Room {
         ensure!(arena.spawns.len() >= seated.len(), "{} has spawns for only {} players", self.options.map, arena.spawns.len());
         let mut spawns = arena.spawns;
         spawns.shuffle(&mut self.rng);
+        // Random picks are rolled here, so the log holds the mobile each seat actually plays.
+        let mobiles: Vec<MobileKind> = seated
+            .iter()
+            .map(|&i| self.members[i].member.mobile.unwrap_or_else(|| MobileKind::ALL[self.rng.random_range(0..MobileKind::ALL.len())]))
+            .collect();
         let seats = seated
             .iter()
             .zip(&teams)
             .zip(&spawns)
-            .map(|((&i, &team), &spawn_x)| Seat {
+            .zip(&mobiles)
+            .map(|(((&i, &team), &spawn_x), &mobile)| Seat {
                 team,
-                mobile: self.members[i].member.mobile,
+                mobile,
                 spawn_x,
                 // Facing the middle, where the enemy most likely is.
                 facing: if 2 * i64::from(spawn_x) < i64::from(arena.width) { Facing::Right } else { Facing::Left },
+                items: self.members[i].member.items,
             })
             .collect();
         let order = self.turn_order(&teams);
         let wind = self.roll_wind();
-        let setup = Setup { map: arena.map, seats, order, wind };
+        let setup = Setup {
+            map: arena.map,
+            seats,
+            order,
+            wind,
+            sudden_death: self.options.sudden_death,
+        };
         let game = Game::new(&setup, self.maps.as_ref()).context("setting up the game")?;
 
         for (&i, &team) in seated.iter().zip(&teams) {
@@ -183,6 +197,10 @@ impl Room {
                 x: self.rng.random_range(0..i32::try_from(width).unwrap_or(i32::MAX).max(1)),
             }),
             Roll::Wind => Event::Wind(self.roll_wind()),
+            Roll::Drop { width } => Event::Drop(Drop {
+                kind: DropKind::ALL[self.rng.random_range(0..DropKind::ALL.len())],
+                x: self.rng.random_range(0..i32::try_from(width).unwrap_or(i32::MAX).max(1)),
+            }),
         }
     }
 
@@ -196,6 +214,8 @@ impl Room {
             Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
             Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time },
             Action::Pass => Event::Pass { seat, time },
+            Action::Item { slot } => Event::UseItem { seat, slot },
+            Action::Spin => Event::Spin { seat },
         };
         self.commit(event)?;
         self.settle(now);
@@ -371,6 +391,7 @@ mod unit {
             max_wind: 12,
             turn_seconds: 10,
             random_teams: false,
+            sudden_death: None,
         }
     }
 

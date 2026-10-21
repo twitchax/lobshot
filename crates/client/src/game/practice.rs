@@ -5,7 +5,9 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, Member, MemberId, RoomCode, RoomOptions, RoomView, Stage};
 use lobshot_sim::{
     bot::{self, Level},
+    drops::{Drop, DropKind},
     game::{Event, Game, MobileKind, Roll, Seat, Setup, Team},
+    items::Loadout,
     map::{MapRef, NoAssets},
     units::{Centis, Facing, Wind},
     weather::{Forecast, WeatherKind},
@@ -43,7 +45,8 @@ fn member(id: MemberId, name: &str, team: Team, bot: bool) -> Member {
         id,
         name: name.to_owned(),
         team: Some(team),
-        mobile: MobileKind::Coilback,
+        mobile: Some(MobileKind::Coilback),
+        items: Loadout::default(),
         rider: "pip".to_owned(),
         ready: true,
         bot,
@@ -90,16 +93,19 @@ fn start(mut session: ResMut<Session>, mut commands: Commands) {
                 mobile: MobileKind::Coilback,
                 spawn_x: 360,
                 facing: Facing::Right,
+                items: Loadout::default(),
             },
             Seat {
                 team: Team::B,
                 mobile: MobileKind::Coilback,
                 spawn_x: 1440,
                 facing: Facing::Left,
+                items: Loadout::default(),
             },
         ],
         order: if referee.roll(2) == 0 { vec![0, 1] } else { vec![1, 0] },
         wind: wind(&mut referee, 26),
+        sudden_death: None,
     };
     let Ok(game) = Game::new(&setup, &NoAssets) else {
         error!("the practice setup is invalid");
@@ -147,6 +153,10 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
                 })
             }
             Roll::Wind => Event::Wind(wind(&mut referee, 26)),
+            Roll::Drop { width } => Event::Drop(Drop {
+                kind: DropKind::ALL[referee.roll(u32::try_from(DropKind::ALL.len()).unwrap_or(1)) as usize],
+                x: i32::try_from(referee.roll(width)).unwrap_or(0),
+            }),
         };
         decide(&mut game, event, &mut played);
     }
@@ -162,6 +172,8 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
                 Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
                 Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time: centis },
                 Action::Pass => Event::Pass { seat, time: centis },
+                Action::Item { slot } => Event::UseItem { seat, slot },
+                Action::Spin => Event::Spin { seat },
             };
             decide(&mut game, event, &mut played);
         }

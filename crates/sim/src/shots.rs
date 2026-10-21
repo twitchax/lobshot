@@ -61,6 +61,12 @@ pub(crate) fn fire(game: &mut Game, seat: u8, shot: Shot, aim: i16, power: Power
                 detonate(game, &shell, &track, effects);
             }
         },
+        // Their own shots land with the M3 sim work; until then each flies as Coilback's S1.
+        MobileKind::Lanternwing | MobileKind::Hookclaw | MobileKind::Sparkhorn | MobileKind::Marblemole => {
+            let track = game.track(flight, 0, 0);
+            effects.push(Effect::Fired { seat, legs: track.legs.clone() });
+            detonate(game, &blast(coilback::S1_BLAST.value, coilback::S1_DAMAGE.value, &track, track.forced), &track, effects);
+        }
     }
 }
 

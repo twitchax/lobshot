@@ -116,11 +116,12 @@ mod unit {
     fn fixture() -> TempDir {
         let dir = TempDir::new().unwrap();
         let assets = dir.path();
-        for (from, to) in [("mobiles/coilback", "mobiles/coilback"), ("riders", "riders"), ("sounds", "sounds")] {
-            std::fs::create_dir_all(assets.join(to)).unwrap();
-            for entry in std::fs::read_dir(sources().join(from)).unwrap() {
+        let mobiles = MobileKind::ALL.map(|mobile| format!("mobiles/{}", lobshot_assets::mobile_slug(mobile)));
+        for dir in mobiles.iter().map(String::as_str).chain(["riders", "sounds"]) {
+            std::fs::create_dir_all(assets.join(dir)).unwrap();
+            for entry in std::fs::read_dir(sources().join(dir)).unwrap() {
                 let path = entry.unwrap().path();
-                std::fs::copy(&path, assets.join(to).join(path.file_name().unwrap())).unwrap();
+                std::fs::copy(&path, assets.join(dir).join(path.file_name().unwrap())).unwrap();
             }
         }
         let map = assets.join("maps/pond");

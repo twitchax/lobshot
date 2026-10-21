@@ -39,6 +39,7 @@ fn flat() -> ClientMsg {
         max_wind: 26,
         turn_seconds: 20,
         random_teams: false,
+        sudden_death: None,
     })
 }
 

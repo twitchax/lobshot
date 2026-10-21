@@ -110,6 +110,7 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
             max_wind: 26,
             turn_seconds: 20,
             random_teams: false,
+            sudden_death: None,
         }))
         .await;
     alice.send(&ClientMsg::Ready(true)).await;

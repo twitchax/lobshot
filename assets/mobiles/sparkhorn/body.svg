@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="84" height="56" viewBox="-36 -66 84 56">
+  <!-- Coilback body: exhaust horn, snail, hull deck, shell, turret cup, saddle, lever.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <!-- Outline: the silhouette's alpha blurred, then thresholded low, grows it by about 1.35 units
+         with round corners (feMorphology's square kernel left square ones at sharp joins), and is
+         filled dark behind the art. -->
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- shell outline in shell-local coords (two-center semicircle spiral, g = 3.6) -->
+    <path id="shellOutline" d="M 18,0 A 18 18 0 0 0 -18,0 A 21.6 21.6 0 0 0 25.2,0 Z"/>
+    <clipPath id="shellClip"><use href="#shellOutline"/></clipPath>
+    <clipPath id="shellClipW"><use href="#shellOutline" transform="translate(-5,-41) rotate(75) scale(0.95)"/></clipPath>
+    <!-- the snail sits low and looks ahead: its head stays under the bell at aim 0, and its
+         antennae reach forward past the muzzle instead of up into the barrel -->
+    <path id="snail" d="M -18,-21.5 L 14,-21.5 C 23,-21.5 35,-21.8 37,-27 C 38.6,-31 35.4,-36.4 29,-36.4 C 23.4,-36.4 20.6,-34 19,-31.2 C 17,-28.4 8.5,-27.2 0,-27.2 L -18,-27.2 Z"/>
+    <clipPath id="snailClip"><use href="#snail"/></clipPath>
+    <clipPath id="hullClip"><path d="M -27,-16 Q -31.5,-16.4 -32,-20.6 Q -32.4,-25.6 -28,-25.6 L 29,-25.6 Q 33.6,-25.6 34,-21.4 Q 34,-16.4 28,-16 Z"/></clipPath>
+    <radialGradient id="shellLight" cx="-15" cy="-50" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3d6" stop-opacity="0.5"/>
+      <stop offset="0.4" stop-color="#fff3d6" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#6a1f3a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#6a1f3a" stop-opacity="0.35"/>
+    </radialGradient>
+    <radialGradient id="headLight" cx="26" cy="-36" r="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4ffd0" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#f4ffd0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- exhaust stack (behind shell), tilted back -->
+    <g transform="translate(-26,-25) rotate(-24)">
+      <rect x="-2" y="-14" width="4" height="14" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
+      <rect x="-1.2" y="-14" width="1.1" height="14" fill="#fff1a8"/>
+      <rect x="0.9" y="-14" width="1.1" height="14" fill="#b9822c"/>
+      <rect x="-2.5" y="-8.6" width="5" height="1.8" rx="0.6" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="0.7"/>
+      <path d="M -2,-14 L -4.4,-19 H 4.4 L 2,-14 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
+      <path d="M 0.9,-14 L 2.6,-18.4 H 4 L 2,-14 Z" fill="#b9822c"/>
+      <ellipse cy="-19" rx="4.4" ry="1.3" fill="#2a1a2e"/>
+    </g>
+
+    <!-- snail foot + head -->
+    <use href="#snail" fill="#9bd65a" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#snailClip)">
+      <path fill="#5fa040" fill-rule="evenodd" d="M 0,-50 H 44 V -10 H 0 Z M 27,-33 m -10.4,0 a 10.4 10.4 0 1 0 20.8,0 a 10.4 10.4 0 1 0 -20.8,0"/>
+      <g fill="#7bbd45"><circle cx="21.6" cy="-33.4" r="1.1"/><circle cx="24.6" cy="-35.6" r="0.8"/><circle cx="19.6" cy="-29.4" r="0.9"/><circle cx="12" cy="-28.2" r="0.8"/></g>
+    </g>
+    <rect clip-path="url(#snailClip)" x="4" y="-40" width="38" height="20" fill="url(#headLight)"/>
+    <path d="M 22.6,-34.5 C 25,-35.8 29.6,-36 32.8,-34.7" stroke="#d8f59a" stroke-width="1.2" fill="none"/>
+    <!-- antennae, far one first: they leave the front of the head and reach forward, low, so
+         the bell clears them at aim 0 -->
+    <path d="M 35,-33.8 C 37.4,-34.8 39.4,-35.4 41.2,-36.8" stroke="#2a1a2e" stroke-width="3" fill="none"/>
+    <path d="M 35,-33.8 C 37.4,-34.8 39.4,-35.4 41.2,-36.8" stroke="#7bbd45" stroke-width="1.5" fill="none"/>
+    <circle cx="42" cy="-37.4" r="1.6" fill="#ff7aa8" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 36,-32.4 C 38.6,-33 41,-33.2 43.2,-34.6" stroke="#2a1a2e" stroke-width="3" fill="none"/>
+    <path d="M 36,-32.4 C 38.6,-33 41,-33.2 43.2,-34.6" stroke="#9bd65a" stroke-width="1.5" fill="none"/>
+    <circle cx="44" cy="-35.1" r="1.7" fill="#ff7aa8" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="43.5" cy="-35.7" r="0.5" fill="#ffd0e2"/>
+    <!-- face -->
+    <ellipse cx="28.4" cy="-31.4" rx="2.5" ry="3.2" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="29.2" cy="-31" rx="1.55" ry="2.3" fill="#2a1a2e"/>
+    <circle cx="29.7" cy="-32.1" r="0.7" fill="#ffffff"/>
+    <ellipse cx="33.4" cy="-31.5" rx="1.35" ry="2.9" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.7"/>
+    <ellipse cx="33.8" cy="-31.1" rx="0.8" ry="2" fill="#2a1a2e"/>
+    <ellipse cx="30.4" cy="-27.6" rx="1.7" ry="0.9" fill="#ff8fa8" opacity="0.8"/>
+    <path d="M 33.2,-27.8 Q 34.6,-26.7 35.9,-28" stroke="#2a1a2e" stroke-width="0.8" fill="none"/>
+
+    <!-- hull deck -->
+    <path d="M -27,-16 Q -31.5,-16.4 -32,-20.6 Q -32.4,-25.6 -28,-25.6 L 29,-25.6 Q 33.6,-25.6 34,-21.4 Q 34,-16.4 28,-16 Z"
+          fill="#2bb3a3" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#hullClip)">
+      <rect x="-34" y="-19" width="70" height="4" fill="#1d7f80"/>
+      <ellipse cx="-5.5" cy="-24.4" rx="19" ry="3.4" fill="#0e3f46" opacity="0.55"/>
+      <path d="M 30,-25 Q 33.4,-25 33.4,-21" stroke="#8be8cf" stroke-width="1" fill="none"/>
+    </g>
+    <path d="M -29,-22.6 H 29" stroke="#8be8cf" stroke-width="0.9" fill="none"/>
+    <path d="M -12,-22 V -18.4 M 12,-22 V -18.4" stroke="#1d7f80" stroke-width="0.8" fill="none"/>
+    <g fill="#16585e"><circle cx="-26" cy="-20.6" r="0.75"/><circle cx="-17" cy="-20.6" r="0.75"/><circle cx="-7" cy="-20.6" r="0.75"/><circle cx="7" cy="-20.6" r="0.75"/><circle cx="17" cy="-20.6" r="0.75"/></g>
+    <rect x="-31" y="-27" width="63.6" height="2.8" rx="1.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -29.4,-26.2 H 30.6" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
+    <path d="M -29.4,-24.6 H 30.6" stroke="#b9822c" stroke-width="0.6" fill="none"/>
+    <circle cx="-20" cy="-20.8" r="3" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-20" cy="-20.8" r="2" fill="#e8434f"/>
+    <path transform="translate(-20,-20.8) scale(0.42)" d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#fff1d0" stroke-width="1.6" fill="none"/>
+    <circle cx="30.4" cy="-20.8" r="2.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="30.6" cy="-20.8" r="1.5" fill="#fff6c8"/>
+    <circle cx="30" cy="-21.4" r="0.55" fill="#ffffff"/>
+
+    <!-- shell -->
+    <g transform="translate(-5,-41) rotate(75) scale(0.95)">
+      <use href="#shellOutline" fill="#f2894a" stroke="#2a1a2e" stroke-width="1.2"/>
+      <g clip-path="url(#shellClip)" fill="none">
+        <path d="M 3.6,0 A 3.6 3.6 0 0 0 -3.6,0 A 7.2 7.2 0 0 0 10.8,0 A 10.8 10.8 0 0 0 -10.8,0 A 14.4 14.4 0 0 0 18,0"
+              stroke="#c4553a" stroke-width="4"/>
+        <path d="M 7.2,0 A 7.2 7.2 0 0 0 -7.2,0 A 10.8 10.8 0 0 0 14.4,0 A 14.4 14.4 0 0 0 -14.4,0 A 18 18 0 0 0 21.6,0"
+              stroke="#ffbf86" stroke-width="2.6"/>
+        <path stroke="#d4683f" stroke-width="0.9"
+              d="M 10.6,-6.1 L 14.6,-8.4 M 6.5,-10.3 L 9.0,-14.3 M 0.9,-12.2 L 1.2,-16.9 M -5.0,-11.1 L -6.9,-15.4 M -9.6,-7.5 L -13.3,-10.4 M -11.9,-2.5 L -16.5,-3.5 M 18.2,5.9 L 22.6,7.7 M 13.8,12.1 L 16.8,15.7 M 6.9,15.5 L 7.9,20.1 M -0.8,15.2 L -2.1,19.7 M -7.4,11.4 L -10.6,14.7 M -11.2,5.4 L -15.7,7.0"/>
+        <path d="M 3.6,0 A 3.6 3.6 0 0 0 -3.6,0 A 7.2 7.2 0 0 0 10.8,0 A 10.8 10.8 0 0 0 -10.8,0 A 14.4 14.4 0 0 0 18,0"
+              stroke="#6e2630" stroke-width="1.1"/>
+      </g>
+    </g>
+    <!-- shell cel shadow (world space): shell minus a light-offset disc -->
+    <path clip-path="url(#shellClipW)" fill="#6a1f3a" opacity="0.42" fill-rule="evenodd"
+          d="M -40,-70 H 30 V -10 H -40 Z M -11,-43 m -21,0 a 21 21 0 1 0 42,0 a 21 21 0 1 0 -42,0"/>
+    <rect clip-path="url(#shellClipW)" x="-30" y="-62" width="50" height="50" fill="url(#shellLight)"/>
+    <path clip-path="url(#shellClipW)" d="M -23.6,-40.8 A 17.6 17.6 0 0 1 -10.6,-54.4" stroke="#ffe2bc" stroke-width="1.5" fill="none"/>
+    <ellipse cx="-16.4" cy="-48.6" rx="3.4" ry="1.7" transform="rotate(-40 -16.4 -48.6)" fill="#fff6e6"/>
+    <circle cx="-12" cy="-52" r="0.9" fill="#fff6e6"/>
+
+    <!-- girth strap (saddle to rear deck) with buckle -->
+    <path d="M -16.6,-53.4 C -21,-49.6 -23.2,-38 -21,-27" stroke="#2a1a2e" stroke-width="3.6" fill="none"/>
+    <path d="M -16.6,-53.4 C -21,-49.6 -23.2,-38 -21,-27" stroke="#8a4b2e" stroke-width="2.2" fill="none"/>
+    <path d="M -17.4,-51.4 C -20.6,-47.6 -22,-40 -21.4,-31" stroke="#c97a4a" stroke-width="0.6" fill="none"/>
+    <rect x="-24.2" y="-43.6" width="3.8" height="3.2" rx="0.6" fill="none" stroke="#e9b949" stroke-width="1" transform="rotate(-12 -22.3 -42)"/>
+    <!-- brass strut (turret cup to front deck) -->
+    <path d="M 9.6,-43 L 12.4,-27.4" stroke="#2a1a2e" stroke-width="3.8" fill="none"/>
+    <path d="M 9.6,-43 L 12.4,-27.4" stroke="#e9b949" stroke-width="2.2" fill="none"/>
+    <path d="M 10.6,-42 L 13,-27.6" stroke="#b9822c" stroke-width="0.8" fill="none"/>
+    <circle cx="12.3" cy="-28" r="1.3" fill="#7a4a24" stroke="#2a1a2e" stroke-width="0.6"/>
+
+    <!-- turret cup -->
+    <path d="M -0.6,-49 L 14.6,-49 L 13.2,-43.6 Q 7,-40.4 0.8,-43.6 Z" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="1"/>
+    <path d="M 13.6,-45.2 L 13.2,-43.6 Q 7,-40.4 0.8,-43.6 L 0.4,-45.2 Q 7,-42.4 13.6,-45.2 Z" fill="#1d7f80"/>
+
+    <ellipse cx="7" cy="-44.6" rx="5.6" ry="1.6" fill="#0e3f46" opacity="0.5"/>
+
+    <!-- control lever -->
+    <path d="M -1.5,-53 L -4.6,-61.6" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M -1.5,-53 L -4.6,-61.6" stroke="#e9b949" stroke-width="1.2" fill="none"/>
+    <circle cx="-4.8" cy="-62.2" r="1.7" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.8"/>
+
+    <!-- saddle -->
+    <path d="M -19,-55 Q -12,-59 -5,-55.5 Q -5,-53 -12,-53 Q -19,-53 -19,-55 Z" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -17,-55.6 Q -12,-57.6 -7.5,-55.8" stroke="#c97a4a" stroke-width="0.9" fill="none"/>
+  </g>
+</svg>

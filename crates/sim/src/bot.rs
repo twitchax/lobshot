@@ -178,6 +178,7 @@ mod over_a_hill {
     use super::*;
     use crate::{
         game::{Effect, MobileKind, Seat, Setup, Team, testing::answer_rolls},
+        items::Loadout,
         map::{MapRef, NoAssets},
         units::Wind,
     };
@@ -201,16 +202,19 @@ mod over_a_hill {
                         mobile: MobileKind::Coilback,
                         spawn_x: 360,
                         facing: Facing::Right,
+                        items: Loadout::default(),
                     },
                     Seat {
                         team: Team::B,
                         mobile: MobileKind::Coilback,
                         spawn_x: 1440,
                         facing: Facing::Left,
+                        items: Loadout::default(),
                     },
                 ],
                 order: vec![1, 0],
                 wind: Wind::new(24, direction).unwrap(),
+                sudden_death: None,
             };
             let mut game = Game::new(&setup, &NoAssets).unwrap();
             answer_rolls(&mut game);

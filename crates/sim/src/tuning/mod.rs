@@ -4,6 +4,11 @@
 //! a test checks every key cited here exists there. Balance work edits this module and nothing else.
 
 pub mod coilback;
+pub mod hookclaw;
+pub mod items;
+pub mod lanternwing;
+pub mod marblemole;
+pub mod sparkhorn;
 
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +98,9 @@ pub const TIE_GOES_TO_LONGEST_WAITING: Tuned<bool> = picked(
     "No public source; the DBR clone sorts by delay, then by last turn. OpenBound's stable sort lets the \
      shooter go again, which rewards nothing.",
 );
+
+/// The turns sudden death may start at: rooms pick one.
+pub const SUDDEN_DEATH_TURNS: Tuned<[u32; 3]> = cited([40, 56, 72], &["OB"]);
 
 // ── Weather ──────────────────────────────────────────────────────────────────
 
@@ -242,10 +250,16 @@ pub struct MobileTuning {
     /// The GunBound mobile whose behavior this is; source tags refer to it by that name.
     pub behaves_like: &'static str,
     pub hp: Tuned<i32>,
+    /// A shield soaks damage before HP does; 0 for most mobiles.
+    pub shield: Tuned<i32>,
+    /// Shield restored each turn, up to `shield`.
+    pub shield_regen: Tuned<i32>,
     pub armor: Tuned<ArmorClass>,
     pub weapon: Tuned<WeaponType>,
     pub base_delay: Tuned<u32>,
     pub delay_per_second: Tuned<u32>,
+    /// Extra delay whenever this mobile uses an item (Armor's 40, SW-mds).
+    pub item_surcharge: Tuned<u32>,
     /// Gravity on this mobile's shots, px/s². Per-mobile "shot weight".
     pub gravity: Tuned<f64>,
     /// Multiplier on wind acceleration (Boomer's is high).

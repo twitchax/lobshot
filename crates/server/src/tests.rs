@@ -203,6 +203,8 @@ pub fn action(event: Event) -> Option<Action> {
         Event::Walk { facing, steps, .. } => Some(Action::Walk { facing, steps }),
         Event::Shoot { shot, aim, power, .. } => Some(Action::Shoot { shot, aim, power }),
         Event::Pass { .. } => Some(Action::Pass),
-        Event::Forfeit { .. } | Event::Wind(_) | Event::Weather(_) => None,
+        Event::UseItem { slot, .. } => Some(Action::Item { slot }),
+        Event::Spin { .. } => Some(Action::Spin),
+        Event::Forfeit { .. } | Event::Wind(_) | Event::Weather(_) | Event::Drop(_) => None,
     }
 }

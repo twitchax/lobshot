@@ -14,25 +14,29 @@
         "team": "A",
         "mobile": "Coilback",
         "spawn_x": 300,
-        "facing": "Right"
+        "facing": "Right",
+        "items": []
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1300,
-        "facing": "Left"
+        "facing": "Left",
+        "items": []
       },
       {
         "team": "A",
         "mobile": "Coilback",
         "spawn_x": 700,
-        "facing": "Right"
+        "facing": "Right",
+        "items": []
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 2000,
-        "facing": "Left"
+        "facing": "Left",
+        "items": []
       }
     ],
     "order": [
@@ -44,7 +48,8 @@
     "wind": {
       "strength": 4,
       "direction": 0
-    }
+    },
+    "sudden_death": null
   },
   "events": [
     {

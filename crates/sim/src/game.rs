@@ -14,11 +14,13 @@ use crate::{
     base::{Res, Void},
     body::{HitFrame, Pose},
     damage::{self, Blast, Target},
+    drops::Drop,
+    items::{Item, Loadout, MAX_ITEMS},
     map::{MapAssets, MapRef},
     movement::{self, Footing, Landing, Step},
     shots,
     terrain::{DirtyRect, Terrain},
-    tuning::{MAX_FLIGHT_SECONDS, MobileTuning, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback},
+    tuning::{MAX_FLIGHT_SECONDS, MobileTuning, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback, hookclaw, lanternwing, marblemole, sparkhorn},
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind},
     weather::{Column, Forecast, Weather, WeatherKind},
@@ -42,16 +44,24 @@ pub enum Team {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MobileKind {
     Coilback,
+    Lanternwing,
+    Hookclaw,
+    Sparkhorn,
+    Marblemole,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 1] = [Self::Coilback];
+    pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
 
     #[must_use]
     pub fn tuning(self) -> &'static MobileTuning {
         match self {
             Self::Coilback => &coilback::MOBILE,
+            Self::Lanternwing => &lanternwing::MOBILE,
+            Self::Hookclaw => &hookclaw::MOBILE,
+            Self::Sparkhorn => &sparkhorn::MOBILE,
+            Self::Marblemole => &marblemole::MOBILE,
         }
     }
 }
@@ -83,6 +93,25 @@ pub struct Seat {
     /// The column the mobile drops into at the start.
     pub spawn_x: i32,
     pub facing: Facing,
+    pub items: Loadout,
+}
+
+/// What sudden death does once it starts (GunBound's room options: WP06, AK, GF-tiro).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SuddenDeathKind {
+    /// Bigger craters, and no SS.
+    BigBomb,
+    /// Every S1 and S2 fires twice, and no SS.
+    Double,
+    /// SS every turn.
+    SsDeath,
+}
+
+/// Sudden death: once `turn` turns are done, `kind` applies and items are off for good.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SuddenDeath {
+    pub kind: SuddenDeathKind,
+    pub turn: u32,
 }
 
 /// Everything a game starts from. The server rolls the random parts (`order`, `wind`).
@@ -94,6 +123,8 @@ pub struct Setup {
     /// alternating.
     pub order: Vec<u8>,
     pub wind: Wind,
+    /// `None` plays without sudden death.
+    pub sudden_death: Option<SuddenDeath>,
 }
 
 /// Something that happened, accepted by the server. A game is its setup plus these, in order.
@@ -113,6 +144,13 @@ pub enum Event {
     Wind(Wind),
     /// The server rolled the forecast it owed (`Roll::Weather`).
     Weather(Forecast),
+    /// The active player uses the item at `slot` in their loadout (one item a turn). Its effect
+    /// is immediate (a heal, the wind) or rides on the turn's shot (Dual, Power Up).
+    UseItem { seat: u8, slot: u8 },
+    /// A dead player spins their slot machine; the server then owes `Roll::Drop`.
+    Spin { seat: u8 },
+    /// The server rolled what the slot machine dropped (`Roll::Drop`).
+    Drop(Drop),
 }
 
 /// Something random the server owes the game before anyone may act.
@@ -123,6 +161,8 @@ pub enum Roll {
     Weather { width: u32 },
     /// New wind (the Wind weather just came up): strength up to the room's max, any direction.
     Wind,
+    /// A slot machine was spun: any `DropKind`, and a column x in `0..width`.
+    Drop { width: u32 },
 }
 
 /// Why a mobile died.
@@ -235,9 +275,17 @@ pub struct Player {
     pub facing: Facing,
     pub tilt: f64,
     pub hp: i32,
+    /// What's left of the shield (`MobileTuning::shield`), which soaks damage before HP.
+    pub shield: i32,
     pub alive: bool,
     pub clock: Clock,
     pub moves_left: u16,
+    /// The loadout's unused items, by position; `Event::UseItem` names a position.
+    pub items: [Option<Item>; MAX_ITEMS],
+    /// The item used this turn, if any: it rides on the turn's shot and adds to its delay.
+    pub armed: Option<Item>,
+    /// Own turns until SS may fire again; 0 when it may.
+    pub ss_lock: u8,
 }
 
 impl Player {
@@ -312,6 +360,7 @@ impl Game {
                 facing: seat.facing,
                 tilt: movement::tilt(&terrain, footing, tuning.ground_probes.value),
                 hp: tuning.hp.value,
+                shield: tuning.shield.value,
                 alive: true,
                 // Before anyone acts, the first in the rolled order has waited longest.
                 clock: Clock {
@@ -319,6 +368,9 @@ impl Game {
                     last_turn: i64::try_from(rank).unwrap_or(0) - i64::try_from(seats).unwrap_or(0),
                 },
                 moves_left: 0,
+                items: seat.items.positions(),
+                armed: None,
+                ss_lock: 0,
             });
         }
 
@@ -437,6 +489,7 @@ impl Game {
                 self.ensure_turn(seat)?;
                 self.end_turn(seat, Ending::Pass, time, &mut effects);
             }
+            Event::UseItem { .. } | Event::Spin { .. } | Event::Drop(_) => bail!("this build doesn't play items or the slot machine yet"),
         }
         Ok(effects)
     }
@@ -759,7 +812,7 @@ pub(crate) mod testing {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
     use super::*;
-    use crate::map::NoAssets;
+    use crate::{drops::DropKind, map::NoAssets};
 
     pub fn duel_setup(distance: i32) -> Setup {
         Setup {
@@ -770,16 +823,19 @@ pub(crate) mod testing {
                     mobile: MobileKind::Coilback,
                     spawn_x: 300,
                     facing: Facing::Right,
+                    items: Loadout::default(),
                 },
                 Seat {
                     team: Team::B,
                     mobile: MobileKind::Coilback,
                     spawn_x: 300 + distance,
                     facing: Facing::Left,
+                    items: Loadout::default(),
                 },
             ],
             order: vec![0, 1],
             wind: Wind::default(),
+            sudden_death: None,
         }
     }
 
@@ -790,6 +846,7 @@ pub(crate) mod testing {
             let event = match roll {
                 Roll::Weather { .. } => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
                 Roll::Wind => Event::Wind(Wind::default()),
+                Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
             };
             game.apply(event).expect("an owed roll is accepted");
         }
@@ -916,6 +973,7 @@ mod unit {
             mobile: MobileKind::Coilback,
             spawn_x: 700,
             facing: Facing::Right,
+            items: Loadout::default(),
         });
         setup.order = vec![0, 1, 2];
         let mut game = Game::new(&setup, &NoAssets).unwrap();

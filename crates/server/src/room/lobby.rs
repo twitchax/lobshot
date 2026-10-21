@@ -9,6 +9,7 @@ use lobshot_protocol::{MAX_CHAT, Member, MemberId, RoomOptions, ServerMsg};
 use lobshot_sim::{
     base::Void,
     game::{MAX_SEATS, MobileKind, Team},
+    items::Loadout,
 };
 
 use super::{BOT_RIDER, Entry, MAX_SPECTATORS, Output, Room};
@@ -73,7 +74,8 @@ impl Room {
                 id: bot,
                 name,
                 team: Some(team),
-                mobile: MobileKind::ALL[0],
+                mobile: Some(MobileKind::ALL[0]),
+                items: Loadout::default(),
                 rider: BOT_RIDER.to_owned(),
                 ready: true,
                 bot: true,
@@ -156,7 +158,7 @@ mod unit {
         let mut h = Harness::new();
         let pip = h.join(1, "Pip");
         h.send(1, ClientMsg::Team(Some(Team::B)));
-        h.send(1, ClientMsg::Mobile(MobileKind::Coilback));
+        h.send(1, ClientMsg::Mobile(Some(MobileKind::Coilback)));
         h.send(1, ClientMsg::Rider("pip-2".into()));
         h.send(1, ClientMsg::Ready(true));
         let member = h.member(pip);
@@ -347,7 +349,7 @@ mod unit {
         for msg in [
             ClientMsg::Ready(false),
             ClientMsg::Team(None),
-            ClientMsg::Mobile(MobileKind::Coilback),
+            ClientMsg::Mobile(Some(MobileKind::Coilback)),
             ClientMsg::Rider("pip".into()),
             flat(1),
             ClientMsg::AddBot { team: Team::A },

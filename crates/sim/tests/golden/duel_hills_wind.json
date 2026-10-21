@@ -14,13 +14,15 @@
         "team": "A",
         "mobile": "Coilback",
         "spawn_x": 420,
-        "facing": "Right"
+        "facing": "Right",
+        "items": []
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1460,
-        "facing": "Left"
+        "facing": "Left",
+        "items": []
       }
     ],
     "order": [
@@ -30,7 +32,8 @@
     "wind": {
       "strength": 9,
       "direction": 160
-    }
+    },
+    "sudden_death": null
   },
   "events": [
     {

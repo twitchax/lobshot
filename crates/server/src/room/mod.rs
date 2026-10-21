@@ -24,6 +24,7 @@ use lobshot_sim::{
     base::{Res, Void},
     bot::{self, Level},
     game::{Event, Game, MAX_SEATS, MobileKind},
+    items::Loadout,
 };
 
 use crate::maps::{Maps, check_asset_name};
@@ -272,6 +273,7 @@ impl Room {
             }
             ClientMsg::Team(team) => self.choose_team(id, team),
             ClientMsg::Mobile(mobile) => self.choose(id, |member| member.mobile = mobile),
+            ClientMsg::Loadout(items) => self.choose(id, |member| member.items = items),
             ClientMsg::Rider(rider) => {
                 check_asset_name(&rider, "rider")?;
                 self.choose(id, |member| member.rider = rider)
@@ -329,7 +331,8 @@ impl Room {
                 id,
                 name,
                 team,
-                mobile: MobileKind::ALL[0],
+                mobile: Some(MobileKind::ALL[0]),
+                items: Loadout::default(),
                 rider: rider.to_owned(),
                 ready: false,
                 bot: false,

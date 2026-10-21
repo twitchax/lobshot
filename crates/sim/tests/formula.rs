@@ -13,6 +13,7 @@
 use lobshot_sim::{
     ballistics::{self, Flight},
     game::{Game, MobileKind, Seat, Setup, Team},
+    items::Loadout,
     map::{MapRef, NoAssets},
     tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, coilback},
     units::{Facing, Vec2, Wind},
@@ -30,16 +31,19 @@ fn duel(distance: i32) -> Game {
                     mobile: MobileKind::Coilback,
                     spawn_x: 300,
                     facing: Facing::Right,
+                    items: Loadout::default(),
                 },
                 Seat {
                     team: Team::B,
                     mobile: MobileKind::Coilback,
                     spawn_x: 300 + distance,
                     facing: Facing::Left,
+                    items: Loadout::default(),
                 },
             ],
             order: vec![0, 1],
             wind: Wind::default(),
+            sudden_death: None,
         },
         &NoAssets,
     )

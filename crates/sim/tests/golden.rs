@@ -11,7 +11,9 @@
 use pretty_assertions::assert_eq;
 
 use lobshot_sim::{
+    drops::{Drop, DropKind},
     game::{Contact, Event, Game, MobileKind, Phase, Roll, Seat, Setup, Shot, Team},
+    items::Loadout,
     log::Log,
     map::{MapRef, NoAssets},
     units::{Centis, Facing, Power, Wind},
@@ -20,15 +22,15 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xa35d_bd9a_3d4d_5e50),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x90f0_7e89_eb25_26b4),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         35,
-        0xcb8e_1dc2_f711_4b2a,
+        0x895b_61f8_58d8_c04c,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 87, 0x87cd_ba86_deac_1881),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 87, 0xc357_cdeb_7284_e5c5),
 ];
 
 #[test]
@@ -79,6 +81,7 @@ fn seat(team: Team, spawn_x: i32, facing: Facing) -> Seat {
         mobile: MobileKind::Coilback,
         spawn_x,
         facing,
+        items: Loadout::default(),
     }
 }
 
@@ -93,6 +96,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
                     seats: vec![seat(Team::A, 350, Facing::Right), seat(Team::B, 1150, Facing::Left)],
                     order: vec![0, 1],
                     wind: Wind::default(),
+                    sudden_death: None,
                 },
                 &[],
             ),
@@ -111,6 +115,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
                     seats: vec![seat(Team::A, 420, Facing::Right), seat(Team::B, 1460, Facing::Left)],
                     order: vec![1, 0],
                     wind: Wind::new(9, 160).unwrap(),
+                    sudden_death: None,
                 },
                 &winds,
             ),
@@ -134,6 +139,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
                     ],
                     order: vec![0, 1, 2, 3],
                     wind: Wind::new(4, 0).unwrap(),
+                    sudden_death: None,
                 },
                 &winds,
             ),
@@ -168,6 +174,11 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
                     Event::Weather(Forecast { kind, x })
                 }
                 Roll::Wind => Event::Wind(winds.get(rolls % winds.len().max(1)).copied().unwrap_or_default()),
+                Roll::Drop { width } => {
+                    let kind = DropKind::ALL[rolls % DropKind::ALL.len()];
+                    let x = i32::try_from((rolls * 389) % usize::try_from(width).unwrap()).unwrap();
+                    Event::Drop(Drop { kind, x })
+                }
             };
             apply(&mut game, event);
         }

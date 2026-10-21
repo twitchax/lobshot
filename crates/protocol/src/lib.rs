@@ -14,13 +14,15 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use lobshot_sim::{
     base::Res,
-    game::{Event, MobileKind, Shot, Team},
+    game::{Event, MobileKind, Shot, SuddenDeath, SuddenDeathKind, Team},
+    items::Loadout,
     log::Log,
+    tuning::SUDDEN_DEATH_TURNS,
     units::{Facing, Power},
 };
 
 /// Bumped whenever a message from an older build would decode differently.
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 
 /// The longest a player name may be, in characters.
 pub const MAX_NAME: usize = 16;
@@ -92,6 +94,8 @@ pub struct RoomOptions {
     pub turn_seconds: u8,
     /// Shuffle teams at the start instead of keeping members' picks.
     pub random_teams: bool,
+    /// What sudden death does and when it starts (one of `SUDDEN_DEATH_TURNS`), or `None`.
+    pub sudden_death: Option<SuddenDeath>,
 }
 
 impl Default for RoomOptions {
@@ -102,6 +106,11 @@ impl Default for RoomOptions {
             max_wind: 26,
             turn_seconds: 20,
             random_teams: false,
+            // A private server's changelog gives Double at 40 turns as the default (RD-origins snippet).
+            sudden_death: Some(SuddenDeath {
+                kind: SuddenDeathKind::Double,
+                turn: SUDDEN_DEATH_TURNS.value[0],
+            }),
         }
     }
 }
@@ -117,6 +126,10 @@ impl RoomOptions {
         ensure!([0, 12, 26].contains(&self.max_wind), "max wind is 0, 12 or 26, not {}", self.max_wind);
         ensure!([5, 10, 20].contains(&self.turn_seconds), "turns are 5, 10 or 20 seconds, not {}", self.turn_seconds);
         ensure!(!self.map.is_empty(), "pick a map");
+        if let Some(SuddenDeath { turn, .. }) = self.sudden_death {
+            let turns = SUDDEN_DEATH_TURNS.value;
+            ensure!(turns.contains(&turn), "sudden death starts at turn {turns:?}, not {turn}");
+        }
         Ok(())
     }
 }
@@ -128,7 +141,9 @@ pub struct Member {
     pub name: String,
     /// The team they'll play on, or `None` to spectate.
     pub team: Option<Team>,
-    pub mobile: MobileKind,
+    /// `None` is Random: the server picks when the game starts.
+    pub mobile: Option<MobileKind>,
+    pub items: Loadout,
     /// A cosmetic rider, by asset name.
     pub rider: String,
     pub ready: bool,
@@ -156,13 +171,26 @@ pub struct RoomView {
     pub stage: Stage,
 }
 
-/// A move in the game, from the player whose turn it is. The server turns it into a sim
-/// `Event` (stamping a shot's turn time itself).
+/// A move in the game, from the player whose turn it is (or, for `Spin`, a dead player). The
+/// server turns it into a sim `Event` (stamping a shot's turn time itself).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
-    Walk { facing: Facing, steps: u16 },
-    Shoot { shot: Shot, aim: i16, power: Power },
+    Walk {
+        facing: Facing,
+        steps: u16,
+    },
+    Shoot {
+        shot: Shot,
+        aim: i16,
+        power: Power,
+    },
     Pass,
+    /// Use the item at this loadout position.
+    Item {
+        slot: u8,
+    },
+    /// A dead player spins their slot machine; it works on anyone's turn.
+    Spin,
 }
 
 /// Client to server.
@@ -181,7 +209,9 @@ pub enum ClientMsg {
     Emote(Emote),
     /// Play on a team, or `None` to spectate.
     Team(Option<Team>),
-    Mobile(MobileKind),
+    /// A mobile, or `None` for Random.
+    Mobile(Option<MobileKind>),
+    Loadout(Loadout),
     Rider(String),
     Ready(bool),
     /// Master only.

@@ -184,6 +184,7 @@ async fn e2e_browser_spectator_follows_a_game() {
         max_wind: 12,
         turn_seconds: 20,
         random_teams: false,
+        sudden_death: None,
     }))
     .await;
     host.send(&ClientMsg::AddBot { team: Team::B }).await;
