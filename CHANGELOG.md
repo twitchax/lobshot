@@ -36,6 +36,7 @@ why the version moved the way it did.
   variants.
 - SearchBot uses items and every shot, and its levels differ by how they misread the wind and miss.
 - The client's unit tests (`cargo make test-client`), on wasm32 in node.
+- Deployed at https://lobshot.twitchax.com: one Fly machine (`fly.toml`, `cargo make deploy`).
 
 ### Changed
 

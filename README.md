@@ -9,10 +9,11 @@ turn order and terrain you blow apart. No accounts and no lobbies: start a game,
 
 ![Coilback on Tidewall, in the browser](docs/screenshots/tidewall.png)
 
-Online 1v1 works: start a room, send the link, play Coilback on Tidewall against a friend or a
-bot, with wind, weather, chat and spectators. "Practice vs bot" plays offline. More mobiles, maps,
-items and team games come next: [`DESIGN.md`](DESIGN.md) has the plan and the milestones, and
-`.prds/` tracks each one.
+Play it at **https://lobshot.twitchax.com**: start a room, send the link, and play Solo from 1v1
+to 4v4 with friends or bots. Five mobiles, five maps with two variants each, all 11 items, sudden
+death, and a slot machine for the dead. "Practice vs bot" plays offline. More mobiles, maps and
+modes come next: [`DESIGN.md`](DESIGN.md) has the plan and the milestones, and `.prds/` tracks
+each one.
 
 ## Self-hosting
 
