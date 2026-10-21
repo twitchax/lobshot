@@ -17,16 +17,17 @@
 //! 3. **Item.** A heal first when it is low; otherwise Dual (on S1 or S2) or Power Up when the
 //!    chosen shot is strong and the item makes it better.
 //!
-//! Difficulty is aim noise added afterward, from a seed the server rolls, so a bot's turn is still
-//! a pure function of its inputs.
+//! Difficulty is error around the search (`tuning::bot`): the bot misreads the wind before it
+//! searches, then misses the aim and power it found. Both come from a seed the server rolls, so
+//! a bot's turn is still a pure function of its inputs.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
     items::{Item, Loadout},
-    tuning::AimRange,
-    units::{Centis, Facing, Power, Vec2},
+    tuning::{self, AimRange, bot::Noise},
+    units::{Centis, Facing, Power, Vec2, Wind},
 };
 
 /// The loadout the server gives bots: the items SearchBot knows how to use, filling all six slots.
@@ -41,23 +42,24 @@ const STRONG_SHOT: f64 = 150.0;
 /// What a kill is worth on top of its damage, in damage.
 const KILL_VALUE: f64 = 300.0;
 
-/// How sloppy the bot's hands are.
+/// How well the bot reads the wind and how steady its hands are (`tuning::bot`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Level {
-    /// Up to 3 power steps and 2 degrees off.
+    /// Someone still learning.
     Easy,
-    /// Up to 1 power step off.
+    /// A friend who knows the game: what the server's bots play.
     Normal,
-    /// Exactly what the search found.
+    /// Close to perfect.
     Hard,
 }
 
 impl Level {
-    fn noise(self) -> (i32, i32) {
+    #[must_use]
+    pub fn noise(self) -> &'static Noise {
         match self {
-            Self::Easy => (3, 2),
-            Self::Normal => (1, 0),
-            Self::Hard => (0, 0),
+            Self::Easy => &tuning::bot::EASY,
+            Self::Normal => &tuning::bot::NORMAL,
+            Self::Hard => &tuning::bot::HARD,
         }
     }
 }
@@ -85,6 +87,10 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         scratch.apply(heal).ok()?;
         events.push(heal);
     }
+    // It searches, and values its shots, in the wind as it reads it.
+    let noise = level.noise();
+    let mut rng = XorShift(seed | 1);
+    scratch.wind = misread(scratch.wind(), noise, &mut rng);
 
     let search = Search::new(&scratch, seat, target.center());
     let mut best: Option<Candidate> = None;
@@ -108,10 +114,8 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     }
 
     let range = best.shot.tuning(me.tuning()).aim.value;
-    let (power_noise, aim_noise) = level.noise();
-    let mut rng = XorShift(seed | 1);
-    let power = i32::from(best.power) + rng.within(power_noise);
-    let aim = (best.aim + i16::try_from(rng.within(aim_noise)).unwrap_or(0)).clamp(range.min, range.max);
+    let power = i32::from(best.power) + rng.within(noise.power_steps.value);
+    let aim = (best.aim + i16::try_from(rng.within(noise.aim_degrees.value)).unwrap_or(0)).clamp(range.min, range.max);
     let power = Power::from_twentieths(u8::try_from(power.clamp(0, i32::from(Power::MAX.twentieths()))).ok()?).ok()?;
     events.push(Event::Shoot {
         seat,
@@ -121,6 +125,16 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         time: Centis(0),
     });
     Some(events)
+}
+
+/// The wind as a bot with `noise` reads it.
+fn misread(wind: Wind, noise: &Noise, rng: &mut XorShift) -> Wind {
+    let strength = i32::from(wind.strength) + rng.within(noise.wind_strength.value);
+    let direction = i32::from(wind.direction) + rng.within(noise.wind_degrees.value);
+    Wind {
+        strength: u8::try_from(strength.clamp(0, i32::from(u8::MAX))).unwrap_or(0),
+        direction: u16::try_from(direction.rem_euclid(360)).unwrap_or(0),
+    }
 }
 
 /// Where the shared flight lands, as the aim pass sees it.
@@ -343,12 +357,13 @@ mod unit {
 
     use super::*;
     use crate::{
+        drops::{Drop, DropKind},
         game::{
-            Effect, MobileKind, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
+            Effect, MobileKind, Roll, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
             testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, start},
         },
         map::MapRef,
-        units::Wind,
+        weather::{Forecast, WeatherKind},
     };
 
     #[test]
@@ -491,6 +506,153 @@ mod unit {
             let events = plan(&game, 0, Level::Normal, 7).unwrap();
             println!("{mobile:?}: {:?} for {events:?}", began.elapsed());
         }
+    }
+
+    /// One 4v4 of `level` bots as a server room plays it: the server's `flat` map and its spawns,
+    /// shuffled as the server shuffles them, Coilbacks with the bot loadout, max wind 26, Double at
+    /// 40, every roll from `seed`, the dead spinning whenever they may, and a pass when a plan
+    /// leaves the turn open. Returns the turns played, and the shots fired and how many hurt an
+    /// enemy.
+    fn room_game(level: Level, seed: u64) -> (i64, u32, u32) {
+        let mut spawns = [200, 1400, 500, 1100, 350, 1250, 650, 950];
+        let mut rolls = XorShift(seed | 1);
+        let mut roll = |below: u32| u32::try_from(rolls.next() % u64::from(below)).unwrap();
+        for i in (1..spawns.len()).rev() {
+            spawns.swap(i, usize::try_from(roll(u32::try_from(i + 1).unwrap())).unwrap());
+        }
+        let seats = (0..8)
+            .map(|i| Seat {
+                team: if i % 2 == 0 { Team::A } else { Team::B },
+                mobile: MobileKind::Coilback,
+                spawn_x: spawns[i],
+                facing: if spawns[i] < 800 { Facing::Right } else { Facing::Left },
+                items: LOADOUT,
+            })
+            .collect();
+        let setup = Setup {
+            map: MapRef::Flat { width: 1600, height: 900, ground: 700 },
+            seats,
+            order: (0..8).collect(),
+            wind: Wind::new(u8::try_from(roll(27)).unwrap(), u16::try_from(roll(360)).unwrap()).unwrap(),
+            sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 40 }),
+        };
+        let mut game = Game::new(&setup, &crate::map::NoAssets).unwrap();
+        let (mut shots, mut hits) = (0, 0);
+        for _ in 0..4000 {
+            while let Some(owed) = game.pending_roll() {
+                let event = match owed {
+                    Roll::Weather { width } => Event::Weather(Forecast {
+                        kind: WeatherKind::ALL[usize::try_from(roll(4)).unwrap()],
+                        x: i32::try_from(roll(width)).unwrap(),
+                    }),
+                    Roll::Wind => Event::Wind(Wind::new(u8::try_from(roll(27)).unwrap(), u16::try_from(roll(360)).unwrap()).unwrap()),
+                    Roll::Drop { width } => Event::Drop(Drop {
+                        kind: DropKind::ALL[usize::try_from(roll(6)).unwrap()],
+                        x: i32::try_from(roll(width)).unwrap(),
+                    }),
+                };
+                game.apply(event).unwrap();
+            }
+            if let Some(dead) = (0..8).find(|&s| game.can_spin(s)) {
+                game.apply(Event::Spin { seat: dead }).unwrap();
+                continue;
+            }
+            let Phase::Turn { seat } = game.phase() else { break };
+            let (team, turn) = (game.players()[usize::from(seat)].team, game.turns());
+            for event in plan(&game, seat, level, u64::from(roll(u32::MAX))).unwrap_or_default() {
+                if game.turns() != turn {
+                    break;
+                }
+                let effects = game.apply(event).unwrap();
+                if matches!(event, Event::Shoot { .. }) {
+                    shots += 1;
+                    let mine = effects.iter().take_while(|e| !matches!(e, Effect::Dropped { .. }));
+                    let hurt = mine.filter_map(|e| {
+                        if let Effect::Damaged { seat, .. } | Effect::Shielded { seat, .. } = *e {
+                            Some(seat)
+                        } else {
+                            None
+                        }
+                    });
+                    hits += u32::from(hurt.into_iter().any(|hit| game.players()[usize::from(hit)].team != team));
+                }
+            }
+            if game.turns() == turn {
+                game.apply(Event::Pass { seat, time: Centis(500) }).unwrap();
+            }
+        }
+        (game.turns(), shots, hits)
+    }
+
+    /// Plays 128 room games per level, in parallel, and prints how long they ran and how often a
+    /// shot hurt an enemy. Run in release: `cargo test -p lobshot-sim --release --lib -- --ignored
+    /// --nocapture tool_length`.
+    #[test]
+    #[ignore = "a tool, not a test: prints game lengths and hit rates by level"]
+    fn tool_length() {
+        const GAMES: u64 = 128;
+        for level in [Level::Hard, Level::Normal, Level::Easy] {
+            let games: Vec<(i64, u32, u32)> = std::thread::scope(|scope| {
+                let running: Vec<_> = (1..=GAMES).map(|seed| scope.spawn(move || room_game(level, seed * 7919))).collect();
+                running.into_iter().map(|game| game.join().unwrap()).collect()
+            });
+            let mut turns: Vec<i64> = games.iter().map(|game| game.0).collect();
+            turns.sort_unstable();
+            let (shots, hits) = games.iter().fold((0, 0), |(s, h), game| (s + game.1, h + game.2));
+            let past = turns.iter().filter(|&&t| t > 40).count();
+            let at = |share: usize| turns[turns.len() * share / 4];
+            println!(
+                "{level:?}: median {} turns (quartiles {} to {}, range {} to {}), past turn 40 in {past}/{GAMES}, {hits} of {shots} shots hurt an enemy ({:.0}%)",
+                at(2),
+                at(1),
+                at(3),
+                turns[0],
+                turns[turns.len() - 1],
+                f64::from(hits) * 100.0 / f64::from(shots)
+            );
+        }
+    }
+
+    #[test]
+    fn the_levels_stay_ordered_hard_exact_and_easy_worst() {
+        let spreads = |level: Level| {
+            let noise = level.noise();
+            [noise.power_steps.value, noise.aim_degrees.value, noise.wind_strength.value, noise.wind_degrees.value]
+        };
+        let (hard, normal, easy) = (spreads(Level::Hard), spreads(Level::Normal), spreads(Level::Easy));
+        assert_eq!(hard, [0; 4], "Hard is the search's own answer");
+        assert!(normal.iter().zip(&easy).all(|(n, e)| 0 < *n && n < e), "{normal:?} {easy:?}");
+    }
+
+    #[test]
+    fn a_misread_wind_stays_within_its_spread_and_hard_reads_it_true() {
+        let wind = Wind::new(3, 350).unwrap();
+        let mut rng = XorShift(99);
+        for _ in 0..200 {
+            let read = misread(wind, Level::Normal.noise(), &mut rng);
+            assert!(read.strength <= 3 + 8 && read.direction < 360, "{read:?}");
+            let off = (i32::from(read.direction) - 350).rem_euclid(360);
+            assert!(off <= 90 || off >= 270, "{read:?}");
+        }
+        assert_eq!(misread(wind, Level::Hard.noise(), &mut rng), wind);
+    }
+
+    #[test]
+    fn normal_lands_between_hard_and_easy() {
+        // The same duel in a crosswind, eight seeds a level: the damage each level deals.
+        let mut game = duel(700);
+        game.wind = Wind::new(14, 30).unwrap();
+        let dealt = |level: Level| -> i32 {
+            (1..=8)
+                .map(|seed| {
+                    let mut game = game.clone();
+                    let events = plan(&game, 0, level, seed * 7919).unwrap();
+                    damage_to(&play(&mut game, events), 1)
+                })
+                .sum()
+        };
+        let (hard, normal, easy) = (dealt(Level::Hard), dealt(Level::Normal), dealt(Level::Easy));
+        assert!(hard > normal && normal > easy, "Hard {hard}, Normal {normal}, Easy {easy}");
     }
 
     #[test]

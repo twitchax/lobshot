@@ -148,11 +148,9 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
 /// hash after every event. Bots play at once and turns start at once, since no one watches.
 ///
 /// Sudden death is set up, and checked to start at turn 40 when the game gets that far, but not
-/// necessarily reached: SearchBot fires S2 and SS when they do more,
-/// at two to three times S1's damage, so eight bots facing each other 300 px apart on `flat` end
-/// in 25 to 60 turns, past turn 40 in a quarter of games (12 seeded sim games; S1-only bots ran
-/// 44 to 78). Rooms only offer 40, 56 and 72, so this test can't start it sooner. The sim's golden
-/// replays (`brawl_4v4`, `duel_big_bomb`, `duel_ss_death`) play each kind through.
+/// required: whether it does is chance. Normal bots on `flat`, spawns shuffled, run a median 43
+/// turns and pass turn 40 in about 70% of games (`lobshot_sim::bot`'s `tool_length`, 128 seeds).
+/// The sim's golden replays (`brawl_4v4`, `duel_big_bomb`, `duel_ss_death`) play each kind through.
 #[tokio::test(flavor = "multi_thread")]
 async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
     let cwd = TempDir::new().unwrap();
