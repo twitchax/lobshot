@@ -220,6 +220,11 @@ pub enum ClientMsg {
     AddBot {
         team: Team,
     },
+    /// Master only, in the lobby: a bot's mobile, or `None` for Random.
+    BotMobile {
+        bot: MemberId,
+        mobile: Option<MobileKind>,
+    },
     /// Master only.
     Kick(MemberId),
     /// Master only, once everyone seated is ready.

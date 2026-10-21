@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context as _, ensure};
+use anyhow::{Context as _, bail, ensure};
 
 use lobshot_assets::{MapInfo, MapVariant, map_path, mask_path, to_ron};
 use lobshot_protocol::{Action, ServerMsg};
@@ -15,6 +15,7 @@ use lobshot_sim::{
     base::{Res, Void},
     bot::{self, Level},
     game::{Event, Game},
+    log::Log,
     map::NoAssets,
     terrain::Terrain,
 };
@@ -145,8 +146,8 @@ pub fn create_room(addr: SocketAddr) -> Res<String> {
 #[derive(Debug, Clone, Default)]
 pub struct Replica {
     game: Option<Game>,
-    /// Events applied so far; the next event's index.
-    applied: usize,
+    /// Everything applied so far: the log as this client has it.
+    log: Option<Log>,
     /// The turn (`Game::turns`) this client already planned.
     planned: Option<i64>,
 }
@@ -162,14 +163,16 @@ impl Replica {
         match msg {
             ServerMsg::Game { log } => {
                 self.game = Some(log.replay(&NoAssets)?);
-                self.applied = log.events.len();
+                self.log = Some(log.clone());
                 self.planned = None;
             }
             ServerMsg::Event { index, event, hash } => {
-                let game = self.game.as_mut().context("an event before the game")?;
-                ensure!(*index as usize == self.applied, "event {index} arrived, but {} was next", self.applied);
+                let (Some(game), Some(log)) = (self.game.as_mut(), self.log.as_mut()) else {
+                    bail!("an event before the game");
+                };
+                ensure!(*index as usize == log.events.len(), "event {index} arrived, but {} was next", log.events.len());
                 game.apply(*event).with_context(|| format!("applying event {index}: {event:?}"))?;
-                self.applied += 1;
+                log.events.push(*event);
                 let mine = game.state_hash()?;
                 ensure!(mine == *hash, "desync after event {index}: {mine:#018x} here, {hash:#018x} on the server");
             }
@@ -181,6 +184,12 @@ impl Replica {
     #[must_use]
     pub fn game(&self) -> Option<&Game> {
         self.game.as_ref()
+    }
+
+    /// The game's setup and every event applied since.
+    #[must_use]
+    pub fn log(&self) -> Option<&Log> {
+        self.log.as_ref()
     }
 
     /// What `seat` does with its turn, as protocol actions: SearchBot's plan, once per turn.

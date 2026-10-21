@@ -36,6 +36,11 @@ impl Client {
         } else {
             Message::Binary(lobshot_protocol::encode(msg).unwrap().into())
         };
+        self.send_frame(frame).await;
+    }
+
+    /// Sends a frame as is, for messages no `ClientMsg` can hold.
+    pub async fn send_frame(&mut self, frame: Message) {
         self.ws.send(frame).await.expect("the socket takes the message");
     }
 
