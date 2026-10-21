@@ -6,12 +6,12 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, Member, MemberId, RoomCode, RoomOptions, RoomView, Stage};
 use lobshot_sim::{
     bot::{self, Level},
-    drops::{Drop, DropKind},
-    game::{Event, Game, MobileKind, Roll, Seat, Setup, Team},
+    game::{Event, Game, MobileKind, Seat, Setup, Team},
     log::Log,
     map::{MapRef, NoAssets},
-    units::{Centis, Facing, Wind},
-    weather::{Forecast, WeatherKind},
+    referee::{self, Dice, XorShift},
+    tuning,
+    units::{Centis, Facing},
 };
 
 use super::{
@@ -24,23 +24,12 @@ use crate::{
 };
 
 const ME: MemberId = MemberId(1);
-/// The bot's think time, so its turn reads as a turn.
-const BOT_THINK: f64 = 1.2;
 
-/// The practice referee's own dice.
+/// The practice referee: its own dice, and the room's max wind for the rolls it answers.
 #[derive(Resource)]
 struct Referee {
-    rng: u64,
-}
-
-impl Referee {
-    fn roll(&mut self, below: u32) -> u32 {
-        // xorshift64; a game's dice need no more.
-        self.rng ^= self.rng << 13;
-        self.rng ^= self.rng >> 7;
-        self.rng ^= self.rng << 17;
-        u32::try_from(self.rng % u64::from(below.max(1))).unwrap_or(0)
-    }
+    dice: XorShift,
+    max_wind: u8,
 }
 
 /// The practice field's spawn columns by team, nearest the middle last.
@@ -56,7 +45,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
     // Seeded from the browser's dice; practice needs no reproducibility.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let seed = (js_sys::Math::random() * 9.0e15) as u64 | 1;
-    let mut referee = Referee { rng: seed };
+    let mut dice = XorShift::new(seed);
     let size = session.practice_team_size.clamp(1, 2);
     let name = crate::web::load("name").unwrap_or_else(|| "You".to_owned());
 
@@ -68,7 +57,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
             let mine = id == ME;
             let mobile = match picks.mobile {
                 Some(mobile) if mine => mobile,
-                _ => MobileKind::ALL[referee.roll(u32::try_from(MobileKind::ALL.len()).unwrap_or(1)) as usize],
+                _ => MobileKind::ALL[dice.below(u32::try_from(MobileKind::ALL.len()).unwrap_or(1)) as usize],
             };
             let items = if mine { picks.loadout } else { bot::LOADOUT };
             seats.push(Seat { team, mobile, spawn_x, facing, items });
@@ -113,12 +102,12 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
         amplitude: 120,
         period: 900,
     };
-    let order = order(&mut referee, size);
+    let teams: Vec<Team> = seats.iter().map(|seat| seat.team).collect();
     let setup = Setup {
         map,
         seats,
-        order,
-        wind: wind(&mut referee, options.max_wind),
+        order: referee::turn_order(&teams, &mut dice),
+        wind: referee::wind(options.max_wind, &mut dice),
         sudden_death: options.sudden_death,
     };
     let Ok(game) = Game::new(&setup, &NoAssets) else {
@@ -126,30 +115,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
         return;
     };
     commands.insert_resource(Match::new(Log { setup, events: Vec::new() }, game));
-    commands.insert_resource(referee);
-}
-
-/// A starting order with the teams alternating, as a server rolls it: a random team first, each
-/// team's seats shuffled. Team A holds seats `0..size`, team B the rest.
-fn order(referee: &mut Referee, size: u8) -> Vec<u8> {
-    let mut teams: [Vec<u8>; 2] = [(0..size).collect(), (size..2 * size).collect()];
-    for team in &mut teams {
-        // Fisher-Yates.
-        for i in (1..team.len()).rev() {
-            let j = referee.roll(u32::try_from(i + 1).unwrap_or(1)) as usize;
-            team.swap(i, j);
-        }
-    }
-    if referee.roll(2) == 1 {
-        teams.swap(0, 1);
-    }
-    (0..usize::from(size)).flat_map(|round| [teams[0][round], teams[1][round]]).collect()
-}
-
-fn wind(referee: &mut Referee, max: u8) -> Wind {
-    let strength = u8::try_from(referee.roll(u32::from(max) + 1)).unwrap_or(0);
-    let direction = u16::try_from(referee.roll(360)).unwrap_or(0);
-    Wind { strength, direction }
+    commands.insert_resource(Referee { dice, max_wind: options.max_wind });
 }
 
 /// Applies an event as the referee and plays its effects.
@@ -175,20 +141,7 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
     let (true, Some(mut referee), Some(mut game)) = (session.practice, referee, game) else { return };
     // Answer whatever the sim owes first.
     while let Some(roll) = game.confirmed.pending_roll() {
-        let event = match roll {
-            Roll::Weather { width } => {
-                let kind = WeatherKind::ALL[referee.roll(4) as usize];
-                Event::Weather(Forecast {
-                    kind,
-                    x: i32::try_from(referee.roll(width)).unwrap_or(0),
-                })
-            }
-            Roll::Wind => Event::Wind(wind(&mut referee, 26)),
-            Roll::Drop { width } => Event::Drop(Drop {
-                kind: DropKind::ALL[referee.roll(u32::try_from(DropKind::ALL.len()).unwrap_or(1)) as usize],
-                x: i32::try_from(referee.roll(width)).unwrap_or(0),
-            }),
-        };
+        let event = referee::answer(roll, referee.max_wind, &mut referee.dice);
         decide(&mut game, event, &mut played);
     }
     let (Some(seat), Some(mine)) = (super::world::current_seat(&game), session.my_seat()) else {
@@ -199,17 +152,12 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let centis = Centis((elapsed.max(0.0) * 100.0) as u32);
 
-    for Act(action) in acts.read() {
-        let event = match *action {
-            // The slot machine works on anyone's turn.
-            Action::Spin => Event::Spin { seat: mine },
-            _ if mine != seat => continue,
-            Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
-            Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time: centis },
-            Action::Pass => Event::Pass { seat, time: centis },
-            Action::Item { slot } => Event::UseItem { seat, slot, time: centis },
-        };
-        decide(&mut game, event, &mut played);
+    for &Act(action) in acts.read() {
+        // The slot machine works on anyone's turn; everything else only on yours.
+        if action != Action::Spin && mine != seat {
+            continue;
+        }
+        decide(&mut game, action.event(mine, centis), &mut played);
     }
     if timeline.busy() {
         return;
@@ -228,21 +176,16 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
         return;
     }
     // A bot's turn, once the last shot has played out and it has "thought".
-    if clock.seat != Some(seat) || elapsed < BOT_THINK {
+    if clock.seat != Some(seat) || elapsed < f64::from(tuning::bot::THINK.value.0) / 100.0 {
         return;
     }
-    let Some(events) = bot::plan(&game.confirmed, seat, Level::Normal, u64::from(referee.roll(u32::MAX))) else {
+    let Some(events) = bot::plan(&game.confirmed, seat, Level::Normal, referee.dice.next_u64()) else {
         return;
     };
     info!("SearchBot plays {events:?}");
     for event in events {
         // Stamped as the server would: the time the bot's turn took.
-        let event = match event {
-            Event::Shoot { seat, shot, aim, power, .. } => Event::Shoot { seat, shot, aim, power, time: centis },
-            Event::UseItem { seat, slot, .. } => Event::UseItem { seat, slot, time: centis },
-            other => other,
-        };
-        decide(&mut game, event, &mut played);
+        decide(&mut game, referee::stamp(event, centis), &mut played);
     }
 }
 

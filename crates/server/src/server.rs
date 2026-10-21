@@ -29,11 +29,11 @@ use tower_http::{
 use crate::{
     config::Config,
     connection::{self, MAX_FRAME},
-    maps::Maps,
     rate::{Limiter, Rate, TOO_FAST},
     room::Timing,
     rooms::Rooms,
 };
+use lobshot_assets::maps::Maps;
 use lobshot_protocol::RoomCode;
 use lobshot_sim::base::Void;
 
@@ -67,7 +67,7 @@ pub fn router(config: &Config) -> Router {
 
     let app = App {
         rooms: Rooms::new(
-            Arc::new(Maps::new(dist)),
+            Arc::new(Maps::new(&dist.join("assets"))),
             Timing {
                 playback_wait: !config.no_playback_wait,
                 ..Timing::new(Duration::from_millis(config.bot_delay_ms))

@@ -9,7 +9,6 @@ use std::{
 
 use anyhow::{Context as _, bail, ensure};
 
-use lobshot_assets::{MapInfo, MapVariant, map_path, mask_path, to_ron};
 use lobshot_protocol::{Action, ServerMsg};
 use lobshot_sim::{
     base::{Res, Void},
@@ -53,28 +52,7 @@ pub fn write_map(dist: &Path, name: &str, mask: &Terrain, spawns: &[i32]) -> Voi
 ///
 /// Fails if a file can't be written.
 pub fn write_map_variants(dist: &Path, name: &str, variants: &[(&str, &Terrain, &[i32])]) -> Void {
-    let assets = dist.join("assets");
-    let info = MapInfo {
-        name: name.to_owned(),
-        title: name.to_owned(),
-        variants: variants
-            .iter()
-            .map(|&(id, mask, spawns)| MapVariant {
-                id: id.to_owned(),
-                spawns: spawns.to_vec(),
-                size: Some((mask.width(), mask.height())),
-                mask_hash: Some(mask.mask_hash()),
-            })
-            .collect(),
-    };
-    let mut files = vec![(map_path(name), to_ron(&info)?.into_bytes())];
-    files.extend(variants.iter().map(|&(id, mask, _)| (mask_path(name, id), mask.encode_mask())));
-    for (path, bytes) in files {
-        let path = assets.join(path);
-        std::fs::create_dir_all(path.parent().context("an asset path has a parent")?)?;
-        std::fs::write(path, bytes)?;
-    }
-    Ok(())
+    lobshot_assets::tests::write_map_variants(&dist.join("assets"), name, variants)
 }
 
 /// A server configuration for tests: loopback on any port, `dist` as the bundle, and turns that

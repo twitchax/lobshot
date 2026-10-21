@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
     items::{Item, Loadout},
+    referee::XorShift,
     tuning::{self, AimRange, bot::Noise},
     units::{Centis, Facing, Power, Vec2, Wind},
 };
@@ -89,7 +90,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     }
     // It searches, and values its shots, in the wind as it reads it.
     let noise = level.noise();
-    let mut rng = XorShift(seed | 1);
+    let mut rng = XorShift::new(seed);
     scratch.wind = misread(scratch.wind(), noise, &mut rng);
 
     let search = Search::new(&scratch, seat, target.center());
@@ -114,8 +115,8 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     }
 
     let range = best.shot.tuning(me.tuning()).aim.value;
-    let power = i32::from(best.power) + rng.within(noise.power_steps.value);
-    let aim = (best.aim + i16::try_from(rng.within(noise.aim_degrees.value)).unwrap_or(0)).clamp(range.min, range.max);
+    let power = i32::from(best.power) + within(&mut rng, noise.power_steps.value);
+    let aim = (best.aim + i16::try_from(within(&mut rng, noise.aim_degrees.value)).unwrap_or(0)).clamp(range.min, range.max);
     let power = Power::from_twentieths(u8::try_from(power.clamp(0, i32::from(Power::MAX.twentieths()))).ok()?).ok()?;
     events.push(Event::Shoot {
         seat,
@@ -129,8 +130,8 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
 
 /// The wind as a bot with `noise` reads it.
 fn misread(wind: Wind, noise: &Noise, rng: &mut XorShift) -> Wind {
-    let strength = i32::from(wind.strength) + rng.within(noise.wind_strength.value);
-    let direction = i32::from(wind.direction) + rng.within(noise.wind_degrees.value);
+    let strength = i32::from(wind.strength) + within(rng, noise.wind_strength.value);
+    let direction = i32::from(wind.direction) + within(rng, noise.wind_degrees.value);
     Wind {
         strength: u8::try_from(strength.clamp(0, i32::from(u8::MAX))).unwrap_or(0),
         direction: u16::try_from(direction.rem_euclid(360)).unwrap_or(0),
@@ -328,25 +329,13 @@ fn slot_of(game: &Game, me: &Player, seat: u8, item: Item) -> Option<u8> {
         .map(|(slot, _)| slot)
 }
 
-/// xorshift64: a tiny, fully specified generator, so a seed means the same noise on every target.
-struct XorShift(u64);
-
-impl XorShift {
-    fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
+/// Uniform in `-spread..=spread`.
+fn within(rng: &mut XorShift, spread: i32) -> i32 {
+    if spread == 0 {
+        return 0;
     }
-
-    /// Uniform in `-spread..=spread`.
-    fn within(&mut self, spread: i32) -> i32 {
-        if spread == 0 {
-            return 0;
-        }
-        let span = u64::try_from(2 * spread + 1).unwrap_or(1);
-        i32::try_from(self.next() % span).unwrap_or(0) - spread
-    }
+    let span = u64::try_from(2 * spread + 1).unwrap_or(1);
+    i32::try_from(rng.next_u64() % span).unwrap_or(0) - spread
 }
 
 #[cfg(test)]
@@ -515,8 +504,8 @@ mod unit {
     /// enemy.
     fn room_game(level: Level, seed: u64) -> (i64, u32, u32) {
         let mut spawns = [200, 1400, 500, 1100, 350, 1250, 650, 950];
-        let mut rolls = XorShift(seed | 1);
-        let mut roll = |below: u32| u32::try_from(rolls.next() % u64::from(below)).unwrap();
+        let mut rolls = XorShift::new(seed);
+        let mut roll = |below: u32| u32::try_from(rolls.next_u64() % u64::from(below)).unwrap();
         for i in (1..spawns.len()).rev() {
             spawns.swap(i, usize::try_from(roll(u32::try_from(i + 1).unwrap())).unwrap());
         }
@@ -627,7 +616,7 @@ mod unit {
     #[test]
     fn a_misread_wind_stays_within_its_spread_and_hard_reads_it_true() {
         let wind = Wind::new(3, 350).unwrap();
-        let mut rng = XorShift(99);
+        let mut rng = XorShift::new(99);
         for _ in 0..200 {
             let read = misread(wind, Level::Normal.noise(), &mut rng);
             assert!(read.strength <= 3 + 8 && read.direction < 360, "{read:?}");
@@ -657,11 +646,11 @@ mod unit {
 
     #[test]
     fn noise_stays_within_its_spread() {
-        let mut rng = XorShift(12345);
-        let draws: Vec<i32> = (0..1000).map(|_| rng.within(3)).collect();
+        let mut rng = XorShift::new(12345);
+        let draws: Vec<i32> = (0..1000).map(|_| within(&mut rng, 3)).collect();
         assert!(draws.iter().all(|d| (-3..=3).contains(d)));
         assert!((-3..=3).all(|v| draws.contains(&v)), "every value comes up");
-        assert_eq!(XorShift(5).within(0), 0);
+        assert_eq!(within(&mut XorShift::new(5), 0), 0);
     }
 }
 

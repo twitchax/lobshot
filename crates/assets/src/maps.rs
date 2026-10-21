@@ -1,6 +1,7 @@
-//! Where games are played: the built-in `flat` map, and drawn maps from the client bundle's
-//! generated assets (`<dist>/assets`, which `cargo xtask art` writes and trunk copies). The server
-//! reads a map's manifest when a game is set up, and its collision mask through `MapAssets`.
+//! Where games are played: the built-in `flat` map, and drawn maps from the generated assets
+//! (`assets/gen`, which `cargo xtask art` writes and trunk copies into the bundle at `assets/`).
+//! The server and the lab read a map's manifest when a game is set up, and its collision mask
+//! through `MapAssets`.
 
 use std::{
     collections::HashMap,
@@ -10,14 +11,15 @@ use std::{
 
 use anyhow::{Context as _, ensure};
 
-use lobshot_assets::{FLAT, MapInfo, map_path, mask_path};
 use lobshot_sim::{
     base::{Res, Void},
-    map::{MapAssets, MapRef},
+    map::{Arena, MapAssets, MapRef},
     terrain::Terrain,
 };
 
-/// `flat` (`lobshot_assets::FLAT`): one field, two screens wide.
+use crate::{FLAT, MapInfo, map_path, mask_path};
+
+/// `flat` (`FLAT`): one field, two screens wide.
 const FLAT_WIDTH: u32 = 1600;
 const FLAT_MAP: MapRef = MapRef::Flat {
     width: FLAT_WIDTH,
@@ -26,16 +28,7 @@ const FLAT_MAP: MapRef = MapRef::Flat {
 };
 const FLAT_SPAWNS: [i32; 8] = [200, 1400, 500, 1100, 350, 1250, 650, 950];
 
-/// A map ready to seat a game on.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Arena {
-    pub map: MapRef,
-    pub width: u32,
-    /// Columns mobiles may spawn in.
-    pub spawns: Vec<i32>,
-}
-
-/// The maps a server can seat games on. Masks are cached once read: every game on a map starts
+/// The maps a host can seat games on. Masks are cached once read: every game on a map starts
 /// from the same one.
 #[derive(Debug)]
 pub struct Maps {
@@ -44,11 +37,11 @@ pub struct Maps {
 }
 
 impl Maps {
-    /// Drawn maps come from `<dist>/assets`.
+    /// Drawn maps come from the generated assets at `root` (`assets/gen`, or a bundle's `assets/`).
     #[must_use]
-    pub fn new(dist: &Path) -> Self {
+    pub fn new(root: &Path) -> Self {
         Self {
-            root: dist.join("assets"),
+            root: root.to_owned(),
             masks: Mutex::new(HashMap::new()),
         }
     }
@@ -145,7 +138,7 @@ mod unit {
 
     #[test]
     fn flat_is_built_in() {
-        let maps = Maps::new(Path::new("no-such-dist"));
+        let maps = Maps::new(Path::new("no-such-assets"));
         let [arena] = maps.arenas(FLAT).unwrap().try_into().unwrap();
         assert_eq!(arena.map, MapRef::Flat { width: 1600, height: 900, ground: 700 });
         assert_eq!(arena.width, 1600);
@@ -154,7 +147,7 @@ mod unit {
 
     #[test]
     fn flat_fits_eight_of_any_mobile() {
-        let maps = Maps::new(Path::new("no-such-dist"));
+        let maps = Maps::new(Path::new("no-such-assets"));
         let [arena] = maps.arenas(FLAT).unwrap().try_into().unwrap();
         assert_eq!(arena.spawns.len(), MAX_SEATS);
         // The rule `cargo xtask art` holds drawn maps' spawns to.
@@ -186,7 +179,7 @@ mod unit {
     #[test]
     fn every_map_the_lobby_offers_seats_eight_in_every_variant() {
         let sources = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
-        for &name in lobshot_assets::MAPS {
+        for &name in crate::MAPS {
             let text = std::fs::read_to_string(sources.join(map_path(name))).unwrap();
             let info = MapInfo::from_ron(&text).unwrap();
             assert!(!info.variants.is_empty(), "{name}");
@@ -198,10 +191,10 @@ mod unit {
 
     #[test]
     fn drawn_maps_load_every_variant_and_its_mask() {
-        let dist = TempDir::new().unwrap();
+        let root = TempDir::new().unwrap();
         let island = Terrain::from_fn(400, 300, |x, y| y >= 150 && (100..300).contains(&x)).unwrap();
-        write_map_variants(dist.path(), "pond", &[("A", &pond(), &[50, 350]), ("B", &island, &[150, 250])]).unwrap();
-        let maps = Maps::new(dist.path());
+        write_map_variants(root.path(), "pond", &[("A", &pond(), &[50, 350]), ("B", &island, &[150, 250])]).unwrap();
+        let maps = Maps::new(root.path());
 
         let [arena, b] = maps.arenas("pond").unwrap().try_into().unwrap();
         assert_eq!(
@@ -228,17 +221,17 @@ mod unit {
         assert_eq!(arena.map.terrain(&maps).unwrap(), pond());
 
         // Cached: the file can go and the mask still loads.
-        std::fs::remove_file(dist.path().join("assets").join(mask_path("pond", "A"))).unwrap();
+        std::fs::remove_file(root.path().join(mask_path("pond", "A"))).unwrap();
         assert_eq!(maps.mask("pond", "A").unwrap(), pond());
     }
 
     #[test]
     fn missing_or_ungenerated_maps_are_refused() {
-        let dist = TempDir::new().unwrap();
-        let maps = Maps::new(dist.path());
+        let root = TempDir::new().unwrap();
+        let maps = Maps::new(root.path());
         assert!(format!("{:#}", maps.arenas("tidewall").unwrap_err()).contains("no map"));
 
-        let source = dist.path().join("assets").join(map_path("raw"));
+        let source = root.path().join(map_path("raw"));
         std::fs::create_dir_all(source.parent().unwrap()).unwrap();
         std::fs::write(&source, r#"MapInfo(name: "raw", title: "Raw", variants: [(id: "A", spawns: [1, 2])])"#).unwrap();
         assert!(format!("{:#}", maps.arenas("raw").unwrap_err()).contains("cargo xtask art"));
@@ -247,7 +240,7 @@ mod unit {
 
     #[test]
     fn names_never_leave_the_assets_directory() {
-        let maps = Maps::new(Path::new("dist"));
+        let maps = Maps::new(Path::new("assets"));
         for name in ["", "..", "../secret", "a/b", "a\\b", "x.ron", &"long".repeat(9)] {
             assert!(maps.arenas(name).is_err(), "{name:?}");
             assert!(maps.mask(name, "A").is_err(), "{name:?}");

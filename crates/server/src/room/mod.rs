@@ -19,6 +19,7 @@ use std::{
 use anyhow::{Context as _, anyhow, bail, ensure};
 use rand::{RngExt as _, rngs::StdRng};
 
+use lobshot_assets::maps::{Maps, check_asset_name};
 use lobshot_protocol::{ClientMsg, Member, MemberId, RoomCode, RoomOptions, RoomView, ServerMsg, Stage, Token, clean_name};
 use lobshot_sim::{
     base::{Res, Void},
@@ -26,8 +27,6 @@ use lobshot_sim::{
     game::{Event, Game, MAX_SEATS, MobileKind},
     items::Loadout,
 };
-
-use crate::maps::{Maps, check_asset_name};
 
 use self::play::Play;
 
@@ -482,7 +481,7 @@ pub(crate) mod testing {
 
         pub fn build(timing: Timing, dist: &Path) -> Self {
             let now = Instant::now();
-            let maps = Arc::new(Maps::new(dist));
+            let maps = Arc::new(Maps::new(&dist.join("assets")));
             let room = Room::new(RoomCode::from_indices([0; 8]), maps, timing, StdRng::seed_from_u64(7), now);
             Self {
                 room,

@@ -19,6 +19,14 @@ pub enum MapRef {
     Asset { name: String, variant: String, mask_hash: u64 },
 }
 
+/// A map ready to seat a game on: one variant, its width, and the columns mobiles may spawn in.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Arena {
+    pub map: MapRef,
+    pub width: u32,
+    pub spawns: Vec<i32>,
+}
+
 /// Loads drawn maps' masks: from disk on the server and in the lab, over HTTP in the client.
 pub trait MapAssets {
     /// The terrain mask for `name`'s `variant`.

@@ -18,8 +18,9 @@ pub struct Config {
     #[arg(long, env = "LOBSHOT_DIST", default_value = "dist")]
     pub dist: PathBuf,
 
-    /// How long a bot thinks before it plays, in milliseconds, so its turn reads as a turn.
-    #[arg(long, env = "LOBSHOT_BOT_DELAY_MS", default_value_t = 1200)]
+    /// How long a bot thinks before it plays, in milliseconds, so its turn reads as a turn. The
+    /// default is the turn time practice and the lab charge a bot (`tuning::bot::THINK`).
+    #[arg(long, env = "LOBSHOT_BOT_DELAY_MS", default_value_t = u64::from(lobshot_sim::tuning::bot::THINK.value.0) * 10)]
     pub bot_delay_ms: u64,
 
     /// Start each turn's clock at once, instead of after clients have shown the last shot. For

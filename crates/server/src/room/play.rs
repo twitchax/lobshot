@@ -10,19 +10,27 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail, ensure};
-use rand::{RngExt as _, seq::SliceRandom as _};
+use rand::{RngExt as _, rngs::StdRng, seq::SliceRandom as _};
 
 use lobshot_protocol::{Action, MemberId, ServerMsg, pacing};
 use lobshot_sim::{
     base::Void,
-    drops::{Drop, DropKind},
-    game::{Effect, Event, Game, MobileKind, Phase, Roll, Seat, Setup, Team},
+    game::{Effect, Event, Game, Phase, Team},
     log::Log,
-    units::{Centis, Facing, Wind},
-    weather::{Forecast, WeatherKind},
+    referee::{self, Dice, Entrant},
+    units::Centis,
 };
 
 use super::{BotTurn, Output, Room};
+
+/// The room's rng as the referee's dice.
+struct Rolls<'a>(&'a mut StdRng);
+
+impl Dice for Rolls<'_> {
+    fn below(&mut self, n: u32) -> u32 {
+        self.0.random_range(0..n.max(1))
+    }
+}
 
 /// The game a room is playing.
 #[derive(Debug)]
@@ -137,42 +145,20 @@ impl Room {
             );
         }
 
-        // Each game rolls which of the map's variants it plays on; with one, there's nothing to roll.
-        let mut arenas = self.maps.arenas(&self.options.map)?;
-        ensure!(!arenas.is_empty(), "{} has no variants", self.options.map);
-        let pick = if arenas.len() > 1 { self.rng.random_range(0..arenas.len()) } else { 0 };
-        let arena = arenas.swap_remove(pick);
-        ensure!(arena.spawns.len() >= seated.len(), "{} has spawns for only {} players", self.options.map, arena.spawns.len());
-        let mut spawns = arena.spawns;
-        spawns.shuffle(&mut self.rng);
-        // Random picks are rolled here, so the log holds the mobile each seat actually plays.
-        let mobiles: Vec<MobileKind> = seated
-            .iter()
-            .map(|&i| self.members[i].member.mobile.unwrap_or_else(|| MobileKind::ALL[self.rng.random_range(0..MobileKind::ALL.len())]))
-            .collect();
-        let seats = seated
+        // The referee seats everyone and rolls the variant, spawns, Random picks, order and wind.
+        let entrants: Vec<Entrant> = seated
             .iter()
             .zip(&teams)
-            .zip(&spawns)
-            .zip(&mobiles)
-            .map(|(((&i, &team), &spawn_x), &mobile)| Seat {
+            .map(|(&i, &team)| Entrant {
                 team,
-                mobile,
-                spawn_x,
-                // Facing the middle, where the enemy most likely is.
-                facing: if 2 * i64::from(spawn_x) < i64::from(arena.width) { Facing::Right } else { Facing::Left },
+                mobile: self.members[i].member.mobile,
                 items: self.members[i].member.items,
             })
             .collect();
-        let order = self.turn_order(&teams);
-        let wind = self.roll_wind();
-        let setup = Setup {
-            map: arena.map,
-            seats,
-            order,
-            wind,
-            sudden_death: self.options.sudden_death,
-        };
+        let mut dice = Rolls(&mut self.rng);
+        let setup = referee::arena(self.maps.arenas(&self.options.map)?, &mut dice)
+            .and_then(|arena| referee::setup(&arena, &entrants, self.options.max_wind, self.options.sudden_death, &mut dice))
+            .with_context(|| format!("seating a game on {}", self.options.map))?;
         let game = Game::new(&setup, self.maps.as_ref()).context("setting up the game")?;
 
         for (&i, &team) in seated.iter().zip(&teams) {
@@ -203,55 +189,13 @@ impl Room {
         teams
     }
 
-    /// Seats in a random order with teams alternating: each team shuffled, then interleaved,
-    /// starting with a random team. A bigger team's extra players go last.
-    fn turn_order(&mut self, teams: &[Team]) -> Vec<u8> {
-        let mut sides = [Team::A, Team::B].map(|side| (0_u8..).zip(teams).filter(|&(_, &team)| team == side).map(|(seat, _)| seat).collect::<Vec<u8>>());
-        for side in &mut sides {
-            side.shuffle(&mut self.rng);
-        }
-        if self.rng.random() {
-            sides.swap(0, 1);
-        }
-        let rounds = sides.iter().map(Vec::len).max().unwrap_or(0);
-        (0..rounds).flat_map(|round| sides.iter().filter_map(move |side| side.get(round).copied())).collect()
-    }
-
-    fn roll_wind(&mut self) -> Wind {
-        Wind {
-            strength: self.rng.random_range(0..=self.options.max_wind),
-            direction: self.rng.random_range(0..360),
-        }
-    }
-
-    fn roll(&mut self, roll: Roll) -> Event {
-        match roll {
-            Roll::Weather { width } => Event::Weather(Forecast {
-                kind: WeatherKind::ALL[self.rng.random_range(0..WeatherKind::ALL.len())],
-                x: self.rng.random_range(0..i32::try_from(width).unwrap_or(i32::MAX).max(1)),
-            }),
-            Roll::Wind => Event::Wind(self.roll_wind()),
-            Roll::Drop { width } => Event::Drop(Drop {
-                kind: DropKind::ALL[self.rng.random_range(0..DropKind::ALL.len())],
-                x: self.rng.random_range(0..i32::try_from(width).unwrap_or(i32::MAX).max(1)),
-            }),
-        }
-    }
-
     /// A move from the member in the current seat.
     pub(super) fn act(&mut self, id: MemberId, action: Action, now: Instant) -> Void {
         let play = self.play.as_ref().context("no game is on")?;
         let seat = play.seats.iter().position(|&member| member == id).context("you aren't playing in this game")?;
         let seat = u8::try_from(seat).context("too many seats")?;
         let time = play.elapsed(now);
-        let event = match action {
-            Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
-            Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time },
-            Action::Pass => Event::Pass { seat, time },
-            Action::Item { slot } => Event::UseItem { seat, slot, time },
-            Action::Spin => Event::Spin { seat },
-        };
-        self.commit(event, now)?;
+        self.commit(action.event(seat, time), now)?;
         self.settle(now);
         Ok(())
     }
@@ -306,12 +250,7 @@ impl Room {
         };
         let time = play.elapsed(now);
         for event in events {
-            let event = match event {
-                Event::Shoot { seat, shot, aim, power, .. } => Event::Shoot { seat, shot, aim, power, time },
-                Event::Pass { seat, .. } => Event::Pass { seat, time },
-                Event::UseItem { seat, slot, .. } => Event::UseItem { seat, slot, time },
-                other => other,
-            };
+            let event = referee::stamp(event, time);
             if let Err(error) = self.commit(event, now) {
                 tracing::warn!(%error, ?event, "the game refused a bot's planned event");
                 break;
@@ -374,7 +313,7 @@ impl Room {
 
     fn answer_rolls(&mut self, now: Instant) {
         while let Some(roll) = self.play.as_ref().and_then(|play| play.game.pending_roll()) {
-            let event = self.roll(roll);
+            let event = referee::answer(roll, self.options.max_wind, &mut Rolls(&mut self.rng));
             self.commit_or_abort(event, now);
         }
     }
@@ -443,11 +382,11 @@ mod unit {
     use lobshot_protocol::{ClientMsg, RoomOptions, Stage};
     use lobshot_sim::{
         bot,
-        game::{Shot, SuddenDeath, SuddenDeathKind},
+        game::{MobileKind, Shot, SuddenDeath, SuddenDeathKind},
         items::{Item, Loadout},
         map::{MapRef, NoAssets},
         terrain::Terrain,
-        units::{Power, TICKS_PER_SECOND, Vec2},
+        units::{Facing, Power, TICKS_PER_SECOND, Vec2},
     };
 
     use super::*;
@@ -692,21 +631,6 @@ mod unit {
     }
 
     #[test]
-    fn turn_order_alternates_teams() {
-        let mut h = Harness::new();
-        for _ in 0..50 {
-            let teams = [Team::A, Team::A, Team::B, Team::B, Team::A, Team::B, Team::A];
-            let order = h.room.turn_order(&teams);
-            let mut sorted = order.clone();
-            sorted.sort_unstable();
-            assert_eq!(sorted, [0, 1, 2, 3, 4, 5, 6]);
-            let sides: Vec<Team> = order.iter().map(|&seat| teams[usize::from(seat)]).collect();
-            assert!(sides[..6].windows(2).all(|pair| pair[0] != pair[1]), "{sides:?}");
-            assert_eq!(sides[6], Team::A, "the bigger team's extra player goes last");
-        }
-    }
-
-    #[test]
     fn random_teams_split_the_seated_evenly() {
         let mut h = Harness::new();
         h.join(1, "Master");
@@ -863,7 +787,17 @@ mod unit {
             h.advance(Duration::from_millis(100));
             h.run_bots();
         }
-        let (showing, _) = lob(&mut h, human);
+        // Let the bot's opening shot, if any, finish showing, then lob until the bot is next: a bot
+        // that used an item can sit out the human's next turn too.
+        let shown = h.room.play.as_ref().unwrap().showing.until.saturating_duration_since(h.now);
+        h.advance(shown);
+        let showing = loop {
+            let (showing, _) = lob(&mut h, human);
+            if h.room.play.as_ref().unwrap().game.phase() != (Phase::Turn { seat: seat_of(&h, human) }) {
+                break showing;
+            }
+            h.advance(showing);
+        };
         h.advance(showing + Duration::from_millis(1199));
         assert_eq!(h.plans.len(), 0, "still showing the shot, then thinking");
         h.advance(Duration::from_millis(1));

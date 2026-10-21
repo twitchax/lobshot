@@ -5,6 +5,7 @@
 //! lasts about as long as a GunBound 4v4 (`bot::tool_length`).
 
 use super::{Tuned, picked};
+use crate::units::Centis;
 
 /// How far off a bot may be, each error uniform within its spread.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,3 +45,8 @@ pub const EASY: Noise = Noise {
     wind_strength: picked(13, "Half the wind's range."),
     wind_degrees: picked(150, "Barely reads the dial."),
 };
+
+/// How long a bot's turn takes, as every host stamps it: the server waits this long before a bot
+/// plays (`LOBSHOT_BOT_DELAY_MS`'s default), and practice and the lab charge it. Turn time adds to
+/// delay, so it decides when a bot moves again.
+pub const THINK: Tuned<Centis> = picked(Centis(120), "Long enough to read as a turn: a person's quick one.");

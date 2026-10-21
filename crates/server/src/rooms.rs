@@ -13,14 +13,12 @@ use std::{
 
 use rand::{RngExt as _, SeedableRng as _, rngs::StdRng};
 
+use lobshot_assets::maps::Maps;
 use lobshot_protocol::RoomCode;
 
-use crate::{
-    maps::Maps,
-    room::{
-        ConnId, Room, Timing,
-        task::{self, RoomHandle},
-    },
+use crate::room::{
+    ConnId, Room, Timing,
+    task::{self, RoomHandle},
 };
 
 /// Every live room. Cheap to clone: clones share the registry.

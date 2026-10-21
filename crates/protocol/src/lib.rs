@@ -20,7 +20,7 @@ use lobshot_sim::{
     game::{Event, MobileKind, Shot, Team},
     items::Loadout,
     log::Log,
-    units::{Facing, Power},
+    units::{Centis, Facing, Power},
 };
 
 /// Bumped whenever a message from an older build would decode differently.
@@ -140,6 +140,21 @@ pub enum Action {
     },
     /// A dead player spins their slot machine; it works on anyone's turn.
     Spin,
+}
+
+impl Action {
+    /// The sim event for this action by the player in `seat`, with `time` as the turn time so
+    /// far (the host's measure of it, never the player's).
+    #[must_use]
+    pub fn event(self, seat: u8, time: Centis) -> Event {
+        match self {
+            Self::Walk { facing, steps } => Event::Walk { seat, facing, steps },
+            Self::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time },
+            Self::Pass => Event::Pass { seat, time },
+            Self::Item { slot } => Event::UseItem { seat, slot, time },
+            Self::Spin => Event::Spin { seat },
+        }
+    }
 }
 
 /// Client to server.
@@ -333,5 +348,30 @@ mod unit {
         assert!(clean_name("   ").is_err());
         assert!(clean_name("a name that is far too long").is_err());
         assert!(clean_name("bad\u{7}").is_err());
+    }
+
+    #[test]
+    fn actions_become_the_actors_events_with_the_hosts_time() {
+        let time = Centis(250);
+        let shot = Action::Shoot {
+            shot: Shot::S1,
+            aim: 30,
+            power: Power::MAX,
+        };
+        assert_eq!(
+            shot.event(3, time),
+            Event::Shoot {
+                seat: 3,
+                shot: Shot::S1,
+                aim: 30,
+                power: Power::MAX,
+                time
+            }
+        );
+        let walk = Action::Walk { facing: Facing::Left, steps: 9 };
+        assert_eq!(walk.event(1, time), Event::Walk { seat: 1, facing: Facing::Left, steps: 9 });
+        assert_eq!(Action::Pass.event(0, time), Event::Pass { seat: 0, time });
+        assert_eq!(Action::Item { slot: 4 }.event(2, time), Event::UseItem { seat: 2, slot: 4, time });
+        assert_eq!(Action::Spin.event(5, time), Event::Spin { seat: 5 });
     }
 }

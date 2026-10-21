@@ -3,7 +3,6 @@
 
 pub mod config;
 pub mod connection;
-pub mod maps;
 pub mod rate;
 pub mod room;
 pub mod rooms;

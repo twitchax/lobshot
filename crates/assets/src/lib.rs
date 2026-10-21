@@ -1,10 +1,13 @@
 //! The asset layout and manifests, in one place for the writer (`cargo xtask art`) and the readers
-//! (the client draws them, the server loads map masks and spawns).
+//! (the client draws them; the server and the lab load map masks and spawns through `maps`).
 //!
 //! Sources live in `assets/` (SVG, hand-written RON and Ogg sounds, CC0). `cargo xtask art`
 //! renders them into `assets/gen/` (gitignored), which trunk copies into the bundle at `assets/`.
 //! Paths below are relative to that root. Every rendered image is drawn at `ART_SCALE`, and its
 //! center is its SVG's origin (a part's pivot, a rider's seat), so a sprite anchors at its center.
+
+pub mod maps;
+pub mod tests;
 
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
