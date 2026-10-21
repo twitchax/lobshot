@@ -7,7 +7,7 @@
 # and drops every game in progress: deploy when nobody is playing.
 
 app = "twitchax-lobshot"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
