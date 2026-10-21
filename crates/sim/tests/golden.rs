@@ -22,15 +22,15 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x90f0_7e89_eb25_26b4),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6488_3e84_636b_4225),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
-        35,
-        0x895b_61f8_58d8_c04c,
+        51,
+        0x84c1_a385_0145_7872,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 87, 0xc357_cdeb_7284_e5c5),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 87, 0x8470_0778_5c46_dbaa),
 ];
 
 #[test]
@@ -203,6 +203,8 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         }
 
         let shot = [Shot::S1, Shot::S2, Shot::Ss][turn % 3];
+        // A locked or disabled SS falls back to S1.
+        let shot = if game.can_shoot(seat, shot) { shot } else { Shot::S1 };
         let range = shot.tuning(me.tuning()).aim.value;
         let aim = i16::midpoint(range.true_min, range.true_max);
         let enemy_index = game.players().iter().position(|p| *p == enemy).unwrap();

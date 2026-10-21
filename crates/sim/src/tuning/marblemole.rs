@@ -1,9 +1,8 @@
 //! Marblemole: a mole in a mine cart that bowls static-charged marbles, with GunBound Grub's
-//! behavior. Its shots land with the M3 sim work; until then they fly as Coilback's S1.
-//! Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
+//! behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
 //! `assets/mobiles/marblemole/rig.ron` lands.
 
-use super::{AimRange, ArmorClass, MobileTuning, Rect, ShotTuning, WeaponType, cited, fitted, picked};
+use super::{AimRange, ArmorClass, DamageRange, MobileTuning, Rect, ShotTuning, Tuned, WeaponType, cited, fitted, picked};
 
 pub const MOBILE: MobileTuning = MobileTuning {
     name: "Marblemole",
@@ -62,6 +61,34 @@ pub const MOBILE: MobileTuning = MobileTuning {
     },
 };
 
-/// Scaled from Coilback's by the square of the power ratio (2.33 against 2.45 bars, since range
-/// goes as power squared over gravity); `tool_fit` refines it.
+/// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
+/// rewrites this line.
 const GRAVITY: f64 = 562.6;
+
+/// S1: the weakest shot in the game (DB-mob).
+pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 80, max: 130 }, &["DB-mob"]);
+pub const S1_BLAST: Tuned<f64> = picked(20.0, "A weak shot's small blast.");
+
+/// S2: four marbles that bounce and roll, bounce off the map's sides, and go off about 3 s after
+/// their first contact or at once on touching a mobile (DB-mob).
+pub const S2_MARBLE_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 45, max: 55 }, "DB-mob's 180-220 for the four, split evenly.");
+pub const S2_MARBLE_BLAST: Tuned<f64> = picked(18.0, "Four small blasts.");
+/// Each marble's power (bars) off the shot's: they leave together and spread as they bounce.
+pub const S2_SPREAD: Tuned<[f64; 4]> = picked([-0.15, -0.05, 0.05, 0.15], "A short line of marbles across the target.");
+pub const S2_FUSE_SECONDS: Tuned<f64> = cited(3.0, &["DB-mob"]);
+/// The share of a marble's speed into a surface that it keeps, bouncing back out.
+pub const S2_RESTITUTION: Tuned<f64> = picked(0.5, "Lively for a few hops, then settling: the fuse outlasts the bouncing.");
+/// The share of its speed along a surface a marble keeps through a bounce.
+pub const S2_FRICTION: Tuned<f64> = picked(0.85, "Enough grip to stop rolling within the fuse on flat ground.");
+/// Below this speed (px/s) after a bounce, a marble comes to rest until its fuse.
+pub const S2_REST_SPEED: Tuned<f64> = picked(40.0, "Hops lower than a pixel or two read as rest.");
+/// The most bounces a marble makes before it rests where it is.
+pub const S2_MAX_BOUNCES: Tuned<u8> = picked(16, "A guard: more bounces than any fuse allows in practice.");
+
+/// SS: a ball that passes through mobiles, hurting each the whole time it touches them, and blows
+/// up on the ground (DB-mob). A touch deals at least `min`, more the longer it lasts, up to `max`.
+pub const SS_TOUCH_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 400, max: 1000 }, &["DB-mob"]);
+/// Damage per second of touch on top of `SS_TOUCH_DAMAGE.min`.
+pub const SS_TOUCH_PER_SECOND: Tuned<f64> = picked(4000.0, "A ball crossing a body in about 0.1 s deals about 800; a long, slow touch reaches the max.");
+pub const SS_LAND_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 80, max: 130 }, "Where it lands it blows up like an S1.");
+pub const SS_LAND_BLAST: Tuned<f64> = picked(30.0, "A bigger crater than S1's.");

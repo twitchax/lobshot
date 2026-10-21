@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     tuning::{LAUNCH_SPEED_PER_BAR, WIND_X_PER_UNIT, WIND_Y_PER_UNIT},
-    units::{TICK, Vec2, Wind},
+    units::{TICK, Vec2, Wind, seconds},
 };
 
 /// A projectile's flight: where it started, how fast, and the constant acceleration on it.
@@ -34,6 +34,23 @@ impl Flight {
         let t = f64::from(tick) * TICK;
         Vec2::new(self.velocity.x + self.accel.x * t, self.velocity.y + self.accel.y * t)
     }
+}
+
+/// Where a helix strand winding about `flight` is at the flight's `tick`: the flight's point,
+/// pushed `amplitude · sin(2π · hertz · t + phase)` along its normal (the velocity turned a quarter
+/// clockwise on screen), where `t` is the shot's elapsed time: `elapsed` ticks at the flight's tick
+/// 0, plus `tick`. The sim collides strands here, and clients draw them here.
+#[must_use]
+pub fn helix_point(flight: &Flight, tick: u32, elapsed: u32, amplitude: f64, hertz: f64, phase: f64) -> Vec2 {
+    let at = flight.at(tick);
+    let velocity = flight.velocity_at(tick);
+    let speed = velocity.length();
+    if speed <= 0.0 {
+        return at;
+    }
+    let normal = Vec2::new(-velocity.y / speed, velocity.x / speed);
+    let t = seconds(elapsed + tick);
+    at + normal * (amplitude * libm::sin(2.0 * core::f64::consts::PI * hertz * t + phase))
 }
 
 /// Launch speed for a power in bars (continuous, so bots and tests can search between steps).

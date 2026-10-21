@@ -24,6 +24,8 @@ pub enum Ending {
     /// A shot with this shot delay (S1, S2 or SS).
     Shot(u32),
     Pass,
+    /// An item that ends the turn by itself (Swap): nothing on top of the item's own delay.
+    Item,
 }
 
 /// Delay for one turn: base + shot (or the pass cost) + items + time at `per_second`.
@@ -32,6 +34,7 @@ pub fn turn_delay(base: u32, ending: Ending, items: u32, per_second: u32, time: 
     let action = match ending {
         Ending::Shot(delay) => delay,
         Ending::Pass => PASS_DELAY.value,
+        Ending::Item => 0,
     };
     // Time is charged in whole delay points, rounding down.
     base + action + items + per_second * time.0 / 100
@@ -66,6 +69,9 @@ mod unit {
         assert_eq!(turn_delay(520, Ending::Pass, 0, 10, Centis(0)), 720);
         assert_eq!(turn_delay(520, Ending::Shot(250), 0, 10, Centis(1234)), 770 + 123);
         assert_eq!(turn_delay(490, Ending::Shot(250), 0, 12, Centis(1000)), 740 + 120, "Turtle pays 12 per second");
+        // Dual on an Armor S1: the item's 600 plus Armor's 40 surcharge (SW-mds).
+        assert_eq!(turn_delay(520, Ending::Shot(250), 640, 10, Centis(0)), 1410);
+        assert_eq!(turn_delay(480, Ending::Item, 50, 10, Centis(0)), 530, "a Swap pays only its item delay");
     }
 
     #[test]

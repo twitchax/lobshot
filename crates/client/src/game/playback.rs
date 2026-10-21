@@ -218,7 +218,30 @@ fn stage(played: Played, dot: &Dot, views: &mut Query<(&MobileView, &mut Shown)>
             }
             Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
             Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
-            Effect::Walked { .. } | Effect::WindChanged(_) | Effect::Forecast(_) | Effect::WeatherChanged { .. } => {}
+            // M3's effects from `Volley` on aren't drawn yet.
+            Effect::Walked { .. }
+            | Effect::WindChanged(_)
+            | Effect::Forecast(_)
+            | Effect::WeatherChanged { .. }
+            | Effect::Volley { .. }
+            | Effect::Helix { .. }
+            | Effect::Beacon { .. }
+            | Effect::Teleported { .. }
+            | Effect::Bolt { .. }
+            | Effect::Bounced { .. }
+            | Effect::Pierced { .. }
+            | Effect::Shielded { .. }
+            | Effect::ShieldStripped { .. }
+            | Effect::ShieldRestored { .. }
+            | Effect::Healed { .. }
+            | Effect::ItemUsed { .. }
+            | Effect::Swapped { .. }
+            | Effect::SsLocked { .. }
+            | Effect::SsReady { .. }
+            | Effect::Spun { .. }
+            | Effect::DropRolled { .. }
+            | Effect::Dropped { .. }
+            | Effect::SuddenDeath { .. } => {}
         }
     }
     // Stable, so cues at the same moment keep the sim's order (the turn passing last).

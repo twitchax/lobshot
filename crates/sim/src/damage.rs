@@ -49,9 +49,16 @@ pub fn damage(blast: &Blast, target: &Target, direct: bool) -> i32 {
         }
         min * (1.0 - gap / blast.radius)
     };
-    let angle = if blast.false_angle { FALSE_ANGLE_DAMAGE.value } else { 1.0 };
-    let damage = (base * blast.weapon.against(target.armor) * angle * blast.boost).floor();
-    // Bounded by the shot's max damage, far inside i32.
+    scale(base, blast.weapon, target.armor, blast.false_angle, blast.boost)
+}
+
+/// `base` damage from a `weapon` against `armor`, scaled for false angle and `boost` (weather,
+/// items), rounding down.
+#[must_use]
+pub fn scale(base: f64, weapon: WeaponType, armor: ArmorClass, false_angle: bool, boost: f64) -> i32 {
+    let angle = if false_angle { FALSE_ANGLE_DAMAGE.value } else { 1.0 };
+    let damage = (base * weapon.against(armor) * angle * boost).floor();
+    // Bounded by a few times the shot's max damage, far inside i32.
     #[allow(clippy::cast_possible_truncation)]
     let damage = damage as i32;
     damage

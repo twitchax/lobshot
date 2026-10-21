@@ -1,9 +1,12 @@
 //! Sparkhorn: a rhino-beetle with a tesla-coil horn and a crackling bubble shield, with GunBound
-//! Lightning's behavior. Its shots land with the M3 sim work; until then they fly as Coilback's S1.
-//! Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
+//! Lightning's behavior. Geometry (hitbox, probes, cannon) is Coilback's until the drawing in
 //! `assets/mobiles/sparkhorn/rig.ron` lands.
+//!
+//! Its S1 and S2 land a ball that calls bolts down onto the impact; the bolts' splash is GunBound
+//! Lightning's constant part (at least 76, SW-mob, WP06), so the ball carries the rest of
+//! DragonBound's range.
 
-use super::{AimRange, ArmorClass, MobileTuning, Rect, ShotTuning, WeaponType, cited, fitted, picked};
+use super::{AimRange, ArmorClass, DamageRange, MobileTuning, Rect, ShotTuning, Tuned, WeaponType, cited, fitted, picked};
 
 pub const MOBILE: MobileTuning = MobileTuning {
     name: "Sparkhorn",
@@ -62,6 +65,28 @@ pub const MOBILE: MobileTuning = MobileTuning {
     },
 };
 
-/// Scaled from Coilback's by the square of the power ratio (2.30 against 2.45 bars, since range
-/// goes as power squared over gravity); `tool_fit` refines it.
+/// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
+/// rewrites this line.
 const GRAVITY: f64 = 548.2;
+
+/// The flat damage a bolt's splash deals each mobile within `BOLT_REACH` of its path, once a turn
+/// even with Dual (GF-max, WP06). Splash ignores armor, angle, weather and items (GF-max).
+pub const SPLASH: Tuned<i32> = cited(76, &["SW-mob", "WP06", "GF-max"]);
+
+/// S1: the ball lands, then a bolt strikes straight down that column; land above the target blocks
+/// it (DB-mob; OpenBound strikes the highest solid point in the column).
+pub const S1_BALL_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 74, max: 174 }, "DB-mob's 150-250, less the splash.");
+pub const S1_BALL_BLAST: Tuned<f64> = picked(20.0, "A small ball: the bolt does the reaching.");
+
+/// S2: the ball lands, then two bolts strike it from either side in a V (WP06).
+pub const S2_BALL_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 74, max: 224 }, "DB-mob's 150-300, less one splash.");
+pub const S2_BALL_BLAST: Tuned<f64> = picked(20.0, "As S1's.");
+/// Each bolt's angle off the vertical.
+pub const S2_BOLT_DEGREES: Tuned<f64> = cited(45.0, &["WP06"]);
+
+/// SS: the ball lands, and every mobile within reach takes a bolt straight down its own column
+/// (DB-mob). The ball itself only carves: DB-mob gives the SS no damage but its bolts'.
+pub const SS_BALL_BLAST: Tuned<f64> = picked(30.0, "A crater to show where it landed.");
+/// How far from the landing (to the hitbox) a mobile must be to take a bolt. OpenBound uses 100.
+pub const SS_REACH: Tuned<f64> = picked(150.0, "DB-mob says a large radius; OpenBound's 100 is barely past a blast.");
+pub const SS_BOLT_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 150, max: 200 }, &["DB-mob"]);

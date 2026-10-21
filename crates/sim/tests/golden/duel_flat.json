@@ -166,9 +166,9 @@
     {
       "Shoot": {
         "seat": 0,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 48,
+        "shot": "S1",
+        "aim": 32,
+        "power": 47,
         "time": 985
       }
     },
@@ -253,17 +253,17 @@
     },
     {
       "Walk": {
-        "seat": 1,
-        "facing": "Left",
+        "seat": 0,
+        "facing": "Right",
         "steps": 0
       }
     },
     {
       "Shoot": {
-        "seat": 1,
+        "seat": 0,
         "shot": "S2",
         "aim": 32,
-        "power": 46,
+        "power": 45,
         "time": 1670
       }
     }

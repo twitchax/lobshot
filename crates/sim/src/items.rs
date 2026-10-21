@@ -1,13 +1,19 @@
 //! Battle items, GunBound's eleven under plain names, and the loadout a player brings into a game:
 //! six slots, each item filling one or two (SW-gp). An item is used once, on its owner's turn, one
-//! a turn. What each does lives in `game`; its numbers live in `tuning::items`.
+//! a turn, and never in sudden death (`Game::can_use_item`). Heals, Wind Flip, Sacrifice's cost
+//! and Swap act at once (`use_item`, here); the rest ride on the turn's shot (`shots::Salvo`). The
+//! numbers live in `tuning::items`.
 
 use anyhow::ensure;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     base::Res,
-    tuning::items::{self, ItemTuning, LOADOUT_SLOTS},
+    game::{Effect, Game},
+    tuning::{
+        ArmorClass,
+        items::{self, BIG_HEAL_SHARE, BIONIC_HEAL_EXTRA, HEAL_SHARE, ItemTuning, LOADOUT_SLOTS, SACRIFICE_COST},
+    },
 };
 
 /// The most items a loadout holds: every item fills at least one slot.
@@ -135,6 +141,48 @@ impl Loadout {
     }
 }
 
+/// Spends `seat`'s item at `slot` and does what it does at once; the caller has checked it may
+/// (`Game::can_use_item`). Returns whether it ended the turn (Swap).
+pub(crate) fn use_item(game: &mut Game, seat: u8, slot: u8, effects: &mut Vec<Effect>) -> bool {
+    let index = usize::from(seat);
+    let Some(item) = game.players[index].items.get_mut(usize::from(slot)).and_then(Option::take) else {
+        return false;
+    };
+    game.players[index].armed = Some(item);
+    effects.push(Effect::ItemUsed { seat, slot, item });
+    let player = game.players[index];
+    let max_hp = player.tuning().hp.value;
+    // Bionic mobiles gain more from healing (SW-mobC, SW-gp).
+    let bionic = if player.tuning().armor.value == ArmorClass::Bionic { BIONIC_HEAL_EXTRA.value } else { 0.0 };
+    match item {
+        Item::Heal => game.heal(seat, HEAL_SHARE.value + bionic, effects),
+        Item::BigHeal => game.heal(seat, BIG_HEAL_SHARE.value + bionic, effects),
+        Item::WindFlip => {
+            game.wind.direction = (game.wind.direction + 180) % 360;
+            effects.push(Effect::WindChanged(game.wind));
+        }
+        Item::Sacrifice => {
+            // A share of at most 1 of a few thousand HP: far inside i32.
+            #[allow(clippy::cast_possible_truncation)]
+            let cost = ((f64::from(max_hp) * SACRIFICE_COST.value).floor() as i32).min(player.hp - 1);
+            if cost > 0 {
+                game.players[index].hp -= cost;
+                effects.push(Effect::Damaged { seat, amount: cost });
+            }
+        }
+        Item::Swap => {
+            let Some(with) = game.swap_partner(seat) else { return false };
+            let theirs = game.players[usize::from(with)].footing;
+            game.place(seat, theirs);
+            game.place(with, player.footing);
+            effects.push(Effect::Swapped { seat, with });
+            return true;
+        }
+        Item::Dual | Item::DualPlus | Item::Teleport | Item::PowerUp | Item::Dig | Item::Thunder => {}
+    }
+    false
+}
+
 impl TryFrom<Vec<Item>> for Loadout {
     type Error = anyhow::Error;
 
@@ -183,5 +231,114 @@ mod unit {
         for item in Item::ALL {
             assert!((1..=2).contains(&item.slots()), "{item:?}");
         }
+    }
+
+    use crate::{
+        game::{
+            Effect, Event, Game, MobileKind, Phase, Shot, Team,
+            testing::{answer_rolls, duel, duel_of, game_of, pass, pass_until, seat, shoot},
+        },
+        units::{Centis, Facing, Power, Wind},
+    };
+
+    /// `game` with seat 0 carrying `items`.
+    fn carrying(mut game: Game, items: &[Item]) -> Game {
+        game.players[0].items = Loadout::new(items).unwrap().positions();
+        game
+    }
+
+    fn use_slot(game: &mut Game, slot: u8) -> Vec<Effect> {
+        game.apply(Event::UseItem { seat: 0, slot }).unwrap()
+    }
+
+    #[test]
+    fn an_item_is_used_once_one_a_turn_on_its_owners_turn() {
+        let mut game = carrying(duel(800), &[Item::Heal, Item::WindFlip]);
+        assert!(!game.can_use_item(1, 0), "not seat 1's turn");
+        assert!(!game.can_use_item(0, 5), "an empty slot");
+        let effects = use_slot(&mut game, 0);
+        assert_eq!(effects[0], Effect::ItemUsed { seat: 0, slot: 0, item: Item::Heal });
+        assert_eq!(game.players()[0].items[0], None, "spent");
+        assert_eq!(game.players()[0].armed, Some(Item::Heal));
+        assert!(!game.can_use_item(0, 1), "one a turn");
+        assert!(game.apply(Event::UseItem { seat: 0, slot: 1 }).is_err());
+        pass(&mut game, 0);
+        assert_eq!(game.players()[0].armed, None, "the turn's item clears with the turn");
+        // A pass with Heal: base 520 + pass 200 + Heal 100 + Armor's surcharge 40.
+        assert_eq!(game.players()[0].clock.delay, 860);
+    }
+
+    #[test]
+    fn heals_restore_a_share_of_max_hp_up_to_it_and_more_for_bionics() {
+        let mut game = carrying(duel(800), &[Item::Heal, Item::BigHeal]);
+        game.players[0].hp = 500;
+        assert!(use_slot(&mut game, 0).contains(&Effect::Healed { seat: 0, amount: 120 }));
+        pass(&mut game, 0);
+        pass_until(&mut game, 0);
+        game.players[0].hp = 900;
+        assert!(use_slot(&mut game, 1).contains(&Effect::Healed { seat: 0, amount: 100 }), "capped at max");
+        assert_eq!(game.players()[0].hp, 1000);
+
+        // Hookclaw is Bionic: Big Heal's 25% becomes 30%.
+        let mut game = carrying(duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800), &[Item::BigHeal]);
+        game.players[0].hp = 100;
+        assert!(use_slot(&mut game, 0).contains(&Effect::Healed { seat: 0, amount: 300 }));
+    }
+
+    #[test]
+    fn wind_flip_turns_the_wind_around() {
+        let mut game = carrying(duel(800), &[Item::WindFlip]);
+        game.wind = Wind::new(14, 30).unwrap();
+        let flipped = Wind::new(14, 210).unwrap();
+        assert!(use_slot(&mut game, 0).contains(&Effect::WindChanged(flipped)));
+        assert_eq!(game.wind(), flipped);
+    }
+
+    #[test]
+    fn sacrifice_costs_eight_percent_but_never_the_last_hp() {
+        let mut game = carrying(duel(800), &[Item::Sacrifice, Item::Sacrifice]);
+        assert!(use_slot(&mut game, 0).contains(&Effect::Damaged { seat: 0, amount: 80 }));
+        assert_eq!(game.players()[0].hp, 920);
+        pass(&mut game, 0);
+        pass_until(&mut game, 0);
+        game.players[0].hp = 30;
+        use_slot(&mut game, 1);
+        assert_eq!(game.players()[0].hp, 1, "down to 1, no lower");
+    }
+
+    #[test]
+    fn swap_trades_places_with_the_weakest_teammate_and_ends_the_turn() {
+        let mut game = game_of(vec![
+            seat(Team::A, MobileKind::Coilback, 300, Facing::Right),
+            seat(Team::B, MobileKind::Coilback, 1100, Facing::Left),
+            seat(Team::A, MobileKind::Coilback, 700, Facing::Right),
+            seat(Team::A, MobileKind::Coilback, 1500, Facing::Right),
+        ]);
+        game.players[0].items = Loadout::new(&[Item::Swap]).unwrap().positions();
+        game.players[3].hp = 400;
+        let (mine, theirs) = (game.players()[0].footing, game.players()[3].footing);
+        let effects = use_slot(&mut game, 0);
+        assert!(effects.contains(&Effect::Swapped { seat: 0, with: 3 }), "{effects:?}");
+        assert_eq!((game.players()[0].footing, game.players()[3].footing), (theirs, mine));
+        assert_eq!(game.phase(), Phase::Turn { seat: 1 }, "the turn ends");
+        assert_eq!(game.players()[0].clock.delay, 520 + 50 + 40, "base, Swap and Armor's surcharge: no shot or pass cost");
+
+        let game = carrying(duel(800), &[Item::Swap]);
+        assert!(!game.can_use_item(0, 0), "no teammate to swap with");
+    }
+
+    #[test]
+    fn items_that_ride_on_the_shot_wait_for_it() {
+        for item in [Item::Dual, Item::DualPlus, Item::Teleport, Item::PowerUp, Item::Dig, Item::Thunder] {
+            let mut game = carrying(duel(800), &[item]);
+            let effects = use_slot(&mut game, 0);
+            assert_eq!(effects, [Effect::ItemUsed { seat: 0, slot: 0, item }], "{item:?} does nothing yet");
+            assert!(game.apply(Event::Pass { seat: 0, time: Centis(0) }).is_ok());
+            answer_rolls(&mut game);
+        }
+        let mut game = carrying(duel(800), &[Item::PowerUp]);
+        use_slot(&mut game, 0);
+        shoot(&mut game, 0, Shot::S1, 35, Power::nearest(2.4));
+        assert_eq!(game.players()[0].clock.delay, 520 + 250 + 150 + 40);
     }
 }

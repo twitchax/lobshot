@@ -1,10 +1,37 @@
-//! Battle items: the slots each fills (WP06, AK) and the delay it adds (SW-gp first). What each
-//! item does, and its effect numbers, land with the item rules.
+//! Battle items: the slots each fills (WP06, AK), the delay it adds (SW-gp first), and what it
+//! does (SW-gp first, OpenBound where GunBound's sources give no number).
 
-use super::{Tuned, cited};
+use super::{DamageRange, Tuned, WeaponType, cited, picked};
 
 /// A loadout holds six small items, or three big ones.
 pub const LOADOUT_SLOTS: Tuned<u8> = cited(6, &["WP06", "AK"]);
+
+/// Heal's share of max HP. SW-gp says only "small heal".
+pub const HEAL_SHARE: Tuned<f64> = cited(0.12, &["OB"]);
+
+/// Big Heal's share of max HP. OpenBound heals 30% (CONTRADICTION).
+pub const BIG_HEAL_SHARE: Tuned<f64> = cited(0.25, &["SW-gp"]);
+
+/// What Bionic mobiles gain on top of either heal's share (Big Heal: 25% becomes 30%). OpenBound
+/// gives 3% (CONTRADICTION).
+pub const BIONIC_HEAL_EXTRA: Tuned<f64> = cited(0.05, &["SW-gp"]);
+
+/// Sacrifice's cost, as a share of max HP; it never leaves its user below 1 HP.
+pub const SACRIFICE_COST: Tuned<f64> = cited(0.08, &["SW-gp", "OB"]);
+
+/// The damage multiplier on the turn's shot from Power Up or Sacrifice.
+pub const DAMAGE_BOOST: Tuned<f64> = cited(1.33, &["SW-gp"]);
+
+/// Dig's crater multiplier (+25% land damage); damage reach is unchanged.
+pub const DIG_CRATER: Tuned<f64> = cited(1.25, &["SW-gp"]);
+
+/// Thunder's bolt, wherever each projectile lands. GunBound gives no number, and OpenBound's
+/// Electricity bolt deals a flat 30.
+pub const THUNDER_DAMAGE: Tuned<DamageRange> = picked(
+    DamageRange { min: 76, max: 80 },
+    "The one GunBound bolt with a stated damage is the slot machine's (WP06), so Thunder strikes as hard.",
+);
+pub const THUNDER_WEAPON: Tuned<WeaponType> = picked(WeaponType::Electric, "Lightning is electric.");
 
 /// What an item costs to carry and to use.
 #[derive(Debug, Clone, Copy, PartialEq)]

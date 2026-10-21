@@ -4,10 +4,12 @@
 //! a test checks every key cited here exists there. Balance work edits this module and nothing else.
 
 pub mod coilback;
+pub mod drops;
 pub mod hookclaw;
 pub mod items;
 pub mod lanternwing;
 pub mod marblemole;
+pub mod score;
 pub mod sparkhorn;
 
 use serde::{Deserialize, Serialize};
@@ -101,6 +103,32 @@ pub const TIE_GOES_TO_LONGEST_WAITING: Tuned<bool> = picked(
 
 /// The turns sudden death may start at: rooms pick one.
 pub const SUDDEN_DEATH_TURNS: Tuned<[u32; 3]> = cited([40, 56, 72], &["OB"]);
+
+/// Big Bomb's crater multiplier on every shot. Sources say only "bigger craters" (WP06, AK).
+pub const BIG_BOMB_CRATER: Tuned<f64> = picked(1.5, "Half again reads as bigger at a glance without flattening a map in a few turns.");
+
+// ── SS ───────────────────────────────────────────────────────────────────────
+
+/// Own turns SS stays locked after it fires; it is usable again on the next. GunBound allows SS
+/// once every 4 of a player's own shots (WP06, GF-tiro), and OpenBound locks it for 3 own turns;
+/// AK says about 9 turns counting everyone's (CONTRADICTION).
+pub const SS_LOCK_TURNS: Tuned<u8> = cited(3, &["WP06", "GF-tiro", "OB"]);
+
+// ── Bolts ────────────────────────────────────────────────────────────────────
+
+/// How far above the map's top bolts strike from and drops fall from, so a mobile standing near the
+/// top is still struck from above.
+pub const SKY: Tuned<f64> = picked(100.0, "Clears any hitbox standing on a map's top rows.");
+
+/// How close a bolt's path must pass to a mobile to hurt it without striking it: OpenBound's shock
+/// radius around its lightning.
+pub const BOLT_REACH: Tuned<f64> = cited(25.0, &["OB"]);
+
+/// The crater a bolt leaves where it strikes the ground.
+pub const BOLT_CRATER: Tuned<f64> = picked(12.0, "A scorch, not a blast: bolts hurt, they don't dig.");
+
+/// How long after a projectile lands the bolt it calls down strikes.
+pub const BOLT_DELAY_SECONDS: Tuned<f64> = picked(0.25, "Sources only say the impact calls the bolt (DB-mob); a beat apart reads as cause and effect.");
 
 // ── Weather ──────────────────────────────────────────────────────────────────
 

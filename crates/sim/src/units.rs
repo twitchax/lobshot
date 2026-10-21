@@ -18,6 +18,21 @@ pub const TICK: f64 = 1.0 / 2048.0;
 /// Ticks per second.
 pub const TICKS_PER_SECOND: u32 = 2048;
 
+/// Whole ticks in `seconds`, rounding down (negative is 0).
+#[must_use]
+pub fn ticks(seconds: f64) -> u32 {
+    // Tuned durations are a few seconds: a small whole-tick count, exact in f64 and in u32.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let ticks = (seconds * f64::from(TICKS_PER_SECOND)) as u32;
+    ticks
+}
+
+/// Seconds in `ticks`.
+#[must_use]
+pub fn seconds(ticks: u32) -> f64 {
+    f64::from(ticks) * TICK
+}
+
 /// Converts degrees to radians with our own constant, so both targets round identically.
 #[must_use]
 pub fn to_radians(degrees: f64) -> f64 {
