@@ -124,6 +124,25 @@ impl Loadout {
         Ok(Self(picked))
     }
 
+    /// A loadout fixed at compile time (a bot's), checked as `new` checks one.
+    ///
+    /// # Panics
+    ///
+    /// When the items fill more than `LOADOUT_SLOTS` slots; in a `const`, that fails the build.
+    #[must_use]
+    pub const fn fixed<const N: usize>(items: [Item; N]) -> Self {
+        let mut picked = [None; MAX_ITEMS];
+        let mut slots = 0;
+        let mut index = 0;
+        while index < N {
+            slots += items[index].slots();
+            picked[index] = Some(items[index]);
+            index += 1;
+        }
+        assert!(slots <= LOADOUT_SLOTS.value, "a loadout fills at most LOADOUT_SLOTS slots");
+        Self(picked)
+    }
+
     pub fn items(&self) -> impl Iterator<Item = Item> + '_ {
         self.0.iter().flatten().copied()
     }
@@ -214,6 +233,13 @@ mod unit {
         assert!(Loadout::new(&[Item::Dual, Item::Teleport, Item::Thunder, Item::Heal]).is_err(), "seven slots");
         assert!(Loadout::new(&[Item::Heal; 7]).is_err());
         assert_eq!(Loadout::default().slots(), 0);
+    }
+
+    #[test]
+    fn a_fixed_loadout_matches_a_checked_one() {
+        const FOUR: Loadout = Loadout::fixed([Item::Dual, Item::PowerUp, Item::Heal, Item::BigHeal]);
+        assert_eq!(FOUR, Loadout::new(&[Item::Dual, Item::PowerUp, Item::Heal, Item::BigHeal]).unwrap());
+        assert_eq!(FOUR.slots(), 6);
     }
 
     #[test]

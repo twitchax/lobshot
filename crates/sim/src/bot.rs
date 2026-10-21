@@ -1,21 +1,45 @@
-//! SearchBot v0: picks a shot by searching aim and power in the sim, the way a player who has
-//! done their homework would. It sees only what a player sees (the game state, including wind and
-//! the weather on the map) and nothing the server hasn't rolled yet.
+//! SearchBot: picks a shot by searching aim, power, shot and item in the sim, the way a player
+//! who has done their homework would. It sees only what a player sees (the game state, including
+//! wind and the weather on the map) and nothing the server hasn't rolled yet. It plays every
+//! mobile, since every mobile's shots are the sim's.
 //!
-//! Search: S1 over the shot's whole aim range, coarse (every 3 degrees, every 2 power steps), then
-//! fine around the best candidate. The whole range, not just the true angles: from a slope or
-//! behind a hill only a false angle may clear the ground, and 70% damage beats none. Score:
-//! distance from the impact to the nearest enemy's center, with a direct hit on any enemy best (a
-//! false-angle hit a little less so) and anything that would hit a teammate worst. Difficulty is
-//! aim noise added afterward, from a seed the server rolls, so a bot's turn is still a pure
-//! function of its inputs.
+//! Search, in three passes:
+//!
+//! 1. **Aim.** Every shot leaves the barrel on the same flight, so one coarse grid (every 3
+//!    degrees, every 2 power steps) over the union of the allowed shots' aim ranges scores where
+//!    that flight lands: a direct hit on the nearest enemy best (a false-angle hit a little less
+//!    so), then distance from its center, and anything that would hit a teammate worst. The whole
+//!    range, not just the true angles: from a slope or behind a hill only a false angle may clear
+//!    the ground, and 70% damage beats none.
+//! 2. **Shot.** For each shot it may fire (never a locked or disabled SS), the two best distinct
+//!    trajectories in its own range, refined, are fired in a scratch game and valued by what they
+//!    did: damage to enemies, kills, and twice the cost of any harm to its own side.
+//! 3. **Item.** A heal first when it is low; otherwise Dual (on S1 or S2) or Power Up when the
+//!    chosen shot is strong and the item makes it better.
+//!
+//! Difficulty is aim noise added afterward, from a seed the server rolls, so a bot's turn is still
+//! a pure function of its inputs.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    game::{Contact, Event, Game, Phase, Shot},
-    units::{Centis, Facing, Power},
+    game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
+    items::{Item, Loadout},
+    tuning::AimRange,
+    units::{Centis, Facing, Power, Vec2},
 };
+
+/// The loadout the server gives bots: the items SearchBot knows how to use, filling all six slots.
+pub const LOADOUT: Loadout = Loadout::fixed([Item::Dual, Item::PowerUp, Item::Heal, Item::BigHeal]);
+
+/// At or below this share of its max HP, a bot heals before it shoots.
+const LOW_HP: f64 = 0.4;
+
+/// A shot worth at least this much (about GunBound's lowest damage tier) earns Dual or Power Up.
+const STRONG_SHOT: f64 = 150.0;
+
+/// What a kill is worth on top of its damage, in damage.
+const KILL_VALUE: f64 = 300.0;
 
 /// How sloppy the bot's hands are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -46,7 +70,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         return None;
     }
     let me = *game.players().get(usize::from(seat))?;
-    let target = game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs())?;
+    let target = *game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs())?;
     let facing = if target.footing.x >= me.footing.x { Facing::Right } else { Facing::Left };
 
     // Search as the bot will stand: turned toward the target.
@@ -57,41 +81,237 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         scratch.apply(turn).ok()?;
         events.push(turn);
     }
+    if let Some(heal) = heal(&scratch, seat) {
+        scratch.apply(heal).ok()?;
+        events.push(heal);
+    }
 
-    let shot = Shot::S1;
-    let range = shot.tuning(me.tuning()).aim.value;
-    let score = |aim: i16, twentieths: u8| -> f64 {
-        let Some(flight) = scratch.launch(seat, aim, f64::from(twentieths) / 20.0) else { return f64::MAX };
-        let impact = scratch.track(flight, 0, 0).impact;
-        match impact.contact {
-            Contact::Gone | Contact::Column(_) => f64::MAX / 2.0,
-            Contact::Mobile(hit) if scratch.players()[usize::from(hit)].team == me.team => f64::MAX / 4.0,
-            Contact::Mobile(_) if range.is_true(aim) => -1000.0 + impact.at.distance(center_of(target)),
-            // A false-angle hit deals 70%: still a hit, but a true-angle one is worth finding.
-            Contact::Mobile(_) => -700.0 + impact.at.distance(center_of(target)),
-            Contact::Terrain => impact.at.distance(center_of(target)),
+    let search = Search::new(&scratch, seat, target.center());
+    let mut best: Option<Candidate> = None;
+    for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+        if !scratch.can_shoot(seat, shot) {
+            continue;
         }
-    };
+        for (aim, power) in search.trajectories(shot.tuning(me.tuning()).aim.value) {
+            let candidate = Candidate::fired(&scratch, seat, None, shot, aim, power, search.proxy(shot, aim, power));
+            if best.as_ref().is_none_or(|best| candidate.beats(best)) {
+                best = Some(candidate);
+            }
+        }
+    }
+    let mut best = best?;
+    if let Some(boosted) = boost(&scratch, seat, &best) {
+        best = boosted;
+    }
+    if let Some(slot) = best.item {
+        events.push(Event::UseItem { seat, slot });
+    }
 
-    let max = Power::MAX.twentieths();
-    let coarse = (range.min..=range.max).step_by(3).flat_map(|aim| (0..=max).step_by(2).map(move |power| (aim, power)));
-    let best = |candidates: &mut dyn Iterator<Item = (i16, u8)>| candidates.map(|(aim, power)| (score(aim, power), aim, power)).min_by(|a, b| a.0.total_cmp(&b.0));
-    let (_, aim, power) = best(&mut coarse.into_iter())?;
-    let fine = ((aim - 2).max(range.min)..=(aim + 2).min(range.max)).flat_map(|aim| (power.saturating_sub(3)..=(power + 3).min(max)).map(move |power| (aim, power)));
-    let (_, aim, power) = best(&mut fine.into_iter())?;
-
+    let range = best.shot.tuning(me.tuning()).aim.value;
     let (power_noise, aim_noise) = level.noise();
     let mut rng = XorShift(seed | 1);
-    let power = i32::from(power) + rng.within(power_noise);
-    let aim = (aim + i16::try_from(rng.within(aim_noise)).unwrap_or(0)).clamp(range.min, range.max);
-    let power = Power::from_twentieths(u8::try_from(power.clamp(0, i32::from(max))).ok()?).ok()?;
-
-    events.push(Event::Shoot { seat, shot, aim, power, time: Centis(0) });
+    let power = i32::from(best.power) + rng.within(power_noise);
+    let aim = (best.aim + i16::try_from(rng.within(aim_noise)).unwrap_or(0)).clamp(range.min, range.max);
+    let power = Power::from_twentieths(u8::try_from(power.clamp(0, i32::from(Power::MAX.twentieths()))).ok()?).ok()?;
+    events.push(Event::Shoot {
+        seat,
+        shot: best.shot,
+        aim,
+        power,
+        time: Centis(0),
+    });
     Some(events)
 }
 
-fn center_of(player: &crate::game::Player) -> crate::units::Vec2 {
-    player.pose().center(player.tuning().hitbox.value)
+/// Where the shared flight lands, as the aim pass sees it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Landing {
+    /// On an enemy, this far from the target's center.
+    Hit(f64),
+    /// On the ground, this far from it.
+    Near(f64),
+    /// Off the map, or into the weather and away.
+    Lost,
+    /// On its own side.
+    Own,
+}
+
+/// The aim pass: where the shared flight lands for every aim and power on the coarse grid.
+struct Search<'g> {
+    game: &'g Game,
+    seat: u8,
+    target: Vec2,
+    /// (aim, power in twentieths, where it lands), over the union of the allowed shots' ranges.
+    grid: Vec<(i16, u8, Landing)>,
+}
+
+impl<'g> Search<'g> {
+    fn new(game: &'g Game, seat: u8, target: Vec2) -> Self {
+        let mut search = Self { game, seat, target, grid: Vec::new() };
+        let tuning = game.players()[usize::from(seat)].tuning();
+        let ranges: Vec<AimRange> = [Shot::S1, Shot::S2, Shot::Ss]
+            .iter()
+            .filter(|&&shot| game.can_shoot(seat, shot))
+            .map(|shot| shot.tuning(tuning).aim.value)
+            .collect();
+        let (low, high) = (ranges.iter().map(|r| r.min).min().unwrap_or(0), ranges.iter().map(|r| r.max).max().unwrap_or(0));
+        for aim in (low..=high).step_by(3) {
+            for power in (0..=Power::MAX.twentieths()).step_by(2) {
+                let landing = search.land(aim, power);
+                search.grid.push((aim, power, landing));
+            }
+        }
+        search
+    }
+
+    fn land(&self, aim: i16, power: u8) -> Landing {
+        let Some(flight) = self.game.launch(self.seat, aim, f64::from(power) / 20.0) else {
+            return Landing::Lost;
+        };
+        let impact = self.game.track(flight, 0, 0).impact;
+        let me = self.game.players()[usize::from(self.seat)];
+        match impact.contact {
+            Contact::Gone | Contact::Column(_) => Landing::Lost,
+            Contact::Mobile(hit) if self.game.players()[usize::from(hit)].team == me.team => Landing::Own,
+            Contact::Mobile(_) => Landing::Hit(impact.at.distance(self.target)),
+            Contact::Terrain => Landing::Near(impact.at.distance(self.target)),
+        }
+    }
+
+    /// A landing's score for `shot` at `aim` (lower is better): a direct hit best, a false-angle
+    /// one (70% damage) a little less so, then nearness.
+    fn score(range: AimRange, aim: i16, landing: Landing) -> f64 {
+        match landing {
+            Landing::Hit(distance) if range.is_true(aim) => -1000.0 + distance,
+            Landing::Hit(distance) => -700.0 + distance,
+            Landing::Near(distance) => distance,
+            Landing::Lost => f64::MAX / 2.0,
+            Landing::Own => f64::MAX / 4.0,
+        }
+    }
+
+    /// The shared flight's score at an aim and power off the grid, for `shot`.
+    fn proxy(&self, shot: Shot, aim: i16, power: u8) -> f64 {
+        let range = shot.tuning(self.game.players()[usize::from(self.seat)].tuning()).aim.value;
+        Self::score(range, aim, self.land(aim, power))
+    }
+
+    /// The two best distinct trajectories within `range`, each refined around its grid point.
+    fn trajectories(&self, range: AimRange) -> Vec<(i16, u8)> {
+        let mut ranked: Vec<(f64, i16, u8)> = self
+            .grid
+            .iter()
+            .filter(|(aim, ..)| range.contains(*aim))
+            .map(|&(aim, power, landing)| (Self::score(range, aim, landing), aim, power))
+            .collect();
+        ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let Some(&(_, first, _)) = ranked.first() else { return Vec::new() };
+        // A second trajectory well away from the first: a lob against a line drive, say.
+        let second = ranked.iter().find(|(_, aim, _)| (aim - first).abs() >= 9);
+        ranked.first().into_iter().chain(second).map(|&(_, aim, power)| self.refine(range, aim, power)).collect()
+    }
+
+    /// The best aim and power within two degrees and three power steps of a grid point.
+    fn refine(&self, range: AimRange, aim: i16, power: u8) -> (i16, u8) {
+        let max = Power::MAX.twentieths();
+        ((aim - 2).max(range.min)..=(aim + 2).min(range.max))
+            .flat_map(|aim| (power.saturating_sub(3)..=(power + 3).min(max)).map(move |power| (aim, power)))
+            .map(|(aim, power)| (Self::score(range, aim, self.land(aim, power)), aim, power))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map_or((aim, power), |(_, aim, power)| (aim, power))
+    }
+}
+
+/// A shot the bot might take, and what it did in a scratch game.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Candidate {
+    item: Option<u8>,
+    shot: Shot,
+    aim: i16,
+    power: u8,
+    value: f64,
+    /// The aim pass's score, to break ties between shots that did nothing.
+    proxy: f64,
+}
+
+impl Candidate {
+    /// Fires `shot` (after the item at `item`, if any) in a scratch copy of `game` and values it.
+    fn fired(game: &Game, seat: u8, item: Option<u8>, shot: Shot, aim: i16, power: u8, proxy: f64) -> Self {
+        let mut scratch = game.clone();
+        let used = item.is_none_or(|slot| scratch.apply(Event::UseItem { seat, slot }).is_ok());
+        let effects = Power::from_twentieths(power)
+            .ok()
+            .filter(|_| used)
+            .and_then(|power| scratch.apply(Event::Shoot { seat, shot, aim, power, time: Centis(0) }).ok());
+        let value = effects.map_or(f64::MIN, |effects| value(game, seat, &effects));
+        Self { item, shot, aim, power, value, proxy }
+    }
+
+    /// More value, then a better landing. Shots are tried cheapest first, so a tie keeps the
+    /// cheaper.
+    fn beats(&self, other: &Self) -> bool {
+        (self.value, -self.proxy).partial_cmp(&(other.value, -other.proxy)).is_some_and(std::cmp::Ordering::is_gt)
+    }
+}
+
+/// What a shot's effects are worth to `seat`: damage to enemies, a bonus per kill, and twice the
+/// cost of any harm to its own side, itself included.
+fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
+    let team = |s: u8| game.players().get(usize::from(s)).map(|p| p.team);
+    let mine = team(seat);
+    effects
+        .iter()
+        .map(|effect| match *effect {
+            Effect::Damaged { seat: hit, amount } | Effect::Shielded { seat: hit, amount } => {
+                let amount = f64::from(amount);
+                if team(hit) == mine { -2.0 * amount } else { amount }
+            }
+            Effect::Died {
+                seat: hit,
+                death: Death::Blasted | Death::Bunged,
+            } => {
+                if team(hit) == mine {
+                    -2.0 * KILL_VALUE
+                } else {
+                    KILL_VALUE
+                }
+            }
+            _ => 0.0,
+        })
+        .sum()
+}
+
+/// The heal `seat` uses first when it is low: Big Heal if it carries one, else Heal.
+fn heal(game: &Game, seat: u8) -> Option<Event> {
+    let me = game.players().get(usize::from(seat))?;
+    if f64::from(me.hp) > f64::from(me.tuning().hp.value) * LOW_HP {
+        return None;
+    }
+    [Item::BigHeal, Item::Heal]
+        .into_iter()
+        .find_map(|wanted| slot_of(game, me, seat, wanted))
+        .map(|slot| Event::UseItem { seat, slot })
+}
+
+/// Dual (for S1 or S2) or Power Up on a strong shot, if the bot carries one and it makes the shot
+/// better.
+fn boost(game: &Game, seat: u8, best: &Candidate) -> Option<Candidate> {
+    if best.value < STRONG_SHOT || best.item.is_some() {
+        return None;
+    }
+    let me = game.players().get(usize::from(seat))?;
+    let wanted: &[Item] = if best.shot == Shot::Ss { &[Item::PowerUp] } else { &[Item::Dual, Item::PowerUp] };
+    let slot = wanted.iter().find_map(|&item| slot_of(game, me, seat, item))?;
+    let boosted = Candidate::fired(game, seat, Some(slot), best.shot, best.aim, best.power, best.proxy);
+    (boosted.value > best.value).then_some(boosted)
+}
+
+/// Where `seat` carries `item`, if it may use it now.
+fn slot_of(game: &Game, me: &Player, seat: u8, item: Item) -> Option<u8> {
+    (0_u8..)
+        .zip(me.items)
+        .find(|&(slot, carried)| carried == Some(item) && game.can_use_item(seat, slot))
+        .map(|(slot, _)| slot)
 }
 
 /// xorshift64: a tiny, fully specified generator, so a seed means the same noise on every target.
@@ -122,9 +342,13 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::game::{
-        Effect,
-        testing::{answer_rolls, duel},
+    use crate::{
+        game::{
+            Effect, MobileKind, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
+            testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, start},
+        },
+        map::MapRef,
+        units::Wind,
     };
 
     #[test]
@@ -159,6 +383,114 @@ mod unit {
         let game = duel(700);
         assert_eq!(plan(&game, 1, Level::Hard, 7), None);
         assert_eq!(plan(&game, 0, Level::Easy, 99), plan(&game, 0, Level::Easy, 99));
+    }
+
+    /// Applies a plan, returning everything it did.
+    fn play(game: &mut Game, events: Vec<Event>) -> Vec<Effect> {
+        events.into_iter().flat_map(|event| game.apply(event).unwrap()).collect()
+    }
+
+    fn shot_of(events: &[Event]) -> Shot {
+        events.iter().find_map(|e| if let Event::Shoot { shot, .. } = e { Some(*shot) } else { None }).unwrap()
+    }
+
+    #[test]
+    fn it_plays_every_mobile() {
+        for mobile in MobileKind::ALL {
+            let mut game = duel_of(mobile, MobileKind::Coilback, 700);
+            let events = plan(&game, 0, Level::Hard, 7).unwrap();
+            let effects = play(&mut game, events);
+            assert!(damage_to(&effects, 1) >= 80, "{mobile:?}: {effects:?}");
+            assert_eq!(damage_to(&effects, 0), 0, "{mobile:?} hurt itself: {effects:?}");
+        }
+    }
+
+    #[test]
+    fn it_never_tries_a_locked_or_disabled_ss() {
+        let mut game = duel(700);
+        game.players[0].ss_lock = 2;
+        assert_ne!(shot_of(&plan(&game, 0, Level::Hard, 7).unwrap()), Shot::Ss);
+        let setup = Setup {
+            sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 0 }),
+            ..duel_setup(700)
+        };
+        let game = start(&setup);
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert_ne!(shot_of(&events), Shot::Ss);
+        let mut game = game;
+        play(&mut game, events);
+    }
+
+    #[test]
+    fn it_heals_when_low() {
+        let mut game = duel(700);
+        game.players[0].items = LOADOUT.positions();
+        game.players[0].hp = 300;
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let big_heal = (0_u8..).zip(LOADOUT.positions()).find(|(_, item)| *item == Some(Item::BigHeal)).unwrap().0;
+        assert_eq!(events[0], Event::UseItem { seat: 0, slot: big_heal });
+        let effects = play(&mut game, events);
+        assert!(effects.iter().any(|e| matches!(e, Effect::Healed { seat: 0, .. })), "{effects:?}");
+    }
+
+    #[test]
+    fn it_doubles_or_powers_up_a_strong_shot() {
+        let mut game = duel(700);
+        game.players[0].items = LOADOUT.positions();
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let Some(&Event::UseItem { slot, .. }) = events.iter().find(|e| matches!(e, Event::UseItem { .. })) else {
+            panic!("no item on a direct hit: {events:?}")
+        };
+        assert!(matches!(LOADOUT.positions()[usize::from(slot)], Some(Item::Dual | Item::PowerUp)));
+        assert!(damage_to(&play(&mut game, events), 1) > 165, "more than one S1 could deal");
+    }
+
+    #[test]
+    fn it_leaves_items_alone_in_sudden_death() {
+        let setup = Setup {
+            sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::BigBomb, turn: 0 }),
+            ..duel_setup(700)
+        };
+        let mut game = start(&setup);
+        game.players[0].items = LOADOUT.positions();
+        game.players[0].hp = 100;
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert!(!events.iter().any(|e| matches!(e, Event::UseItem { .. })), "{events:?}");
+    }
+
+    /// Times a plan for each mobile in a 4v4 on hills, in wind, with the bot's loadout. Run in
+    /// release: `cargo test -p lobshot-sim --release --lib -- --ignored --nocapture tool_time`.
+    #[test]
+    #[ignore = "a tool, not a test: prints each mobile's planning time"]
+    fn tool_time() {
+        for mobile in MobileKind::ALL {
+            let seats = (0..8)
+                .map(|i| Seat {
+                    team: if i % 2 == 0 { Team::A } else { Team::B },
+                    mobile,
+                    spawn_x: 200 + 250 * i,
+                    facing: if i % 2 == 0 { Facing::Right } else { Facing::Left },
+                    items: LOADOUT,
+                })
+                .collect();
+            let setup = Setup {
+                map: MapRef::Hills {
+                    width: 2400,
+                    height: 1000,
+                    ground: 840,
+                    amplitude: 120,
+                    period: 900,
+                },
+                seats,
+                order: (0..8).collect(),
+                wind: Wind::new(18, 120).unwrap(),
+                sudden_death: None,
+            };
+            let game = start(&setup);
+            let began = std::time::Instant::now();
+            let events = plan(&game, 0, Level::Normal, 7).unwrap();
+            println!("{mobile:?}: {:?} for {events:?}", began.elapsed());
+        }
     }
 
     #[test]
