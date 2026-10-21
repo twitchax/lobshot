@@ -195,6 +195,18 @@ mod unit {
         }
     }
 
+    #[test]
+    fn the_lobby_offers_exactly_the_drawn_maps() {
+        let mut drawn: Vec<String> = std::fs::read_dir(sources().join("maps"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        drawn.sort();
+        let mut offered: Vec<String> = lobshot_assets::MAPS.iter().map(|&name| name.to_owned()).collect();
+        offered.sort();
+        assert_eq!(offered, drawn, "lobshot_assets::MAPS lists every map in assets/maps/, and only those");
+    }
+
     /// The mask is the land path and nothing else: every pixel agrees with an exact inside test on
     /// the geometry, except where the outline passes within a pixel of the pixel's center (coverage
     /// rounding). Decorations or a drifted renderer would show up as solid pixels far from it.

@@ -434,6 +434,15 @@ impl Game {
         }
     }
 
+    /// Whether `seat` may spin its slot machine now (`Event::Spin`), so the server knows when a
+    /// dead bot can.
+    #[must_use]
+    pub fn can_spin(&self, seat: u8) -> bool {
+        // The slot machine lands with the M3 sim work.
+        let _ = seat;
+        false
+    }
+
     fn player(&self, seat: u8) -> Res<&Player> {
         self.players.get(usize::from(seat)).ok_or_else(|| anyhow::anyhow!("there is no seat {seat}"))
     }

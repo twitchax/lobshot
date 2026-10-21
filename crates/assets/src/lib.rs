@@ -38,6 +38,10 @@ pub fn rider_path(rider: &str) -> String {
     format!("riders/{rider}.png")
 }
 
+/// The drawn maps a room can pick, in the order the lobby offers them; `cargo xtask art` checks
+/// this matches `assets/maps/`.
+pub const MAPS: &[&str] = &["tidewall"];
+
 /// A map's manifest.
 #[must_use]
 pub fn map_path(map: &str) -> String {
