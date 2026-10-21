@@ -14,6 +14,7 @@ pub mod items;
 pub mod log;
 pub mod map;
 pub mod movement;
+pub mod score;
 mod shots;
 pub mod terrain;
 pub mod tuning;
