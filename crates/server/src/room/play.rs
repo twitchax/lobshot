@@ -437,6 +437,7 @@ mod unit {
 
     use lobshot_protocol::{ClientMsg, RoomOptions, Stage};
     use lobshot_sim::{
+        bot,
         game::{Shot, SuddenDeath, SuddenDeathKind},
         items::{Item, Loadout},
         map::{MapRef, NoAssets},
@@ -446,7 +447,7 @@ mod unit {
 
     use super::*;
     use crate::{
-        room::{BOT_ITEMS, ConnId, Timing, testing::Harness},
+        room::{ConnId, Timing, testing::Harness},
         tests::{Replica, write_map},
     };
 
@@ -1076,7 +1077,7 @@ mod unit {
         assert_eq!(setup.sudden_death, Some(sudden_death));
         let pip = usize::from(seat_of(&h, pip));
         assert_eq!(setup.seats[pip].items, loadout);
-        assert_eq!(setup.seats[1 - pip].items, Loadout::new(&BOT_ITEMS).unwrap(), "the bot's");
+        assert_eq!(setup.seats[1 - pip].items, bot::LOADOUT, "the bot's");
         assert_eq!(game(&h).players()[pip].items, loadout.positions());
     }
 

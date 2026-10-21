@@ -8,11 +8,11 @@ use anyhow::{Context as _, ensure};
 use lobshot_protocol::{MAX_CHAT, Member, MemberId, RoomOptions, ServerMsg};
 use lobshot_sim::{
     base::Void,
+    bot,
     game::{MAX_SEATS, MobileKind, Team},
-    items::Loadout,
 };
 
-use super::{BOT_ITEMS, BOT_RIDER, Entry, MAX_SPECTATORS, Output, Room};
+use super::{BOT_RIDER, Entry, MAX_SPECTATORS, Output, Room};
 
 impl Room {
     pub(super) fn ensure_lobby(&self) -> Void {
@@ -61,7 +61,7 @@ impl Room {
     }
 
     /// Seats a bot, named "Bot N" with the lowest free N. Bots are always ready, and bring
-    /// `BOT_ITEMS`.
+    /// SearchBot's loadout (`bot::LOADOUT`): the items it knows how to use.
     pub(super) fn add_bot(&mut self, id: MemberId, team: Team) -> Void {
         self.ensure_master(id)?;
         self.ensure_lobby()?;
@@ -71,7 +71,6 @@ impl Room {
             .map(|n| format!("Bot {n}"))
             .find(|name| self.members.iter().all(|e| e.member.name != *name))
             .context("no bot name is free")?;
-        let items = Loadout::new(&BOT_ITEMS).context("the bots' loadout")?;
         let bot = self.next_member_id();
         self.members.push(Entry {
             member: Member {
@@ -79,7 +78,7 @@ impl Room {
                 name,
                 team: Some(team),
                 mobile: Some(MobileKind::ALL[0]),
-                items,
+                items: bot::LOADOUT,
                 rider: BOT_RIDER.to_owned(),
                 ready: true,
                 bot: true,
@@ -155,7 +154,7 @@ mod unit {
     use lobshot_protocol::{ClientMsg, Emote, Stage, Token};
     use lobshot_sim::{
         game::{SuddenDeath, SuddenDeathKind},
-        items::Item,
+        items::{Item, Loadout},
         terrain::Terrain,
         tuning::SUDDEN_DEATH_TURNS,
     };
@@ -310,7 +309,7 @@ mod unit {
         let names: Vec<&str> = bots.iter().map(|m| m.name.as_str()).collect();
         assert_eq!(names, ["Bot 1", "Bot 2", "Bot 3"]);
         assert!(bots.iter().all(|m| m.ready && m.connected && m.team == Some(Team::B)));
-        assert!(bots.iter().all(|m| m.items.items().eq(BOT_ITEMS) && m.mobile.is_some()), "a loadout, and no Random pick");
+        assert!(bots.iter().all(|m| m.items == bot::LOADOUT && m.mobile.is_some()), "SearchBot's loadout, and no Random pick");
 
         h.send(1, ClientMsg::Kick(bots[1].id));
         h.send(1, ClientMsg::AddBot { team: Team::A });

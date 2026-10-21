@@ -24,7 +24,7 @@ use lobshot_sim::{
     base::{Res, Void},
     bot::{self, Level},
     game::{Event, Game, MAX_SEATS, MobileKind},
-    items::{Item, Loadout},
+    items::Loadout,
 };
 
 use crate::maps::{Maps, check_asset_name};
@@ -45,10 +45,6 @@ pub const IDLE: Duration = Duration::from_mins(10);
 
 /// The rider a bot wears.
 const BOT_RIDER: &str = "pip";
-
-/// What a bot brings into a game: a common mix, five of the six slots. A stand-in until
-/// `lobshot_sim::bot::LOADOUT` lands with the bot's item play.
-const BOT_ITEMS: [Item; 4] = [Item::Dual, Item::PowerUp, Item::Heal, Item::Dig];
 
 /// A socket, unique across the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
