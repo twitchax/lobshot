@@ -19,7 +19,7 @@ use tempfile::TempDir;
 
 use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::{INDEX_HTML, create_room, http_get, write_bundle};
-use lobshot_sim::game::Phase;
+use lobshot_sim::game::{Event, Phase, SuddenDeath, SuddenDeathKind, Team};
 
 use support::{Client, play_out};
 
@@ -39,9 +39,15 @@ impl Drop for Server {
 /// Starts the binary on `127.0.0.1:0`, serving `dist` from inside a scratch working directory, and
 /// reads the bound address from its `listening` log line.
 fn start(dist: &Path, cwd: &Path) -> Server {
+    start_with(dist, cwd, &[])
+}
+
+/// `start`, with more flags.
+fn start_with(dist: &Path, cwd: &Path, flags: &[&str]) -> Server {
     let mut child = Command::new(env!("CARGO_BIN_EXE_lobshot"))
         .current_dir(cwd)
         .args(["--bind", "127.0.0.1:0"])
+        .args(flags)
         .env("LOBSHOT_DIST", dist)
         .env("RUST_LOG", "info")
         .stdout(Stdio::null())
@@ -131,4 +137,59 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
         assert_eq!(room.stage, Stage::Lobby);
         assert!(room.members.iter().all(|m| !m.ready && m.connected), "{room:?}");
     }
+}
+
+/// M3's acceptance test (PRD-0004 uat-002): a 4v4 Solo game on `flat` with sudden death (Double
+/// at 40), every seat a bot, plays to the end against the real binary. The host spectates and a
+/// second spectator follows in JSON; each replays the log it receives and checks the server's
+/// hash after every event. Bots play at once and turns start at once, since no one watches.
+///
+/// "Items used" needs the M3 rules (PRD-0004 T-002): `main`'s bots use none. "Sudden death
+/// reached" (a turn played past turn 40) holds already: these games run 56 to 84 turns on `main`
+/// (20 seeds), and the four items each bot brings shouldn't cut that by a third.
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
+    let cwd = TempDir::new().unwrap();
+    let dist = TempDir::new().unwrap();
+    write_bundle(dist.path()).unwrap();
+    let server = start_with(dist.path(), cwd.path(), &["--bot-delay-ms", "0", "--no-playback-wait"]);
+    let addr = server.addr;
+    let code = tokio::task::spawn_blocking(move || create_room(addr)).await.unwrap().unwrap();
+
+    let mut host = Client::connect(addr, &code, false).await;
+    let (host_id, _, _) = host.hello("Host", None).await;
+    host.send(&ClientMsg::Team(None)).await;
+    let sudden_death = SuddenDeath { kind: SuddenDeathKind::Double, turn: 40 };
+    host.send(&ClientMsg::Configure(RoomOptions {
+        map: "flat".into(),
+        team_size: 4,
+        max_wind: 26,
+        turn_seconds: 5,
+        random_teams: false,
+        sudden_death: Some(sudden_death),
+    }))
+    .await;
+    for team in [Team::A, Team::B].repeat(4) {
+        host.send(&ClientMsg::AddBot { team }).await;
+    }
+    host.recv_until(|msg| matches!(msg, ServerMsg::Room(view) if view.members.iter().filter(|m| m.bot).count() == 8)).await;
+
+    let mut watcher = Client::connect(addr, &code, true).await;
+    let (watcher_id, _, view) = watcher.hello("Watcher", None).await;
+    assert_eq!(view.members.iter().find(|m| m.id == watcher_id).unwrap().team, None, "every seat is taken");
+    host.send(&ClientMsg::Start).await;
+
+    let ((host_replica, room), (watcher_replica, _)) = tokio::join!(play_out(&mut host, host_id, None, 0), play_out(&mut watcher, watcher_id, None, 0));
+
+    let (game, log) = (host_replica.game().unwrap(), host_replica.log().unwrap());
+    assert!(matches!(game.phase(), Phase::Over { .. }), "{:?}", game.phase());
+    assert_eq!(game.state_hash().unwrap(), watcher_replica.game().unwrap().state_hash().unwrap());
+    assert_eq!(log, watcher_replica.log().unwrap());
+    assert_eq!(log.setup.seats.len(), 8);
+    assert_eq!(log.setup.sudden_death, Some(sudden_death));
+    assert_eq!(room.stage, Stage::Lobby);
+
+    let items = log.events.iter().filter(|event| matches!(event, Event::UseItem { .. })).count();
+    assert!(items > 0, "the bots used no items in {} turns", game.turns());
+    assert!(game.turns() > i64::from(sudden_death.turn), "the game ended after {} turns, before sudden death", game.turns());
 }

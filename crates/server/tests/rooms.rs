@@ -9,11 +9,17 @@ use std::net::SocketAddr;
 
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
-use tokio_tungstenite::{connect_async, tungstenite::Error};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{Error, Message},
+};
 
-use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
+use lobshot_protocol::{ClientMsg, RoomOptions, RoomView, ServerMsg, Stage};
 use lobshot_server::{rate::TOO_FAST, tests};
-use lobshot_sim::game::{Phase, Team};
+use lobshot_sim::{
+    game::{Phase, Team},
+    items::{Item, Loadout},
+};
 
 use support::{Client, play_out};
 
@@ -142,6 +148,47 @@ async fn a_kicked_player_hears_kicked_then_the_socket_closes() {
     let mut back = Client::connect(f.addr, &f.code, false).await;
     let (again, _, _) = back.hello("Pest", Some(token)).await;
     assert_ne!(again, pest_id, "the token was revoked; they come back as someone new");
+}
+
+/// The binary form of `ClientMsg::Loadout` with three of `item`, then a fourth written in by hand:
+/// postcard writes a list as its length, then its items.
+fn four_of(item: Item) -> Message {
+    let mut bytes = lobshot_protocol::encode(&ClientMsg::Loadout(Loadout::new(&[item; 3]).unwrap())).unwrap();
+    let length = bytes.len() - 4;
+    let [3, a, b, c] = bytes[length..] else { panic!("{bytes:?}") };
+    assert!(a == b && b == c);
+    bytes[length] = 4;
+    bytes.push(a);
+    Message::Binary(bytes.into())
+}
+
+/// A `Loadout` can't be built over six slots, so a client sends one only by hand; either form
+/// is refused as it decodes, and the member keeps the loadout they had.
+#[tokio::test]
+async fn a_loadout_over_six_slots_is_refused_in_either_form() {
+    let f = fixture().await;
+    let mut client = Client::connect(f.addr, &f.code, false).await;
+    let (me, _, _) = client.hello("Pip", None).await;
+    let items = |view: &RoomView| view.members.iter().find(|m| m.id == me).unwrap().items;
+
+    // Four Heals fill four slots: the hand-written list itself is sound.
+    client.send_frame(four_of(Item::Heal)).await;
+    let ServerMsg::Room(view) = client.recv().await else { panic!() };
+    let heals = Loadout::new(&[Item::Heal; 4]).unwrap();
+    assert_eq!(items(&view), heals);
+    // Four Duals fill eight. postcard keeps none of the check's words, only that it failed.
+    client.send_frame(four_of(Item::Dual)).await;
+    let ServerMsg::Rejected { reason } = client.recv().await else { panic!() };
+    assert!(reason.starts_with("decoding a message"), "{reason}");
+
+    client.json = true;
+    client.send_frame(Message::Text(r#"{"Loadout":["Dual","Dual","Dual","Heal"]}"#.into())).await;
+    let ServerMsg::Rejected { reason } = client.recv().await else { panic!() };
+    assert!(reason.contains("a loadout fills at most 6 slots, not 7"), "{reason}");
+
+    client.send(&ClientMsg::Ready(true)).await;
+    let ServerMsg::Room(view) = client.recv().await else { panic!() };
+    assert_eq!(items(&view), heals, "unchanged");
 }
 
 #[tokio::test]

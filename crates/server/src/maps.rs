@@ -131,6 +131,12 @@ mod unit {
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
+    use lobshot_sim::{
+        game::{Game, MAX_SEATS, MobileKind, Seat, Setup, Team},
+        items::Loadout,
+        units::{Facing, Wind},
+    };
+
     use super::*;
     use crate::tests::write_map;
 
@@ -145,6 +151,60 @@ mod unit {
         assert_eq!(arena.map, MapRef::Flat { width: 1600, height: 900, ground: 700 });
         assert_eq!(arena.width, 1600);
         assert_eq!(arena.spawns, [200, 1400, 500, 1100, 350, 1250, 650, 950]);
+    }
+
+    #[test]
+    fn flat_fits_eight_of_any_mobile() {
+        let maps = Maps::new(Path::new("no-such-dist"));
+        let arena = maps.arena(FLAT).unwrap();
+        assert_eq!(arena.spawns.len(), MAX_SEATS);
+        // `cargo xtask art`'s rule for drawn maps' spawns: whichever way two neighbors face, there
+        // is room for both.
+        let reach = MobileKind::ALL
+            .iter()
+            .map(|mobile| {
+                let hitbox = mobile.tuning().hitbox.value;
+                (-hitbox.x).max(hitbox.x + hitbox.w)
+            })
+            .fold(0.0, f64::max);
+        let mut spawns = arena.spawns.clone();
+        spawns.sort_unstable();
+        for pair in spawns.windows(2) {
+            assert!(f64::from(pair[1] - pair[0]) >= 2.0 * reach, "spawns {pair:?} are closer than two mobiles");
+        }
+        assert!(f64::from(spawns[0]) >= reach && f64::from(spawns[7]) + reach <= f64::from(arena.width), "{spawns:?}");
+
+        for mobile in MobileKind::ALL {
+            let seats = (0..).zip(&arena.spawns).map(|(i, &spawn_x)| Seat {
+                team: if i % 2 == 0 { Team::A } else { Team::B },
+                mobile,
+                spawn_x,
+                facing: Facing::Right,
+                items: Loadout::default(),
+            });
+            let setup = Setup {
+                map: arena.map.clone(),
+                seats: seats.collect(),
+                order: (0..8).collect(),
+                wind: Wind::default(),
+                sudden_death: None,
+            };
+            Game::new(&setup, &maps).unwrap_or_else(|e| panic!("eight {mobile:?}: {e:#}"));
+        }
+    }
+
+    /// The hand-written manifests in `assets/maps/`, which `cargo xtask art` copies into the bundle.
+    #[test]
+    fn every_map_the_lobby_offers_seats_eight_in_every_variant() {
+        let sources = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+        for &name in lobshot_assets::MAPS {
+            let text = std::fs::read_to_string(sources.join(map_path(name))).unwrap();
+            let info = MapInfo::from_ron(&text).unwrap();
+            assert!(!info.variants.is_empty(), "{name}");
+            for variant in &info.variants {
+                assert!(variant.spawns.len() >= MAX_SEATS, "{name} {} spawns only {} players", variant.id, variant.spawns.len());
+            }
+        }
     }
 
     #[test]

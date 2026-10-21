@@ -24,7 +24,7 @@ use lobshot_sim::{
     base::{Res, Void},
     bot::{self, Level},
     game::{Event, Game, MAX_SEATS, MobileKind},
-    items::Loadout,
+    items::{Item, Loadout},
 };
 
 use crate::maps::{Maps, check_asset_name};
@@ -45,6 +45,10 @@ pub const IDLE: Duration = Duration::from_mins(10);
 
 /// The rider a bot wears.
 const BOT_RIDER: &str = "pip";
+
+/// What a bot brings into a game: a common mix, five of the six slots. A stand-in until
+/// `lobshot_sim::bot::LOADOUT` lands with the bot's item play.
+const BOT_ITEMS: [Item; 4] = [Item::Dual, Item::PowerUp, Item::Heal, Item::Dig];
 
 /// A socket, unique across the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -281,6 +285,7 @@ impl Room {
             ClientMsg::Ready(ready) => self.choose(id, |member| member.ready = ready),
             ClientMsg::Configure(options) => self.configure(id, options),
             ClientMsg::AddBot { team } => self.add_bot(id, team),
+            ClientMsg::BotMobile { bot, mobile } => self.bot_mobile(id, bot, mobile),
             ClientMsg::Kick(target) => self.kick(id, target, now),
             ClientMsg::Start => self.start(id, now),
             ClientMsg::Act(action) => self.act(id, action, now),
@@ -479,7 +484,7 @@ pub(crate) mod testing {
             Self::build(Timing::new(Duration::ZERO), dist)
         }
 
-        fn build(timing: Timing, dist: &Path) -> Self {
+        pub fn build(timing: Timing, dist: &Path) -> Self {
             let now = Instant::now();
             let maps = Arc::new(Maps::new(dist));
             let room = Room::new(RoomCode::from_indices([0; 8]), maps, timing, StdRng::seed_from_u64(7), now);
@@ -499,6 +504,11 @@ pub(crate) mod testing {
 
         /// Opens socket `conn` and says hello as `name`; returns the new member's id.
         pub fn join(&mut self, conn: u64, name: &str) -> MemberId {
+            self.join_with_token(conn, name).0
+        }
+
+        /// `join`, also returning the token that rejoins as this member.
+        pub fn join_with_token(&mut self, conn: u64, name: &str) -> (MemberId, Token) {
             self.open(conn);
             self.send(
                 conn,
@@ -508,8 +518,8 @@ pub(crate) mod testing {
                     rider: "pip".into(),
                 },
             );
-            match self.take(conn).first() {
-                Some(ServerMsg::Welcome { you, .. }) => *you,
+            match self.take(conn).into_iter().next() {
+                Some(ServerMsg::Welcome { you, token }) => (you, token),
                 other => panic!("{name} wasn't welcomed: {other:?}"),
             }
         }
@@ -545,11 +555,16 @@ pub(crate) mod testing {
             while !self.plans.is_empty() {
                 for turn in std::mem::take(&mut self.plans) {
                     let events = turn.plan();
-                    self.room.planned(turn.turn, events, self.now);
-                    self.pump();
+                    self.planned(&turn, events);
                 }
                 self.advance(Duration::ZERO);
             }
+        }
+
+        /// Hands the room `events` as the plan for `turn`: the test plays the bot's hands.
+        pub fn planned(&mut self, turn: &BotTurn, events: Option<Vec<Event>>) {
+            self.room.planned(turn.turn, events, self.now);
+            self.pump();
         }
 
         /// Everything sent to `conn` since the last call.

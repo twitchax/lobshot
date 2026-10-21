@@ -3,9 +3,9 @@
 //!
 //! Every accepted event goes through `commit`: applied to the server's `Game`, appended to the log
 //! and broadcast with the state hash after it. Then `settle` answers whatever rolls the sim now
-//! owes (`DESIGN.md`, "Game model": the server owns randomness) and starts the next turn or ends
-//! the game. A turn's clock starts once clients have shown everything before it
-//! (`lobshot_protocol::pacing`): the sim resolves a shot at once, but a player watches it fly.
+//! owes (`DESIGN.md`, "Game model": the server owns randomness), spins dead bots' slot machines,
+//! and starts the next turn or ends the game. A turn's clock starts once clients have shown the
+//! turn starting (`Showing`): the sim resolves a shot at once, but a player watches it fly.
 
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,7 @@ use lobshot_protocol::{Action, MemberId, ServerMsg, pacing};
 use lobshot_sim::{
     base::Void,
     drops::{Drop, DropKind},
-    game::{Event, Game, MobileKind, Phase, Roll, Seat, Setup, Team},
+    game::{Effect, Event, Game, MobileKind, Phase, Roll, Seat, Setup, Team},
     log::Log,
     units::{Centis, Facing, Wind},
     weather::{Forecast, WeatherKind},
@@ -34,8 +34,38 @@ pub(super) struct Play {
     pub turn: Option<Turn>,
     /// The turn timer.
     pub limit: Duration,
-    /// How long clients will take to show what was committed since the last turn began.
-    pub showing: Duration,
+    pub showing: Showing,
+}
+
+/// What clients are showing. They play each event's scene in turn (`lobshot_protocol::pacing`),
+/// each once it has arrived and the one before it is over, and start a turn's clock as the scene
+/// holding its `TurnStarted` ends. So a scene in the middle of a turn (a dead player's spin) holds
+/// up whatever is committed after it, but never the turn already running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Showing {
+    /// When the last scene queued ends.
+    until: Instant,
+    /// When the scene that started the latest turn ends.
+    turn: Instant,
+}
+
+impl Showing {
+    fn new(now: Instant) -> Self {
+        Self { until: now, turn: now }
+    }
+
+    /// Queues the scene for an event's effects, committed at `now`.
+    fn queue(&mut self, effects: &[Effect], now: Instant) {
+        self.until = self.until.max(now) + scene(effects);
+        if effects.iter().any(|effect| matches!(effect, Effect::TurnStarted { .. })) {
+            self.turn = self.until;
+        }
+    }
+}
+
+/// How long clients take to show one event's effects.
+fn scene(effects: &[Effect]) -> Duration {
+    Duration::try_from_secs_f32(pacing::schedule(effects).end).unwrap_or_default()
 }
 
 /// The turn being played.
@@ -151,7 +181,7 @@ impl Room {
             seats: seated.iter().map(|&i| self.members[i].member.id).collect(),
             turn: None,
             limit: Duration::from_secs(u64::from(self.options.turn_seconds)),
-            showing: Duration::ZERO,
+            showing: Showing::new(now),
         });
         tracing::info!(room = self.code.as_str(), players = seated.len(), map = self.options.map, "game started");
         self.broadcast_room();
@@ -217,7 +247,7 @@ impl Room {
             Action::Item { slot } => Event::UseItem { seat, slot },
             Action::Spin => Event::Spin { seat },
         };
-        self.commit(event)?;
+        self.commit(event, now)?;
         self.settle(now);
         Ok(())
     }
@@ -229,9 +259,12 @@ impl Room {
         if !play.game.players().get(seat).is_some_and(|player| player.alive) {
             return Ok(());
         }
-        self.commit(Event::Forfeit {
-            seat: u8::try_from(seat).context("too many seats")?,
-        })?;
+        self.commit(
+            Event::Forfeit {
+                seat: u8::try_from(seat).context("too many seats")?,
+            },
+            now,
+        )?;
         self.settle(now);
         Ok(())
     }
@@ -274,7 +307,7 @@ impl Room {
                 Event::Pass { seat, .. } => Event::Pass { seat, time },
                 other => other,
             };
-            if let Err(error) = self.commit(event) {
+            if let Err(error) = self.commit(event, now) {
                 tracing::warn!(%error, ?event, "the game refused a bot's planned event");
                 break;
             }
@@ -289,11 +322,11 @@ impl Room {
     }
 
     /// Applies an accepted event, logs it and broadcasts it with the state hash after it.
-    fn commit(&mut self, event: Event) -> Void {
+    fn commit(&mut self, event: Event, now: Instant) -> Void {
         let play = self.play.as_mut().context("no game is on")?;
         let index = u32::try_from(play.log.events.len()).context("the log is full")?;
         let effects = play.game.apply(event)?;
-        play.showing += Duration::try_from_secs_f32(pacing::schedule(&effects).end).unwrap_or_default();
+        play.showing.queue(&effects, now);
         play.log.events.push(event);
         // The event is applied, so it must go out either way; a zero hash makes every client
         // report a desync rather than drift silently.
@@ -308,19 +341,18 @@ impl Room {
     /// Commits an event the server itself chose (a roll, a timeout's pass). The sim refusing one
     /// is a bug; ending the game beats leaving it stuck with nobody able to move.
     fn commit_or_abort(&mut self, event: Event, now: Instant) {
-        if let Err(error) = self.commit(event) {
+        if let Err(error) = self.commit(event, now) {
             tracing::error!(room = self.code.as_str(), %error, ?event, "the game refused a server event; ending it");
             self.finish(now);
         }
     }
 
-    /// After an event: answers every roll the sim now owes, then starts the next turn or, if the
-    /// game is over, returns to the lobby.
+    /// After an event: answers every roll the sim now owes, spins the slot machine for every dead
+    /// bot the game lets spin, then starts the next turn or, if the game is over, returns to the
+    /// lobby.
     fn settle(&mut self, now: Instant) {
-        while let Some(roll) = self.play.as_ref().and_then(|play| play.game.pending_roll()) {
-            let event = self.roll(roll);
-            self.commit_or_abort(event, now);
-        }
+        self.answer_rolls(now);
+        self.spin_for_bots(now);
         let Some(play) = &self.play else { return };
         match play.game.phase() {
             Phase::Over { winner } => {
@@ -335,13 +367,44 @@ impl Room {
         }
     }
 
+    fn answer_rolls(&mut self, now: Instant) {
+        while let Some(roll) = self.play.as_ref().and_then(|play| play.game.pending_roll()) {
+            let event = self.roll(roll);
+            self.commit_or_abort(event, now);
+        }
+    }
+
+    /// A dead bot spins whenever `Game::can_spin` lets it, on anyone's turn, as a player would.
+    fn spin_for_bots(&mut self, now: Instant) {
+        let seats = self.play.as_ref().map_or(0, |play| play.seats.len());
+        for seat in (0..seats).filter_map(|seat| u8::try_from(seat).ok()) {
+            let spins = self
+                .play
+                .as_ref()
+                .is_some_and(|play| play.game.can_spin(seat) && play.seats.get(usize::from(seat)).is_some_and(|&id| self.is_bot(id)));
+            if !spins {
+                continue;
+            }
+            // The game said this spin was allowed, so refusing it is a sim bug, but one that leaves
+            // nobody stuck: the game goes on without it.
+            if let Err(error) = self.commit(Event::Spin { seat }, now) {
+                tracing::warn!(room = self.code.as_str(), %error, seat, "the game refused a bot's spin");
+                continue;
+            }
+            self.answer_rolls(now);
+        }
+    }
+
+    fn is_bot(&self, id: MemberId) -> bool {
+        self.members.iter().any(|e| e.member.id == id && e.member.bot)
+    }
+
     fn begin_turn(&mut self, seat: u8, now: Instant) {
         self.turns_started += 1;
+        let bot = self.play.as_ref().and_then(|play| play.seats.get(usize::from(seat))).is_some_and(|&id| self.is_bot(id));
         let Some(play) = &mut self.play else { return };
-        let bot = play.seats.get(usize::from(seat)).is_some_and(|&id| self.members.iter().any(|e| e.member.id == id && e.member.bot));
-        // The clock starts as clients finish showing the last turn, not when the sim resolved it.
-        let showing = std::mem::take(&mut play.showing);
-        let started = if self.timing.playback_wait { now + showing } else { now };
+        // The clock starts as clients show the turn starting, not when the sim started it.
+        let started = if self.timing.playback_wait { play.showing.turn.max(now) } else { now };
         play.turn = Some(Turn {
             serial: self.turns_started,
             seat,
@@ -366,21 +429,24 @@ impl Room {
 mod unit {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+    use std::{collections::HashSet, path::Path};
+
     use pretty_assertions::assert_eq;
 
     use tempfile::TempDir;
 
     use lobshot_protocol::{ClientMsg, RoomOptions, Stage};
     use lobshot_sim::{
-        game::Shot,
+        game::{Shot, SuddenDeath, SuddenDeathKind},
+        items::{Item, Loadout},
         map::{MapRef, NoAssets},
         terrain::Terrain,
-        units::Power,
+        units::{Power, TICKS_PER_SECOND, Vec2},
     };
 
     use super::*;
     use crate::{
-        room::{ConnId, Timing, testing::Harness},
+        room::{BOT_ITEMS, ConnId, Timing, testing::Harness},
         tests::{Replica, write_map},
     };
 
@@ -408,6 +474,73 @@ mod unit {
 
     fn log(h: &Harness) -> Log {
         h.room.play.as_ref().unwrap().log.clone()
+    }
+
+    fn game(h: &Harness) -> &Game {
+        &h.room.play.as_ref().unwrap().game
+    }
+
+    fn alive(h: &Harness, seat: u8) -> bool {
+        game(h).players()[usize::from(seat)].alive
+    }
+
+    /// `n` humans on conns 1 to `n` (1 the master), seated in joining order, alternating teams,
+    /// all ready to play with `options`. Once the game starts, seat `i` is conn `i + 1`.
+    fn humans(h: &mut Harness, n: u64, options: RoomOptions) -> Vec<MemberId> {
+        let mut people = vec![h.join(1, "P1")];
+        h.send(1, ClientMsg::Configure(options));
+        people.extend((2..=n).map(|conn| h.join(conn, &format!("P{conn}"))));
+        for conn in 1..=n {
+            h.send(conn, ClientMsg::Ready(true));
+        }
+        people
+    }
+
+    /// Whose turn it is, and the conn of the human playing it among `people` (see `humans`).
+    fn turn_of(h: &Harness, people: &[MemberId]) -> (u8, Option<u64>) {
+        let Phase::Turn { seat } = game(h).phase() else { panic!("the game is over") };
+        let id = h.room.play.as_ref().unwrap().seats[usize::from(seat)];
+        (seat, people.iter().position(|&p| p == id).map(|i| u64::try_from(i).unwrap() + 1))
+    }
+
+    /// Where each seat spawns on `pits`.
+    const PIT_SPAWNS: [i32; 8] = [100, 300, 500, 700, 900, 1100, 1300, 1500];
+
+    /// Writes `pits` into `dist`: a field with a shaft down off the map ten steps right of each
+    /// spawn, so a player who walks right falls to their death, as in battle.
+    fn write_pits(dist: &Path) {
+        let shaft = |x: u32| PIT_SPAWNS.iter().any(|&spawn| (spawn + 10..spawn + 13).contains(&i32::try_from(x).unwrap()));
+        let mask = Terrain::from_fn(1600, 600, |x, y| y >= 400 && !shaft(x)).unwrap();
+        write_map(dist, "pits", &mask, &PIT_SPAWNS).unwrap();
+    }
+
+    fn pits(team_size: u8) -> RoomOptions {
+        RoomOptions { map: "pits".into(), ..options(team_size) }
+    }
+
+    /// Bots that play the moment their turn comes up, and turns that start at once: for tests
+    /// whose clock stands still while clients would still be showing a shot or a fall.
+    fn at_once() -> Timing {
+        Timing {
+            playback_wait: false,
+            ..Timing::new(Duration::ZERO)
+        }
+    }
+
+    /// The fatal walk on `pits`.
+    const INTO_THE_PIT: Action = Action::Walk { facing: Facing::Right, steps: 30 };
+
+    /// Plays a `humans` game until `victim` is dead: they walk into their pit, everyone else passes.
+    fn walk_into_the_pit(h: &mut Harness, people: &[MemberId], victim: u8) {
+        for _ in 0..50 {
+            if !alive(h, victim) {
+                return;
+            }
+            let (seat, conn) = turn_of(h, people);
+            let action = if seat == victim { INTO_THE_PIT } else { Action::Pass };
+            h.send(conn.unwrap(), ClientMsg::Act(action));
+        }
+        panic!("seat {victim} never died");
     }
 
     fn seat_of(h: &Harness, id: MemberId) -> u8 {
@@ -638,11 +771,15 @@ mod unit {
     /// conn that fired it.
     fn lob(h: &mut Harness, a: MemberId) -> (Duration, u64) {
         let (seat, conn) = current(h, a);
+        (lob_as(h, seat, conn), conn)
+    }
+
+    /// A lob from `seat`, played by `conn`: what clients will spend showing it.
+    fn lob_as(h: &mut Harness, seat: u8, conn: u64) -> Duration {
         let (shot, aim, power) = (Shot::S1, 45, Power::nearest(2.0));
-        let mut game = h.room.play.as_ref().unwrap().game.clone();
-        let effects = game.apply(Event::Shoot { seat, shot, aim, power, time: Centis(0) }).unwrap();
+        let effects = game(h).clone().apply(Event::Shoot { seat, shot, aim, power, time: Centis(0) }).unwrap();
         h.send(conn, ClientMsg::Act(Action::Shoot { shot, aim, power }));
-        (Duration::from_secs_f32(pacing::schedule(&effects).end), conn)
+        scene(&effects)
     }
 
     #[test]
@@ -660,7 +797,11 @@ mod unit {
         h.send(conn, ClientMsg::Act(Action::Pass));
         let pass = log(&h).events.iter().rev().find(|event| matches!(event, Event::Pass { .. })).copied();
         assert_eq!(pass, Some(Event::Pass { seat, time: Centis(0) }));
-        // A pass (and the rolls after it) have nothing to watch: the next clock starts at once.
+        // A pass has nothing to watch, but clients show it only once the shot is over, and start
+        // the next turn's clock then.
+        let rest = showing.checked_sub(showing / 2).unwrap();
+        assert_eq!(h.room.deadline(), Some(h.now + rest + Duration::from_secs(10)));
+        h.advance(rest);
         assert_eq!(h.room.deadline(), Some(h.now + Duration::from_secs(10)));
     }
 
@@ -818,7 +959,9 @@ mod unit {
 
     #[test]
     fn a_bot_game_plays_to_the_end_and_returns_to_the_lobby() {
-        let mut h = Harness::new();
+        // The human passes the moment their turn comes up, while clients would still be showing
+        // the bot's shot: with the playback wait, the bot's next turn would wait for that.
+        let mut h = Harness::with_timing(at_once());
         let human = h.join(1, "Pip");
         h.send(1, ClientMsg::Configure(options(1)));
         h.send(1, ClientMsg::AddBot { team: Team::B });
@@ -859,5 +1002,341 @@ mod unit {
         h.advance(Duration::from_millis(1));
         assert_eq!(h.plans.len(), 1);
         assert_eq!(h.plans[0].seat, 1);
+    }
+
+    #[test]
+    fn a_4v4_seats_eight_and_its_turn_order_alternates_teams() {
+        let mut h = Harness::new();
+        let people = humans(&mut h, 8, options(4));
+        let teams: Vec<Option<Team>> = people.iter().map(|&id| h.member(id).team).collect();
+        assert_eq!(teams, [Team::A, Team::B].repeat(4).into_iter().map(Some).collect::<Vec<_>>(), "joiners fill the smaller team");
+        let watcher = h.join(9, "Watcher");
+        assert_eq!(h.member(watcher).team, None, "eight seats are all there are");
+
+        h.send(3, ClientMsg::Team(Some(Team::B)));
+        h.send(1, ClientMsg::Start);
+        assert_eq!(h.rejections(1), ["team B has 5 players, but teams are 4"]);
+        h.send(3, ClientMsg::Team(Some(Team::A)));
+        h.send(1, ClientMsg::Start);
+        assert_eq!(h.rejections(1), Vec::<String>::new());
+
+        let setup = log(&h).setup;
+        assert_eq!(setup.seats.len(), 8);
+        let mut spawns: Vec<i32> = setup.seats.iter().map(|seat| seat.spawn_x).collect();
+        spawns.sort_unstable();
+        spawns.dedup();
+        assert_eq!(spawns.len(), 8, "a spawn each");
+        let sides: Vec<Team> = setup.order.iter().map(|&seat| setup.seats[usize::from(seat)].team).collect();
+        assert!(sides.windows(2).all(|pair| pair[0] != pair[1]), "{sides:?}");
+    }
+
+    #[test]
+    fn random_picks_are_rolled_at_the_start_and_logged() {
+        let mut h = Harness::new();
+        let people = humans(&mut h, 8, options(4));
+        h.send(1, ClientMsg::Mobile(Some(MobileKind::Hookclaw)));
+        for conn in 2..=8 {
+            h.send(conn, ClientMsg::Mobile(None));
+        }
+        h.take(2);
+        h.send(1, ClientMsg::Start);
+
+        let messages = h.take(2);
+        let Some(ServerMsg::Game { log: sent }) = messages.iter().find(|msg| matches!(msg, ServerMsg::Game { .. })) else {
+            panic!("{messages:?}")
+        };
+        let mobiles: Vec<MobileKind> = sent.setup.seats.iter().map(|seat| seat.mobile).collect();
+        assert_eq!(mobiles[0], MobileKind::Hookclaw, "a pick is kept");
+        let rolled: HashSet<MobileKind> = mobiles[1..].iter().copied().collect();
+        assert!(rolled.len() > 1, "Random is rolled per seat: {mobiles:?}");
+        let played: Vec<MobileKind> = game(&h).players().iter().map(|player| player.mobile).collect();
+        assert_eq!(played, mobiles, "the log holds what each seat plays");
+        assert!(people[1..].iter().all(|&id| h.member(id).mobile.is_none()), "Random stays their pick for the next game");
+    }
+
+    #[test]
+    fn the_setup_carries_loadouts_and_sudden_death() {
+        let mut h = Harness::new();
+        let pip = h.join(1, "Pip");
+        let sudden_death = SuddenDeath { kind: SuddenDeathKind::Double, turn: 40 };
+        h.send(
+            1,
+            ClientMsg::Configure(RoomOptions {
+                sudden_death: Some(sudden_death),
+                ..options(1)
+            }),
+        );
+        h.send(1, ClientMsg::AddBot { team: Team::B });
+        let loadout = Loadout::new(&[Item::Dual, Item::Heal, Item::Thunder]).unwrap();
+        h.send(1, ClientMsg::Loadout(loadout));
+        h.send(1, ClientMsg::Ready(true));
+        h.send(1, ClientMsg::Start);
+
+        let setup = log(&h).setup;
+        assert_eq!(setup.sudden_death, Some(sudden_death));
+        let pip = usize::from(seat_of(&h, pip));
+        assert_eq!(setup.seats[pip].items, loadout);
+        assert_eq!(setup.seats[1 - pip].items, Loadout::new(&BOT_ITEMS).unwrap(), "the bot's");
+        assert_eq!(game(&h).players()[pip].items, loadout.positions());
+    }
+
+    #[test]
+    fn scenes_play_one_at_a_time_and_a_turn_starts_as_its_scene_ends() {
+        let start = Instant::now();
+        let blast = |seconds: u32| Effect::Exploded {
+            at: Vec2::new(10.0, 10.0),
+            radius: 30.0,
+            tick: seconds * TICKS_PER_SECOND,
+            dirty: None,
+        };
+        let turn = Effect::TurnStarted { seat: 1 };
+        let shot = [blast(2), turn.clone()];
+        // A stand-in for a spin's effects: something to watch, but no turn in it.
+        let spin = [blast(1)];
+        let (shot_ends, spin_takes) = (start + scene(&shot), scene(&spin));
+        assert!(spin_takes > Duration::ZERO);
+
+        let mut showing = Showing::new(start);
+        showing.queue(&shot, start);
+        assert_eq!(showing, Showing { until: shot_ends, turn: shot_ends });
+        // A spin that arrives while the shot plays waits for it, and the turn the shot started
+        // keeps its clock.
+        showing.queue(&spin, start + Duration::from_secs(1));
+        assert_eq!(
+            showing,
+            Showing {
+                until: shot_ends + spin_takes,
+                turn: shot_ends
+            }
+        );
+        // One that arrives with nothing playing plays at once.
+        let later = start + Duration::from_mins(1);
+        showing.queue(&spin, later);
+        assert_eq!(
+            showing,
+            Showing {
+                until: later + spin_takes,
+                turn: shot_ends
+            }
+        );
+        // A pass while it plays starts the next turn once it is over: not before, or the turn
+        // would run while clients still show the spin, and not later.
+        showing.queue(&[turn], later + Duration::from_millis(100));
+        assert_eq!(
+            showing,
+            Showing {
+                until: later + spin_takes,
+                turn: later + spin_takes
+            }
+        );
+    }
+
+    #[test]
+    fn a_living_player_or_a_watcher_cant_spin() {
+        let (mut h, ..) = duel();
+        h.send(1, ClientMsg::Start);
+        h.join(3, "Watcher");
+        let before = log(&h).events.len();
+        for conn in [1, 2] {
+            h.send(conn, ClientMsg::Act(Action::Spin));
+            assert_eq!(h.rejections(conn).len(), 1, "conn {conn}'s mobile is alive");
+        }
+        h.send(3, ClientMsg::Act(Action::Spin));
+        assert_eq!(h.rejections(3), ["you aren't playing in this game"]);
+        assert_eq!(log(&h).events.len(), before);
+    }
+
+    /// Needs the M3 slot machine (PRD-0004 T-005): `main`'s sim refuses `Event::Spin`.
+    #[test]
+    fn a_dead_players_spin_works_on_anyones_turn_and_leaves_the_clock_alone() {
+        let dist = TempDir::new().unwrap();
+        write_pits(dist.path());
+        let mut h = Harness::with_dist(dist.path());
+        let people = humans(&mut h, 4, pits(2));
+        h.send(1, ClientMsg::Start);
+        let victim = seat_of(&h, people[0]);
+        walk_into_the_pit(&mut h, &people, victim);
+
+        // Two seconds into someone else's turn, the dead player spins.
+        h.advance(Duration::from_secs(2));
+        let turn = h.room.play.as_ref().unwrap().turn.unwrap();
+        let deadline = h.room.deadline();
+        let mut replay = game(&h).clone();
+        let before = log(&h).events.len();
+        h.send(1, ClientMsg::Act(Action::Spin));
+        assert_eq!(h.rejections(1), Vec::<String>::new());
+        let events = log(&h).events.split_off(before);
+        let [Event::Spin { seat }, Event::Drop(drop)] = events.as_slice() else { panic!("{events:?}") };
+        assert_eq!(*seat, victim);
+        assert!((0..1600).contains(&drop.x), "{drop:?}");
+        let after = h.room.play.as_ref().unwrap().turn.unwrap();
+        assert_eq!((after.serial, after.seat, after.started), (turn.serial, turn.seat, turn.started), "the same turn, on the same clock");
+        assert_eq!(h.room.deadline(), deadline);
+
+        // Clients show the shot that ends this turn after the spin, so the next turn waits for both.
+        let spun = h.now + events.iter().map(|&event| scene(&replay.apply(event).unwrap())).sum::<Duration>();
+        h.advance(Duration::from_secs(1));
+        let (seat, conn) = turn_of(&h, &people);
+        let shot = lob_as(&mut h, seat, conn.unwrap());
+        assert_eq!(h.room.deadline(), Some(spun.max(h.now) + shot + Duration::from_secs(10)));
+    }
+
+    /// Needs the M3 slot machine (PRD-0004 T-005): on `main`, `Game::can_spin` is always false.
+    #[test]
+    fn dead_bots_spin_whenever_the_game_lets_them() {
+        let dist = TempDir::new().unwrap();
+        write_pits(dist.path());
+        let mut h = Harness::build(at_once(), dist.path());
+        let host = h.join(1, "Host");
+        h.send(1, ClientMsg::Configure(pits(2)));
+        for team in [Team::A, Team::B, Team::B] {
+            h.send(1, ClientMsg::AddBot { team });
+        }
+        h.send(1, ClientMsg::Ready(true));
+        h.send(1, ClientMsg::Start);
+        let seats = h.room.play.as_ref().unwrap().seats.clone();
+        let host_seat = seat_of(&h, host);
+        // The host's teammate, so the game outlasts its death.
+        let victim = seat_of(&h, h.room.view().members[1].id);
+
+        // The host and the bots pass, except the victim, which walks into its pit; then a round
+        // more. However the game rations spins, no dead bot is ever left able to spin.
+        let mut turns_dead = 0;
+        for _ in 0..50 {
+            if turns_dead == 8 {
+                break;
+            }
+            h.advance(Duration::ZERO);
+            let Phase::Turn { seat } = game(&h).phase() else { panic!("the game ended") };
+            if seat == host_seat {
+                h.send(1, ClientMsg::Act(Action::Pass));
+            } else {
+                let turn = h.plans.pop().expect("a bot's turn asks for a plan");
+                let event = if seat == victim {
+                    Event::Walk { seat, facing: Facing::Right, steps: 30 }
+                } else {
+                    Event::Pass { seat, time: Centis(0) }
+                };
+                h.planned(&turn, Some(vec![event]));
+            }
+            for seat in (0_u8..).take(seats.len()) {
+                assert!(!game(&h).can_spin(seat), "seat {seat} could spin but didn't");
+            }
+            if !alive(&h, victim) {
+                turns_dead += 1;
+            }
+        }
+
+        assert_eq!(turns_dead, 8, "the victim never died");
+        let events = log(&h).events;
+        let spins: Vec<usize> = (0..events.len()).filter(|&i| events[i] == Event::Spin { seat: victim }).collect();
+        assert!(!spins.is_empty(), "the dead bot never spun");
+        assert!(spins.iter().all(|&i| matches!(events.get(i + 1), Some(Event::Drop(_)))), "each spin's drop is rolled at once");
+    }
+
+    /// Needs the M3 slot machine (PRD-0004 T-005): `main`'s sim refuses `Event::Spin`.
+    #[test]
+    fn in_a_4v4_a_dead_player_who_leaves_and_rejoins_still_spins() {
+        let dist = TempDir::new().unwrap();
+        write_pits(dist.path());
+        let mut h = Harness::with_dist(dist.path());
+        let (first, token) = h.join_with_token(1, "Victim");
+        h.send(1, ClientMsg::Configure(pits(4)));
+        let mut people = vec![first];
+        people.extend((2..=8).map(|conn| h.join(conn, &format!("P{conn}"))));
+        for conn in 1..=8 {
+            h.send(conn, ClientMsg::Ready(true));
+        }
+        h.send(1, ClientMsg::Start);
+        let victim = seat_of(&h, first);
+        walk_into_the_pit(&mut h, &people, victim);
+
+        h.close(1);
+        // A round goes by without them; their seat has no turns to time out.
+        for _ in 0..7 {
+            let (_, conn) = turn_of(&h, &people);
+            h.send(conn.unwrap(), ClientMsg::Act(Action::Pass));
+        }
+        h.open(9);
+        h.send(
+            9,
+            ClientMsg::Hello {
+                name: "Victim".into(),
+                token: Some(token),
+                rider: "pip".into(),
+            },
+        );
+        assert!(matches!(h.take(9).first(), Some(ServerMsg::Welcome { you, .. }) if *you == first));
+        let before = log(&h).events.len();
+        h.send(9, ClientMsg::Act(Action::Spin));
+        assert_eq!(h.rejections(9), Vec::<String>::new());
+        let events = log(&h).events.split_off(before);
+        assert!(matches!(events.as_slice(), [Event::Spin { seat }, Event::Drop(_)] if *seat == victim), "{events:?}");
+    }
+
+    #[test]
+    fn in_a_4v4_a_kicked_players_mobile_dies_and_the_game_goes_on() {
+        let mut h = Harness::new();
+        let people = humans(&mut h, 8, options(4));
+        h.send(1, ClientMsg::Start);
+        // The master can't kick themselves, so play on until it is someone else's turn.
+        while turn_of(&h, &people).1 == Some(1) {
+            h.send(1, ClientMsg::Act(Action::Pass));
+        }
+
+        // Off their turn: their mobile dies, and the turn goes on as it was.
+        let (current, _) = turn_of(&h, &people);
+        let turn = h.room.play.as_ref().unwrap().turn.unwrap().serial;
+        let idle = (0..8).find(|&seat| seat != current && seat != 0).unwrap();
+        h.send(1, ClientMsg::Kick(people[usize::from(idle)]));
+        assert_eq!(log(&h).events.last(), Some(&Event::Forfeit { seat: idle }));
+        assert!(!alive(&h, idle));
+        assert_eq!(game(&h).phase(), Phase::Turn { seat: current });
+        assert_eq!(h.room.play.as_ref().unwrap().turn.unwrap().serial, turn);
+
+        // On their turn: their mobile dies and the next player's turn begins.
+        h.send(1, ClientMsg::Kick(people[usize::from(current)]));
+        assert!(!alive(&h, current));
+        assert!(h.room.play.as_ref().unwrap().turn.unwrap().serial > turn);
+        assert!(matches!(h.room.view().stage, Stage::Playing { .. }), "three a side play on");
+
+        for _ in 0..12 {
+            let (seat, conn) = turn_of(&h, &people);
+            assert!(![idle, current].contains(&seat), "a kicked seat's turn came up");
+            h.send(conn.unwrap(), ClientMsg::Act(Action::Pass));
+        }
+    }
+
+    #[test]
+    fn eight_bots_plan_one_turn_at_a_time_and_the_room_answers_meanwhile() {
+        let mut h = Harness::with_timing(at_once());
+        h.join(1, "Host");
+        h.send(1, ClientMsg::Team(None));
+        h.send(1, ClientMsg::Configure(options(4)));
+        for team in [Team::A, Team::B].repeat(4) {
+            h.send(1, ClientMsg::AddBot { team });
+        }
+        h.send(1, ClientMsg::Start);
+        assert_eq!(h.rejections(1), Vec::<String>::new(), "a spectating master needn't be ready");
+
+        for _ in 0..16 {
+            h.advance(Duration::ZERO);
+            let Phase::Turn { seat } = game(&h).phase() else { break };
+            assert_eq!(h.plans.iter().map(|turn| turn.seat).collect::<Vec<_>>(), [seat], "the bot whose turn it is, alone");
+            let turn = h.plans.pop().unwrap();
+            // The search runs off the room's task; the room keeps serving while it does.
+            h.take(1);
+            h.send(
+                1,
+                ClientMsg::Chat {
+                    text: "still here".into(),
+                    team_only: false,
+                },
+            );
+            assert!(h.take(1).iter().any(|msg| matches!(msg, ServerMsg::Chat { .. })));
+            let events = turn.plan();
+            assert!(events.as_ref().is_some_and(|events| events.iter().any(|e| matches!(e, Event::Shoot { .. }))), "{events:?}");
+            h.planned(&turn, events);
+        }
     }
 }

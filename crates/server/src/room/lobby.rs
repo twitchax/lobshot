@@ -12,7 +12,7 @@ use lobshot_sim::{
     items::Loadout,
 };
 
-use super::{BOT_RIDER, Entry, MAX_SPECTATORS, Output, Room};
+use super::{BOT_ITEMS, BOT_RIDER, Entry, MAX_SPECTATORS, Output, Room};
 
 impl Room {
     pub(super) fn ensure_lobby(&self) -> Void {
@@ -52,13 +52,16 @@ impl Room {
         self.ensure_lobby()?;
         options.validate()?;
         // Refuse a map that can't be played now rather than at `Start`.
-        self.maps.arena(&options.map)?;
+        let spawns = self.maps.arena(&options.map)?.spawns.len();
+        let players = 2 * usize::from(options.team_size);
+        ensure!(spawns >= players, "{} has spawns for only {spawns} players, not {players}", options.map);
         self.options = options;
         self.broadcast_room();
         Ok(())
     }
 
-    /// Seats a bot, named "Bot N" with the lowest free N. Bots are always ready.
+    /// Seats a bot, named "Bot N" with the lowest free N. Bots are always ready, and bring
+    /// `BOT_ITEMS`.
     pub(super) fn add_bot(&mut self, id: MemberId, team: Team) -> Void {
         self.ensure_master(id)?;
         self.ensure_lobby()?;
@@ -68,6 +71,7 @@ impl Room {
             .map(|n| format!("Bot {n}"))
             .find(|name| self.members.iter().all(|e| e.member.name != *name))
             .context("no bot name is free")?;
+        let items = Loadout::new(&BOT_ITEMS).context("the bots' loadout")?;
         let bot = self.next_member_id();
         self.members.push(Entry {
             member: Member {
@@ -75,7 +79,7 @@ impl Room {
                 name,
                 team: Some(team),
                 mobile: Some(MobileKind::ALL[0]),
-                items: Loadout::default(),
+                items,
                 rider: BOT_RIDER.to_owned(),
                 ready: true,
                 bot: true,
@@ -87,6 +91,13 @@ impl Room {
         });
         self.broadcast_room();
         Ok(())
+    }
+
+    /// The master picks a bot's mobile, as a player picks their own.
+    pub(super) fn bot_mobile(&mut self, id: MemberId, bot: MemberId, mobile: Option<MobileKind>) -> Void {
+        self.ensure_master(id)?;
+        ensure!(self.entry(bot)?.member.bot, "only a bot's mobile is the master's to pick");
+        self.choose(bot, |member| member.mobile = mobile)
     }
 
     /// The master removes a member: their token stops working and their socket closes. Mid-game
@@ -139,11 +150,21 @@ mod unit {
     use std::time::Duration;
 
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
 
     use lobshot_protocol::{ClientMsg, Emote, Stage, Token};
+    use lobshot_sim::{
+        game::{SuddenDeath, SuddenDeathKind},
+        items::Item,
+        terrain::Terrain,
+        tuning::SUDDEN_DEATH_TURNS,
+    };
 
     use super::*;
-    use crate::room::{ConnId, testing::Harness};
+    use crate::{
+        room::{ConnId, testing::Harness},
+        tests::write_map,
+    };
 
     fn flat(team_size: u8) -> ClientMsg {
         ClientMsg::Configure(RoomOptions {
@@ -158,12 +179,20 @@ mod unit {
         let mut h = Harness::new();
         let pip = h.join(1, "Pip");
         h.send(1, ClientMsg::Team(Some(Team::B)));
-        h.send(1, ClientMsg::Mobile(Some(MobileKind::Coilback)));
+        h.send(1, ClientMsg::Mobile(Some(MobileKind::Hookclaw)));
+        let loadout = Loadout::new(&[Item::Teleport, Item::PowerUp, Item::Heal, Item::WindFlip]).unwrap();
+        h.send(1, ClientMsg::Loadout(loadout));
         h.send(1, ClientMsg::Rider("pip-2".into()));
         h.send(1, ClientMsg::Ready(true));
         let member = h.member(pip);
-        assert_eq!((member.team, member.rider.as_str(), member.ready), (Some(Team::B), "pip-2", true));
+        assert_eq!(
+            (member.team, member.mobile, member.rider.as_str(), member.ready),
+            (Some(Team::B), Some(MobileKind::Hookclaw), "pip-2", true)
+        );
+        assert_eq!(member.items, loadout);
         assert!(h.take(1).iter().all(|msg| matches!(msg, ServerMsg::Room(_))), "each change is broadcast");
+        h.send(1, ClientMsg::Mobile(None));
+        assert_eq!(h.member(pip).mobile, None, "Random");
 
         h.send(1, ClientMsg::Rider("../../etc".into()));
         assert_eq!(h.rejections(1), ["\"../../etc\" is not a rider name"]);
@@ -176,7 +205,8 @@ mod unit {
         let mut h = Harness::new();
         let master = h.join(1, "Master");
         let other = h.join(2, "Other");
-        for msg in [flat(2), ClientMsg::AddBot { team: Team::A }, ClientMsg::Kick(master), ClientMsg::Start] {
+        let bot_mobile = ClientMsg::BotMobile { bot: master, mobile: None };
+        for msg in [flat(2), ClientMsg::AddBot { team: Team::A }, bot_mobile, ClientMsg::Kick(master), ClientMsg::Start] {
             h.send(2, msg);
             assert_eq!(h.rejections(2), ["only the room master can do that"]);
         }
@@ -184,6 +214,23 @@ mod unit {
         assert_eq!(h.rejections(1), ["you can't kick yourself"]);
         h.send(1, ClientMsg::Kick(other));
         assert_eq!(h.rejections(1), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_master_picks_a_bots_mobile_but_no_players() {
+        let mut h = Harness::new();
+        let master = h.join(1, "Master");
+        let other = h.join(2, "Other");
+        h.send(1, ClientMsg::AddBot { team: Team::B });
+        let bot = h.room.view().members.iter().find(|m| m.bot).unwrap().id;
+        h.send(1, ClientMsg::BotMobile { bot, mobile: Some(MobileKind::Sparkhorn) });
+        assert_eq!(h.member(bot).mobile, Some(MobileKind::Sparkhorn));
+        h.send(1, ClientMsg::BotMobile { bot, mobile: None });
+        assert_eq!(h.member(bot).mobile, None, "Random");
+        for target in [master, other] {
+            h.send(1, ClientMsg::BotMobile { bot: target, mobile: None });
+            assert_eq!(h.rejections(1), ["only a bot's mobile is the master's to pick"]);
+        }
     }
 
     #[test]
@@ -206,6 +253,52 @@ mod unit {
     }
 
     #[test]
+    fn sudden_death_is_off_or_a_kind_from_a_listed_turn() {
+        let mut h = Harness::new();
+        h.join(1, "Master");
+        let with = |sudden_death| {
+            ClientMsg::Configure(RoomOptions {
+                map: "flat".into(),
+                sudden_death,
+                ..RoomOptions::default()
+            })
+        };
+        h.send(1, with(Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 41 })));
+        assert_eq!(h.rejections(1), ["sudden death starts at turn [40, 56, 72], not 41"]);
+        for kind in [SuddenDeathKind::BigBomb, SuddenDeathKind::Double, SuddenDeathKind::SsDeath] {
+            for turn in SUDDEN_DEATH_TURNS.value {
+                let sudden_death = Some(SuddenDeath { kind, turn });
+                h.send(1, with(sudden_death));
+                assert_eq!(h.rejections(1), Vec::<String>::new());
+                assert_eq!(h.room.view().options.sudden_death, sudden_death);
+            }
+        }
+        h.send(1, with(None));
+        assert_eq!(h.room.view().options.sudden_death, None, "off");
+    }
+
+    #[test]
+    fn a_map_must_have_a_spawn_for_every_seat_of_the_team_size() {
+        let dist = TempDir::new().unwrap();
+        write_map(dist.path(), "nook", &Terrain::from_fn(800, 400, |_, y| y >= 300).unwrap(), &[100, 300, 500, 700]).unwrap();
+        let mut h = Harness::with_dist(dist.path());
+        h.join(1, "Master");
+        let nook = |team_size| {
+            ClientMsg::Configure(RoomOptions {
+                map: "nook".into(),
+                team_size,
+                ..RoomOptions::default()
+            })
+        };
+        h.send(1, nook(3));
+        assert_eq!(h.rejections(1), ["nook has spawns for only 4 players, not 6"]);
+        h.send(1, nook(2));
+        assert_eq!(h.rejections(1), Vec::<String>::new());
+        h.send(1, flat(4));
+        assert_eq!(h.rejections(1), Vec::<String>::new(), "flat seats eight");
+    }
+
+    #[test]
     fn bots_are_named_seated_and_ready() {
         let mut h = Harness::new();
         h.join(1, "Master");
@@ -217,6 +310,7 @@ mod unit {
         let names: Vec<&str> = bots.iter().map(|m| m.name.as_str()).collect();
         assert_eq!(names, ["Bot 1", "Bot 2", "Bot 3"]);
         assert!(bots.iter().all(|m| m.ready && m.connected && m.team == Some(Team::B)));
+        assert!(bots.iter().all(|m| m.items.items().eq(BOT_ITEMS) && m.mobile.is_some()), "a loadout, and no Random pick");
 
         h.send(1, ClientMsg::Kick(bots[1].id));
         h.send(1, ClientMsg::AddBot { team: Team::A });
@@ -350,6 +444,8 @@ mod unit {
             ClientMsg::Ready(false),
             ClientMsg::Team(None),
             ClientMsg::Mobile(Some(MobileKind::Coilback)),
+            ClientMsg::Mobile(None),
+            ClientMsg::Loadout(Loadout::new(&[Item::Heal]).unwrap()),
             ClientMsg::Rider("pip".into()),
             flat(1),
             ClientMsg::AddBot { team: Team::A },
