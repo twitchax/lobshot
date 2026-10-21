@@ -124,6 +124,33 @@ pub enum SuddenDeathKind {
     SsDeath,
 }
 
+impl SuddenDeathKind {
+    /// Every kind, in the order a room's options list them.
+    pub const ALL: [Self; 3] = [Self::BigBomb, Self::Double, Self::SsDeath];
+
+    /// The player-facing name: GunBound's room options' own.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::BigBomb => "Big Bomb",
+            Self::Double => "Double",
+            Self::SsDeath => "SS Death",
+        }
+    }
+}
+
+/// Whether a seat may fire SS, and if not, why (T-003; `Game::ss_state`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SsState {
+    Ready,
+    /// Locked for this many more of the seat's own turns.
+    Locked(u8),
+    /// Off for the rest of the game: Big Bomb and Double sudden deaths take SS away.
+    Off(SuddenDeathKind),
+    /// Not with this item armed: Dual and Dual+ fire S1 or S2.
+    Armed(Item),
+}
+
 /// Sudden death: once `turn` turns are done, `kind` applies and items are off for good.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SuddenDeath {
@@ -669,11 +696,29 @@ impl Game {
         self.check_spin(seat).is_ok()
     }
 
-    /// Whether `seat` may fire `shot` now: it is its turn, and an SS is neither locked nor off.
-    /// The aim is checked when it fires.
+    /// Whether `seat` may fire `shot` now: it is its turn, and an SS is ready (`ss_state`). The aim
+    /// is checked when it fires.
     #[must_use]
     pub fn can_shoot(&self, seat: u8, shot: Shot) -> bool {
         self.ensure_turn(seat).is_ok() && self.check_shot(seat, shot).is_ok()
+    }
+
+    /// Whether `seat` may fire SS, on its turn or not (`can_shoot` adds the turn): locked for
+    /// `SS_LOCK_TURNS` own turns after each, off in Big Bomb and Double, free every turn in SS
+    /// Death, and never with Dual or Dual+ armed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when there is no such seat.
+    pub fn ss_state(&self, seat: u8) -> Res<SsState> {
+        let player = self.player(seat)?;
+        Ok(match (self.sudden_death(), player.armed) {
+            (Some(SuddenDeathKind::SsDeath), _) => SsState::Ready,
+            (Some(kind), _) => SsState::Off(kind),
+            (None, _) if player.ss_lock > 0 => SsState::Locked(player.ss_lock),
+            (None, Some(item @ (Item::Dual | Item::DualPlus))) => SsState::Armed(item),
+            (None, _) => SsState::Ready,
+        })
     }
 
     /// Whether `seat` may use the item at `slot` now (`Event::UseItem`).
@@ -781,21 +826,17 @@ impl Game {
         }
     }
 
-    /// SS gating (T-003): locked for `SS_LOCK_TURNS` own turns after each, off in Big Bomb and
-    /// Double, free every turn in SS Death, and never with Dual or Dual+ armed.
+    /// SS gating (T-003), by `ss_state`.
     fn check_shot(&self, seat: u8, shot: Shot) -> Void {
         if shot != Shot::Ss {
             return Ok(());
         }
-        match self.sudden_death() {
-            Some(SuddenDeathKind::SsDeath) => return Ok(()),
-            Some(kind) => bail!("SS is off in {kind:?} sudden death"),
-            None => {}
+        match self.ss_state(seat)? {
+            SsState::Ready => Ok(()),
+            SsState::Locked(turns) => bail!("seat {seat}'s SS is locked for {turns} more of its turns"),
+            SsState::Off(kind) => bail!("SS is off in {kind:?} sudden death"),
+            SsState::Armed(item) => bail!("{:?} fires S1 or S2, not SS", Some(item)),
         }
-        let player = self.player(seat)?;
-        ensure!(player.ss_lock == 0, "seat {seat}'s SS is locked for {} more of its turns", player.ss_lock);
-        ensure!(!matches!(player.armed, Some(Item::Dual | Item::DualPlus)), "{:?} fires S1 or S2, not SS", player.armed);
-        Ok(())
     }
 
     /// An item may be used on its owner's turn, before sudden death, one a turn; Swap needs a
@@ -1617,8 +1658,30 @@ mod unit {
             game.players[0].items = Loadout::new(&[item]).unwrap().positions();
             game.apply(Event::UseItem { seat: 0, slot: 0 }).unwrap();
             assert!(!game.can_shoot(0, Shot::Ss), "{item:?}");
+            assert_eq!(game.ss_state(0).unwrap(), SsState::Armed(item));
             assert!(game.can_shoot(0, Shot::S2));
         }
+    }
+
+    #[test]
+    fn ss_state_says_why_on_any_turn() {
+        let mut game = duel(800);
+        assert_eq!(game.ss_state(1).unwrap(), SsState::Ready, "not its turn, but ready");
+        shoot(&mut game, 0, Shot::Ss, 30, Power::nearest(2.0));
+        assert_eq!(game.ss_state(0).unwrap(), SsState::Locked(4), "locked as it fired");
+        assert!(game.ss_state(9).is_err());
+        for kind in [SuddenDeathKind::BigBomb, SuddenDeathKind::Double] {
+            assert_eq!(sudden(kind, 0).ss_state(0).unwrap(), SsState::Off(kind));
+        }
+        let mut game = sudden(SuddenDeathKind::SsDeath, 0);
+        game.players[0].ss_lock = 3;
+        assert_eq!(game.ss_state(0).unwrap(), SsState::Ready, "SS Death lifts the lock");
+    }
+
+    #[test]
+    fn sudden_deaths_have_their_own_names() {
+        let names = SuddenDeathKind::ALL.map(SuddenDeathKind::name);
+        assert_eq!(names, ["Big Bomb", "Double", "SS Death"]);
     }
 
     // ── Sudden death ──

@@ -7,14 +7,14 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, ClientMsg};
 use lobshot_sim::{
-    game::{Event, Player, Shot},
+    game::{Event, Player, Shot, SsState},
     items::MAX_ITEMS,
     units::{Facing, Power},
 };
 
 use super::playback::TurnClock;
 use crate::{
-    model::{ChatLine, Match, Screen, Session, Ss},
+    model::{ChatLine, Match, Screen, Session},
     net::Socket,
     ui::{Clicked, UiAction},
     web::{TextInput, Typed},
@@ -46,10 +46,10 @@ pub fn item_key_label(position: u8) -> Option<&'static str> {
 
 /// The shot Tab moves to from `shot`: S1, S2, then SS if it's ready.
 #[must_use]
-pub fn next_shot(shot: Shot, ss: Ss) -> Shot {
+pub fn next_shot(shot: Shot, ss_ready: bool) -> Shot {
     match shot {
         Shot::S1 => Shot::S2,
-        Shot::S2 if ss == Ss::Ready => Shot::Ss,
+        Shot::S2 if ss_ready => Shot::Ss,
         Shot::S2 | Shot::Ss => Shot::S1,
     }
 }
@@ -126,17 +126,17 @@ fn keys(keyboard: Res<ButtonInput<KeyCode>>, turn: Turn, game: Option<ResMut<Mat
         return;
     };
     let Some(me) = game.player(seat).copied() else { return };
-    let ss = game.ss(seat);
+    let ss_ready = game.predicted.ss_state(seat).is_ok_and(|ss| ss == SsState::Ready);
     start_turn(&mut controls, seat, turn.clock.started, &me);
     // A locked SS can't stay picked (it locks once fired; sudden death can take it away).
-    if controls.shot == Shot::Ss && ss != Ss::Ready {
+    if controls.shot == Shot::Ss && !ss_ready {
         controls.shot = Shot::S1;
     }
     if turn.typing.is_open() {
         return;
     }
     let dt = turn.time.delta_secs();
-    pick_shot(&keyboard, &mut controls, ss);
+    pick_shot(&keyboard, &mut controls, ss_ready);
     for position in keyboard.get_just_pressed().filter_map(|&key| item_for_key(key)) {
         if game.predicted.can_use_item(seat, position) {
             acts.write(Act(Action::Item { slot: position }));
@@ -169,12 +169,12 @@ fn start_turn(controls: &mut Controls, seat: u8, started: f64, me: &Player) {
     controls.charging = false;
 }
 
-fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, ss: Ss) {
+fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, ss_ready: bool) {
     if keyboard.just_pressed(KeyCode::Tab) {
-        controls.shot = next_shot(controls.shot, ss);
+        controls.shot = next_shot(controls.shot, ss_ready);
     }
     for (key, shot) in [(KeyCode::Digit1, Shot::S1), (KeyCode::Digit2, Shot::S2), (KeyCode::Digit3, Shot::Ss)] {
-        if keyboard.just_pressed(key) && (shot != Shot::Ss || ss == Ss::Ready) {
+        if keyboard.just_pressed(key) && (shot != Shot::Ss || ss_ready) {
             controls.shot = shot;
         }
     }
@@ -373,10 +373,9 @@ mod unit {
 
     #[test]
     fn tab_skips_ss_unless_it_is_ready() {
-        assert_eq!(next_shot(Shot::S1, Ss::Ready), Shot::S2);
-        assert_eq!(next_shot(Shot::S2, Ss::Ready), Shot::Ss);
-        assert_eq!(next_shot(Shot::Ss, Ss::Ready), Shot::S1);
-        assert_eq!(next_shot(Shot::S2, Ss::Locked(3)), Shot::S1);
-        assert_eq!(next_shot(Shot::S2, Ss::Off), Shot::S1);
+        assert_eq!(next_shot(Shot::S1, true), Shot::S2);
+        assert_eq!(next_shot(Shot::S2, true), Shot::Ss);
+        assert_eq!(next_shot(Shot::Ss, true), Shot::S1);
+        assert_eq!(next_shot(Shot::S2, false), Shot::S1, "locked or off");
     }
 }

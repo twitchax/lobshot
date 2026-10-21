@@ -5,15 +5,10 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use lobshot_protocol::RoomCode;
-use lobshot_sim::game::Player;
+use lobshot_sim::game::{Player, SsState};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
-use crate::{
-    model::{Ss, Sudden},
-    picks::Picks,
-    sound::SoundLog,
-    ui::ButtonSpots,
-};
+use crate::{model::Sudden, picks::Picks, sound::SoundLog, ui::ButtonSpots};
 
 /// Where the page is: the title screen (`/`), or a room (`/r/{code}`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,7 +198,7 @@ pub struct Published<'a> {
 /// This player in the game.
 pub struct Me<'a> {
     pub player: &'a Player,
-    pub ss: Ss,
+    pub ss: SsState,
     pub can_spin: bool,
 }
 
@@ -254,9 +249,9 @@ pub fn publish(now: &Published) {
         set(&object, "armed", &player.armed.map_or(JsValue::NULL, |item| name(&item)));
         set(&object, "ss_lock", &player.ss_lock.into());
         let ss = match me.ss {
-            Ss::Ready => "ready",
-            Ss::Locked(_) => "locked",
-            Ss::Off => "off",
+            SsState::Ready => "ready",
+            SsState::Locked(_) => "locked",
+            SsState::Off(_) | SsState::Armed(_) => "off",
         };
         set(&object, "ss", &ss.into());
         set(&object, "can_spin", &me.can_spin.into());

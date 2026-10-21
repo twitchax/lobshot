@@ -42,6 +42,10 @@ pub fn rider_path(rider: &str) -> String {
 /// this matches `assets/maps/`.
 pub const MAPS: &[&str] = &["tidewall"];
 
+/// The synthetic map the server builds in, for testing: one flat field. Not drawn, so not one of
+/// `MAPS`; the lobby offers it after them.
+pub const FLAT: &str = "flat";
+
 /// A map's manifest.
 #[must_use]
 pub fn map_path(map: &str) -> String {
@@ -287,6 +291,11 @@ mod unit {
         assert_eq!(item_path(Item::DualPlus), "items/dual_plus.png");
         assert_eq!(item_path(Item::BigHeal), "items/big_heal.png");
         assert_eq!(drop_path(DropKind::Dynamite), "drops/dynamite.png");
+    }
+
+    #[test]
+    fn the_built_in_map_is_none_of_the_drawn_ones() {
+        assert!(!MAPS.contains(&FLAT), "{FLAT} names the server's synthetic field, which has no art");
     }
 
     #[test]

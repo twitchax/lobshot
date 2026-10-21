@@ -7,17 +7,19 @@
 //! each accepted event (`ServerMsg::Event`), and replay them with `lobshot_sim`. The server sends
 //! its state hash with every event, so a client that diverged knows at once.
 
+pub mod options;
 pub mod pacing;
+
+pub use options::RoomOptions;
 
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use lobshot_sim::{
     base::Res,
-    game::{Event, MobileKind, Shot, SuddenDeath, SuddenDeathKind, Team},
+    game::{Event, MobileKind, Shot, Team},
     items::Loadout,
     log::Log,
-    tuning::SUDDEN_DEATH_TURNS,
     units::{Facing, Power},
 };
 
@@ -79,59 +81,6 @@ pub enum Emote {
     Angry,
     Cool,
     GoodGame,
-}
-
-/// What the room master sets before a game.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RoomOptions {
-    /// A drawn map's name (`tidewall`), or `flat` for the synthetic test map.
-    pub map: String,
-    /// Players per team, 1 to 4.
-    pub team_size: u8,
-    /// The strongest wind the Wind weather may roll: 0, 12 or 26.
-    pub max_wind: u8,
-    /// The turn timer: 5, 10 or 20 seconds.
-    pub turn_seconds: u8,
-    /// Shuffle teams at the start instead of keeping members' picks.
-    pub random_teams: bool,
-    /// What sudden death does and when it starts (one of `SUDDEN_DEATH_TURNS`), or `None`.
-    pub sudden_death: Option<SuddenDeath>,
-}
-
-impl Default for RoomOptions {
-    fn default() -> Self {
-        Self {
-            map: "tidewall".to_owned(),
-            team_size: 1,
-            max_wind: 26,
-            turn_seconds: 20,
-            random_teams: false,
-            // A private server's changelog gives Double at 40 turns as the default (RD-origins snippet).
-            sudden_death: Some(SuddenDeath {
-                kind: SuddenDeathKind::Double,
-                turn: SUDDEN_DEATH_TURNS.value[0],
-            }),
-        }
-    }
-}
-
-impl RoomOptions {
-    /// Checks the ranges.
-    ///
-    /// # Errors
-    ///
-    /// Fails on a value the room can't use.
-    pub fn validate(&self) -> Res<()> {
-        ensure!((1..=4).contains(&self.team_size), "teams are 1 to 4 players, not {}", self.team_size);
-        ensure!([0, 12, 26].contains(&self.max_wind), "max wind is 0, 12 or 26, not {}", self.max_wind);
-        ensure!([5, 10, 20].contains(&self.turn_seconds), "turns are 5, 10 or 20 seconds, not {}", self.turn_seconds);
-        ensure!(!self.map.is_empty(), "pick a map");
-        if let Some(SuddenDeath { turn, .. }) = self.sudden_death {
-            let turns = SUDDEN_DEATH_TURNS.value;
-            ensure!(turns.contains(&turn), "sudden death starts at turn {turns:?}, not {turn}");
-        }
-        Ok(())
-    }
 }
 
 /// Someone in the room.

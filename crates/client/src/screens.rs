@@ -6,22 +6,16 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use lobshot_protocol::{ClientMsg, Member, MemberId, RoomOptions, RoomView, Token};
-use lobshot_sim::{
-    game::{MAX_SEATS, SuddenDeath, SuddenDeathKind, Team},
-    tuning::SUDDEN_DEATH_TURNS,
-};
+use lobshot_sim::game::{MAX_SEATS, Team};
 
 use crate::{
     assets::ImageCache,
-    model::{Screen, Session, sudden_death_name},
+    model::{Screen, Session},
     net::{Link, Socket},
     picks::{self, Picks},
     ui::{Clicked, UiAction, button, panel, small_button, team_color, text, theme},
     web::{self, Page, TextInput, Typed},
 };
-
-/// The synthetic map the server builds in, for testing: one flat field.
-const FLAT: &str = "flat";
 
 /// The root of whichever screen is up, so it can be torn down.
 #[derive(Component)]
@@ -427,39 +421,17 @@ fn describe(options: &RoomOptions) -> String {
     parts.push(
         options
             .sudden_death
-            .map_or_else(|| "no sudden death".to_owned(), |rule| format!("sudden death: {} at turn {}", sudden_death_name(rule.kind), rule.turn)),
+            .map_or_else(|| "no sudden death".to_owned(), |rule| format!("sudden death: {} at turn {}", rule.kind.name(), rule.turn)),
     );
     parts.join(", ")
 }
 
-/// The value after `current` in `values`, wrapping around; the first if `current` isn't there.
-fn next_of<T: PartialEq + Copy>(values: &[T], current: T) -> T {
-    let at = values.iter().position(|&value| value == current).map_or(0, |at| at + 1);
-    values.get(at % values.len().max(1)).copied().unwrap_or(current)
-}
-
-/// The map after `current`: the drawn maps in the lobby's order, then the synthetic `flat`.
-fn next_map(current: &str) -> &'static str {
-    let maps: Vec<&'static str> = lobshot_assets::MAPS.iter().copied().chain([FLAT]).collect();
-    let at = maps.iter().position(|&map| map == current).map_or(0, |at| at + 1);
-    maps[at % maps.len()]
-}
-
-/// The next sudden death: off, Big Bomb, Double, SS Death, then off again, keeping its turn.
-fn next_sudden_death(current: Option<SuddenDeath>) -> Option<SuddenDeath> {
-    let kinds = [None, Some(SuddenDeathKind::BigBomb), Some(SuddenDeathKind::Double), Some(SuddenDeathKind::SsDeath)];
-    let turn = current.map_or(SUDDEN_DEATH_TURNS.value[0], |rule| rule.turn);
-    next_of(&kinds, current.map(|rule| rule.kind)).map(|kind| SuddenDeath { kind, turn })
-}
-
 /// The master's option buttons: each one moves its option to the next value.
 fn options_row(screen: &mut ChildSpawnerCommands, options: &RoomOptions) {
-    let with = |change: &dyn Fn(&mut RoomOptions)| {
-        let mut options = options.clone();
-        change(&mut options);
-        UiAction::Configure(options)
-    };
+    // The lobby offers the drawn maps, then the server's flat field for testing.
+    let maps: Vec<&str> = lobshot_assets::MAPS.iter().copied().chain([lobshot_assets::FLAT]).collect();
     let on_off = |on: bool| if on { "on" } else { "off" };
+    let configure = UiAction::Configure;
     screen
         .spawn(Node {
             flex_wrap: FlexWrap::Wrap,
@@ -468,22 +440,19 @@ fn options_row(screen: &mut ChildSpawnerCommands, options: &RoomOptions) {
             ..default()
         })
         .with_children(|row| {
-            row.spawn(small_button(format!("Map: {}", options.map), with(&|o| next_map(&o.map).clone_into(&mut o.map))));
-            row.spawn(small_button(format!("Team size: {}", options.team_size), with(&|o| o.team_size = next_of(&[1, 2, 3, 4], o.team_size))));
-            row.spawn(small_button(format!("Max wind: {}", options.max_wind), with(&|o| o.max_wind = next_of(&[0, 12, 26], o.max_wind))));
-            row.spawn(small_button(
-                format!("Turn: {} s", options.turn_seconds),
-                with(&|o| o.turn_seconds = next_of(&[5, 10, 20], o.turn_seconds)),
-            ));
-            row.spawn(small_button(format!("Random teams: {}", on_off(options.random_teams)), with(&|o| o.random_teams = !o.random_teams)));
-            let sudden = options.sudden_death.map_or("off", |rule| sudden_death_name(rule.kind));
-            row.spawn(small_button(format!("Sudden death: {sudden}"), with(&|o| o.sudden_death = next_sudden_death(o.sudden_death))));
+            row.spawn(small_button(format!("Map: {}", options.map), configure(options.next_map(&maps))));
+            row.spawn(small_button(format!("Team size: {}", options.team_size), configure(options.next_team_size())));
+            row.spawn(small_button(format!("Max wind: {}", options.max_wind), configure(options.next_max_wind())));
+            row.spawn(small_button(format!("Turn: {} s", options.turn_seconds), configure(options.next_turn_seconds())));
+            let random_teams = RoomOptions {
+                random_teams: !options.random_teams,
+                ..options.clone()
+            };
+            row.spawn(small_button(format!("Random teams: {}", on_off(options.random_teams)), configure(random_teams)));
+            let sudden = options.sudden_death.map_or("off", |rule| rule.kind.name());
+            row.spawn(small_button(format!("Sudden death: {sudden}"), configure(options.next_sudden_death())));
             if let Some(rule) = options.sudden_death {
-                let turn = SuddenDeath {
-                    turn: next_of(&SUDDEN_DEATH_TURNS.value, rule.turn),
-                    ..rule
-                };
-                row.spawn(small_button(format!("At turn {}", rule.turn), with(&|o| o.sudden_death = Some(turn))));
+                row.spawn(small_button(format!("At turn {}", rule.turn), configure(options.next_sudden_death_turn())));
             }
         });
 }
@@ -632,39 +601,6 @@ mod unit {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-
-    #[test]
-    fn options_cycle_through_their_values_and_wrap() {
-        assert_eq!(next_of(&[1, 2, 3, 4], 1), 2);
-        assert_eq!(next_of(&[1, 2, 3, 4], 4), 1);
-        assert_eq!(next_of(&[0, 12, 26], 7), 0, "an unknown value starts over");
-        assert_eq!(next_of(&SUDDEN_DEATH_TURNS.value, 72), 40);
-    }
-
-    #[test]
-    fn maps_cycle_through_the_drawn_ones_then_flat() {
-        let mut seen = vec![lobshot_assets::MAPS[0]];
-        loop {
-            let next = next_map(seen.last().unwrap());
-            if next == seen[0] {
-                break;
-            }
-            seen.push(next);
-        }
-        let mut expected = lobshot_assets::MAPS.to_vec();
-        expected.push(FLAT);
-        assert_eq!(seen, expected);
-        assert_eq!(next_map("gone"), lobshot_assets::MAPS[0]);
-    }
-
-    #[test]
-    fn sudden_death_cycles_its_kinds_through_off_and_keeps_its_turn() {
-        let at = |kind, turn| Some(SuddenDeath { kind, turn });
-        assert_eq!(next_sudden_death(None), at(SuddenDeathKind::BigBomb, 40));
-        assert_eq!(next_sudden_death(at(SuddenDeathKind::BigBomb, 56)), at(SuddenDeathKind::Double, 56));
-        assert_eq!(next_sudden_death(at(SuddenDeathKind::Double, 72)), at(SuddenDeathKind::SsDeath, 72));
-        assert_eq!(next_sudden_death(at(SuddenDeathKind::SsDeath, 72)), None);
-    }
 
     #[test]
     fn everyone_else_reads_the_options_in_a_line() {

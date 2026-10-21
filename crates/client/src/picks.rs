@@ -2,7 +2,6 @@
 //! name and rider. The lobby and the garage edit them (`mobile_picker`, `loadout_editor`), practice
 //! plays with them, and in a room they go to the server whenever they differ from what it has.
 
-use anyhow::ensure;
 use bevy::{prelude::*, ui::InteractionDisabled};
 use lobshot_assets::ART_SCALE;
 use lobshot_protocol::{ClientMsg, Stage};
@@ -69,13 +68,13 @@ impl Picks {
     ///
     /// Fails, saying why, when the item doesn't fit.
     pub fn add(&mut self, item: Item) -> SimRes<()> {
-        self.loadout = add_item(&self.loadout, item)?;
+        self.loadout = self.loadout.with(item)?;
         self.save();
         Ok(())
     }
 
     pub fn remove(&mut self, position: u8) {
-        self.loadout = remove_item(&self.loadout, position);
+        self.loadout = self.loadout.without(position);
         self.save();
     }
 
@@ -115,38 +114,6 @@ pub fn role(mobile: Option<MobileKind>) -> &'static str {
         Some(MobileKind::Marblemole) => "A mine-cart mole. Its marbles bounce and roll into pits.",
         None => "Any of them: the room picks when the game starts.",
     }
-}
-
-/// The loadout slots still free.
-#[must_use]
-pub fn free_slots(loadout: &Loadout) -> u8 {
-    LOADOUT_SLOTS.value.saturating_sub(loadout.slots())
-}
-
-/// The loadout with `item` added at the end.
-///
-/// # Errors
-///
-/// Fails, saying why, when the item needs more slots than are free.
-pub fn add_item(loadout: &Loadout, item: Item) -> SimRes<Loadout> {
-    let (needs, free) = (item.slots(), free_slots(loadout));
-    ensure!(
-        needs <= free,
-        "{} needs {needs} {}, and {free} {} free.",
-        item.name(),
-        plural(needs, "slot", "slots"),
-        plural(free, "is", "are")
-    );
-    let items: Vec<Item> = loadout.items().chain([item]).collect();
-    Loadout::new(&items)
-}
-
-/// The loadout without the item at `position` (unchanged if there is none).
-#[must_use]
-pub fn remove_item(loadout: &Loadout, position: u8) -> Loadout {
-    let items: Vec<Item> = loadout.items().enumerate().filter(|&(at, _)| at != usize::from(position)).map(|(_, item)| item).collect();
-    // Fewer items than a legal loadout always fit.
-    Loadout::new(&items).unwrap_or(*loadout)
 }
 
 fn plural(count: u8, one: &'static str, many: &'static str) -> &'static str {
@@ -259,7 +226,7 @@ const SLOT_GAP: f32 = 6.0;
 /// item with its costs (click one to add it). An item that doesn't fit can't be added, so an
 /// over-full loadout never reaches the server.
 pub fn loadout_editor(parent: &mut ChildSpawnerCommands, picks: &Picks, server: &AssetServer, cache: &mut ImageCache) {
-    let free = free_slots(&picks.loadout);
+    let free = picks.loadout.free_slots();
     parent
         .spawn(Node {
             align_items: AlignItems::Center,
@@ -439,31 +406,6 @@ mod unit {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-
-    #[test]
-    fn items_add_until_the_slots_run_out() {
-        let mut loadout = Loadout::default();
-        for item in [Item::Dual, Item::Teleport, Item::Heal] {
-            loadout = add_item(&loadout, item).unwrap();
-        }
-        assert_eq!(free_slots(&loadout), 1);
-        let refused = add_item(&loadout, Item::Thunder).map(|_| ()).unwrap_err().to_string();
-        assert_eq!(refused, "Thunder needs 2 slots, and 1 is free.");
-        let full = add_item(&loadout, Item::Dig).unwrap();
-        assert_eq!(full.slots(), 6);
-        assert_eq!(full.items().collect::<Vec<_>>(), vec![Item::Dual, Item::Teleport, Item::Heal, Item::Dig], "in the order added");
-        let refused = add_item(&full, Item::Heal).map(|_| ()).unwrap_err().to_string();
-        assert_eq!(refused, "Heal needs 1 slot, and 0 are free.");
-    }
-
-    #[test]
-    fn removing_takes_out_one_position_and_keeps_the_order() {
-        let loadout = Loadout::new(&[Item::Heal, Item::Dual, Item::Heal]).unwrap();
-        let removed = remove_item(&loadout, 1);
-        assert_eq!(removed.items().collect::<Vec<_>>(), vec![Item::Heal, Item::Heal]);
-        assert_eq!(remove_item(&loadout, 5), loadout, "no item there");
-        assert_eq!(remove_item(&Loadout::default(), 0), Loadout::default());
-    }
 
     #[test]
     fn the_starter_loadout_is_full_and_legal() {

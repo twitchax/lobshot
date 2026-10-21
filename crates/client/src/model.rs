@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use bevy::prelude::*;
 use lobshot_protocol::{MemberId, RoomCode, RoomView, ServerMsg, Stage};
 use lobshot_sim::{
-    game::{Effect, Event, Game, Phase, Player, Shot, SuddenDeath, SuddenDeathKind, Team},
+    game::{Effect, Event, Game, Player, SuddenDeath, SuddenDeathKind, Team},
     log::Log,
     map::{MapAssets, MapRef},
 };
@@ -159,20 +159,6 @@ impl Match {
         sudden(self.predicted.sudden_death(), self.log.setup.sudden_death, self.predicted.turns())
     }
 
-    /// Whether `seat` may pick SS, and if not, why. On the seat's own turn the sim has the last
-    /// word (an armed Dual or Dual+ fires no SS either).
-    #[must_use]
-    pub fn ss(&self, seat: u8) -> Ss {
-        let Some(player) = self.player(seat) else { return Ss::Off };
-        let shown = ss(self.sudden_death(), player.ss_lock);
-        let deciding = self.predicted.phase() == (Phase::Turn { seat }) && self.predicted.pending_roll().is_none();
-        if shown == Ss::Ready && deciding && !self.predicted.can_shoot(seat, Shot::Ss) {
-            Ss::Off
-        } else {
-            shown
-        }
-    }
-
     /// Applies the server's next event; returns its effects for playback.
     fn confirm(&mut self, event: Event, hash: u64) -> Vec<Effect> {
         let effects = match self.confirmed.apply(event) {
@@ -226,38 +212,6 @@ pub fn sudden(on: Option<SuddenDeathKind>, rule: Option<SuddenDeath>, turns: i64
         (Some(kind), _) => Sudden::On(kind),
         (None, Some(SuddenDeath { kind, turn })) if i64::from(turn) > turns => Sudden::In { turns: i64::from(turn) - turns, kind },
         (None, _) => Sudden::Never,
-    }
-}
-
-/// A sudden death's player-facing name.
-#[must_use]
-pub fn sudden_death_name(kind: SuddenDeathKind) -> &'static str {
-    match kind {
-        SuddenDeathKind::BigBomb => "Big Bomb",
-        SuddenDeathKind::Double => "Double",
-        SuddenDeathKind::SsDeath => "SS Death",
-    }
-}
-
-/// Whether a player may pick SS.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ss {
-    Ready,
-    /// Locked for this many more of the player's own turns.
-    Locked(u8),
-    /// Off: for the rest of the game (Big Bomb and Double sudden deaths), or this turn (the sim
-    /// refuses it, as with Dual armed).
-    Off,
-}
-
-/// SS as the HUD shows it for a player with `ss_lock` own turns to wait: SS Death lifts the lock,
-/// Big Bomb and Double take SS away.
-#[must_use]
-pub fn ss(sudden: Sudden, ss_lock: u8) -> Ss {
-    match sudden {
-        Sudden::On(SuddenDeathKind::BigBomb | SuddenDeathKind::Double) => Ss::Off,
-        Sudden::Never | Sudden::In { .. } if ss_lock > 0 => Ss::Locked(ss_lock),
-        Sudden::On(SuddenDeathKind::SsDeath) | Sudden::Never | Sudden::In { .. } => Ss::Ready,
     }
 }
 
@@ -393,9 +347,9 @@ pub fn finish_loading(loading: Option<Res<Loading>>, mut masks: Masks, mut comma
 fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, picks: Res<Picks>, clock: Res<TurnClock>, sounds: Res<SoundLog>, buttons: Res<ButtonSpots>) {
     let seat = session.my_seat();
     let me = game.as_deref().zip(seat).and_then(|(game, seat)| {
-        game.player(seat).map(|player| web::Me {
-            player,
-            ss: game.ss(seat),
+        Some(web::Me {
+            player: game.player(seat)?,
+            ss: game.predicted.ss_state(seat).ok()?,
             can_spin: game.confirmed.can_spin(seat),
         })
     });
@@ -435,7 +389,7 @@ mod unit {
         game::{MobileKind, Roll, Seat, Setup},
         items::{Item, Loadout},
         map::NoAssets,
-        units::{Facing, Wind},
+        units::{Centis, Facing, Wind},
         weather::{Forecast, WeatherKind},
     };
 
@@ -511,18 +465,7 @@ mod unit {
     }
 
     #[test]
-    fn ss_follows_its_lock_until_sudden_death_decides() {
-        let before = Sudden::In { turns: 5, kind: SuddenDeathKind::BigBomb };
-        assert_eq!(ss(Sudden::Never, 0), Ss::Ready);
-        assert_eq!(ss(Sudden::Never, 3), Ss::Locked(3));
-        assert_eq!(ss(before, 2), Ss::Locked(2));
-        assert_eq!(ss(Sudden::On(SuddenDeathKind::SsDeath), 3), Ss::Ready, "SS every turn");
-        assert_eq!(ss(Sudden::On(SuddenDeathKind::BigBomb), 0), Ss::Off);
-        assert_eq!(ss(Sudden::On(SuddenDeathKind::Double), 0), Ss::Off);
-    }
-
-    #[test]
-    fn a_match_reads_ss_and_sudden_death_from_the_sim() {
+    fn a_match_reads_sudden_death_from_the_sim_and_its_setup() {
         let mut setup = setup(&[Item::Dual]);
         setup.sudden_death = Some(SuddenDeath { kind: SuddenDeathKind::BigBomb, turn: 40 });
         let game = Game::new(&setup, &NoAssets).unwrap();
@@ -535,10 +478,16 @@ mod unit {
                 kind: SuddenDeathKind::BigBomb
             }
         );
-        assert_eq!(game.ss(0), Ss::Ready);
-        // Seat 0 moves first and arms Dual, which fires no SS.
-        game.referee(Event::UseItem { seat: 0, slot: 0 }).unwrap();
-        assert_eq!(game.ss(0), Ss::Off);
-        assert_eq!(game.ss(1), Ss::Ready, "not its turn: its lock decides");
+        // Seat 0 moves first; the countdown counts the turns the log has done.
+        let before = game.applied();
+        game.referee(Event::Pass { seat: 0, time: Centis(0) }).unwrap();
+        assert_eq!(game.applied(), before + 1, "the log grows with each event");
+        assert_eq!(
+            game.sudden_death(),
+            Sudden::In {
+                turns: 39,
+                kind: SuddenDeathKind::BigBomb
+            }
+        );
     }
 }

@@ -10,17 +10,14 @@ use std::{
 
 use anyhow::{Context as _, ensure};
 
-use lobshot_assets::{MapInfo, map_path, mask_path};
+use lobshot_assets::{FLAT, MapInfo, map_path, mask_path};
 use lobshot_sim::{
     base::{Res, Void},
     map::{MapAssets, MapRef},
     terrain::Terrain,
 };
 
-/// The synthetic test map's name.
-pub const FLAT: &str = "flat";
-
-/// `flat`: one field, two screens wide.
+/// `flat` (`lobshot_assets::FLAT`): one field, two screens wide.
 const FLAT_WIDTH: u32 = 1600;
 const FLAT_MAP: MapRef = MapRef::Flat {
     width: FLAT_WIDTH,

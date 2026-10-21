@@ -6,7 +6,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
     drops::DropKind,
-    game::{Effect, Game, Shot},
+    game::{Effect, Game, Shot, SsState},
     items::Item,
     units::Vec2 as SimVec2,
     weather::WeatherKind,
@@ -21,7 +21,7 @@ use super::{
 };
 use crate::{
     assets::ImageCache,
-    model::{Match, Played, Screen, Session, Ss, Sudden, sudden_death_name},
+    model::{Match, Played, Screen, Session, Sudden},
     picks,
     ui::{Clicked, UiAction, art, button, button_node, chosen, panel, team_color, text, theme},
 };
@@ -255,7 +255,7 @@ fn slot_machine_parts(machine: &mut ChildSpawnerCommands, server: &AssetServer, 
             reel.spawn((ReelFace(None), face(true), children![text("?", 36.0, theme::ACCENT)]));
             for kind in DropKind::ALL {
                 let image = cache.get(server, lobshot_assets::drop_path(kind));
-                reel.spawn((ReelFace(Some(kind)), face(false), children![art(image, drop_name(kind), Vec2::splat(56.0), 12.0)]));
+                reel.spawn((ReelFace(Some(kind)), face(false), children![art(image, kind.name(), Vec2::splat(56.0), 12.0)]));
             }
         });
     machine.spawn((SpinButton, button("Spin", UiAction::Spin)));
@@ -265,19 +265,6 @@ fn slot_machine_parts(machine: &mut ChildSpawnerCommands, server: &AssetServer, 
         TextLayout::justify(Justify::Center),
         Node { max_width: Val::Px(130.0), ..default() },
     ));
-}
-
-/// A drop's player-facing name.
-#[must_use]
-fn drop_name(kind: DropKind) -> &'static str {
-    match kind {
-        DropKind::Dynamite => "Dynamite",
-        DropKind::Hammer => "Hammer",
-        DropKind::Bolt => "Bolt",
-        DropKind::Chest => "Chest",
-        DropKind::Calm => "Calm",
-        DropKind::Reverse => "Reverse",
-    }
 }
 
 /// Shots, angle, pass and chat; then the power bar and the move bar.
@@ -381,11 +368,11 @@ fn delay_label(delay: i64, base: Option<i64>, yours: bool) -> String {
 }
 
 /// The SS button's label: its lock in own turns left, or that sudden death took it.
-fn ss_label(ss: Ss) -> String {
+fn ss_label(ss: SsState) -> String {
     match ss {
-        Ss::Ready => shot_label(Shot::Ss).to_owned(),
-        Ss::Locked(turns) => format!("SS in {turns}"),
-        Ss::Off => "SS off".to_owned(),
+        SsState::Ready => shot_label(Shot::Ss).to_owned(),
+        SsState::Locked(turns) => format!("SS in {turns}"),
+        SsState::Off(_) | SsState::Armed(_) => "SS off".to_owned(),
     }
 }
 
@@ -395,7 +382,7 @@ fn sudden_label(sudden: Sudden) -> String {
         Sudden::Never => String::new(),
         Sudden::In { turns: 1, .. } => "Sudden death next turn".to_owned(),
         Sudden::In { turns, .. } => format!("Sudden death in {turns} turns"),
-        Sudden::On(kind) => format!("Sudden death: {}", sudden_death_name(kind)),
+        Sudden::On(kind) => format!("Sudden death: {}", kind.name()),
     }
 }
 
@@ -498,7 +485,7 @@ fn weather_and_turns(game: Option<Res<Match>>, session: Res<Session>, controls: 
         }
     }
     // Spectators see SS as ready: it isn't theirs to lock.
-    let ss = session.my_seat().map_or(Ss::Ready, |seat| game.ss(seat));
+    let ss = session.my_seat().and_then(|seat| game.predicted.ss_state(seat).ok()).unwrap_or(SsState::Ready);
     for (entity, tab, mut border, mut node, children) in &mut lists.tabs {
         let selected = tab.0 == controls.shot;
         node.border = UiRect::all(Val::Px(if selected { 2.0 } else { 0.0 }));
@@ -514,7 +501,7 @@ fn weather_and_turns(game: Option<Res<Match>>, session: Res<Session>, controls: 
                 (**text).clone_from(&label);
             }
         }
-        if ss == Ss::Ready {
+        if ss == SsState::Ready {
             commands.entity(entity).remove::<InteractionDisabled>();
         } else {
             commands.entity(entity).insert(InteractionDisabled);
@@ -569,7 +556,7 @@ fn banner(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>
     } else if let Some((kind, at)) = herald.0
         && now - at < SUDDEN_BANNER_SECONDS
     {
-        format!("Sudden death: {}! Items are off.", sudden_death_name(kind))
+        format!("Sudden death: {}! Items are off.", kind.name())
     } else {
         String::new()
     };
@@ -840,7 +827,7 @@ fn slot_machine(game: Option<Res<Match>>, session: Res<Session>, mut machine: Ma
     }
     let status = match (whirling, machine.reel.landed, can_spin) {
         (true, _, _) => "Spinning...".to_owned(),
-        (false, Some(kind), _) => format!("{}! Look out below.", drop_name(kind)),
+        (false, Some(kind), _) => format!("{}! Look out below.", kind.name()),
         (false, None, true) => "Spin to drop trouble on the living.".to_owned(),
         (false, None, false) => "The machine is resting.".to_owned(),
     };
@@ -894,7 +881,7 @@ fn drop_markers(game: Option<Res<Match>>, markers: Query<Entity, With<DropMarker
         commands.spawn((
             GameRoot,
             DropMarker,
-            Text2d::new(format!("{} in {}", drop_name(drop.kind), drop.turns)),
+            Text2d::new(format!("{} in {}", drop.kind.name(), drop.turns)),
             TextFont {
                 font_size: bevy::text::FontSize::Px(14.0),
                 ..default()
@@ -955,9 +942,10 @@ mod unit {
 
     #[test]
     fn the_ss_button_shows_its_lock() {
-        assert_eq!(ss_label(Ss::Ready), "SS");
-        assert_eq!(ss_label(Ss::Locked(3)), "SS in 3");
-        assert_eq!(ss_label(Ss::Off), "SS off");
+        assert_eq!(ss_label(SsState::Ready), "SS");
+        assert_eq!(ss_label(SsState::Locked(3)), "SS in 3");
+        assert_eq!(ss_label(SsState::Off(lobshot_sim::game::SuddenDeathKind::Double)), "SS off");
+        assert_eq!(ss_label(SsState::Armed(Item::Dual)), "SS off");
     }
 
     #[test]

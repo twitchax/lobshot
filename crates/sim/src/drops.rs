@@ -38,6 +38,19 @@ pub enum DropKind {
 impl DropKind {
     /// Every drop; the server rolls one uniformly.
     pub const ALL: [Self; 6] = [Self::Dynamite, Self::Hammer, Self::Bolt, Self::Chest, Self::Calm, Self::Reverse];
+
+    /// The player-facing name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Dynamite => "Dynamite",
+            Self::Hammer => "Hammer",
+            Self::Bolt => "Bolt",
+            Self::Chest => "Chest",
+            Self::Calm => "Calm",
+            Self::Reverse => "Reverse",
+        }
+    }
 }
 
 /// A rolled drop: what, and the column it falls down.
@@ -153,6 +166,15 @@ mod unit {
         game::{MobileKind, testing::duel_of},
         units::Wind,
     };
+
+    #[test]
+    fn every_drop_has_its_own_name() {
+        let mut names: Vec<&str> = DropKind::ALL.iter().map(|kind| kind.name()).collect();
+        assert!(names.iter().all(|name| !name.is_empty()));
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), DropKind::ALL.len());
+    }
 
     /// Lands `kind` on seat 1's column of a duel at once, and returns what it did.
     fn land_on_seat_1(kind: DropKind, wind: Wind) -> (Game, Vec<Effect>) {

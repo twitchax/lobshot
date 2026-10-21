@@ -158,6 +158,40 @@ impl Loadout {
     pub fn positions(&self) -> [Option<Item>; MAX_ITEMS] {
         self.0
     }
+
+    /// The slots still free.
+    #[must_use]
+    pub fn free_slots(&self) -> u8 {
+        LOADOUT_SLOTS.value.saturating_sub(self.slots())
+    }
+
+    /// This loadout with `item` added at the end.
+    ///
+    /// # Errors
+    ///
+    /// Fails, saying why in words a player reads, when the item needs more slots than are free.
+    pub fn with(&self, item: Item) -> Res<Self> {
+        let (needs, free) = (item.slots(), self.free_slots());
+        let plural = |count: u8, one: &'static str, many: &'static str| if count == 1 { one } else { many };
+        ensure!(
+            needs <= free,
+            "{} needs {needs} {}, and {free} {} free.",
+            item.name(),
+            plural(needs, "slot", "slots"),
+            plural(free, "is", "are")
+        );
+        let items: Vec<Item> = self.items().chain([item]).collect();
+        Self::new(&items)
+    }
+
+    /// This loadout without the item at `position`, the rest keeping their order (unchanged if
+    /// there is none).
+    #[must_use]
+    pub fn without(&self, position: u8) -> Self {
+        let items: Vec<Item> = self.items().enumerate().filter(|&(at, _)| at != usize::from(position)).map(|(_, item)| item).collect();
+        // Fewer items than a legal loadout always fit.
+        Self::new(&items).unwrap_or(*self)
+    }
 }
 
 /// Spends `seat`'s item at `slot` and does what it does at once; the caller has checked it may
@@ -250,6 +284,28 @@ mod unit {
         assert_eq!(serde_json::from_str::<Loadout>(&json).unwrap(), loadout);
         assert_eq!(postcard::from_bytes::<Loadout>(&postcard::to_allocvec(&loadout).unwrap()).unwrap(), loadout);
         assert!(serde_json::from_str::<Loadout>(r#"["Dual","Dual","Dual","Heal"]"#).is_err());
+    }
+
+    #[test]
+    fn items_add_until_the_slots_run_out() {
+        let loadout = [Item::Dual, Item::Teleport, Item::Heal]
+            .into_iter()
+            .fold(Loadout::default(), |loadout, item| loadout.with(item).unwrap());
+        assert_eq!(loadout.free_slots(), 1);
+        assert_eq!(loadout.with(Item::Thunder).unwrap_err().to_string(), "Thunder needs 2 slots, and 1 is free.");
+        let full = loadout.with(Item::Dig).unwrap();
+        assert_eq!(full.slots(), 6);
+        assert_eq!(full.free_slots(), 0);
+        assert_eq!(full.items().collect::<Vec<_>>(), [Item::Dual, Item::Teleport, Item::Heal, Item::Dig], "in the order added");
+        assert_eq!(full.with(Item::Heal).unwrap_err().to_string(), "Heal needs 1 slot, and 0 are free.");
+    }
+
+    #[test]
+    fn removing_takes_out_one_position_and_keeps_the_order() {
+        let loadout = Loadout::new(&[Item::Heal, Item::Dual, Item::Heal]).unwrap();
+        assert_eq!(loadout.without(1).items().collect::<Vec<_>>(), [Item::Heal, Item::Heal]);
+        assert_eq!(loadout.without(5), loadout, "no item there");
+        assert_eq!(Loadout::default().without(0), Loadout::default());
     }
 
     #[test]
