@@ -144,9 +144,11 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
 /// second spectator follows in JSON; each replays the log it receives and checks the server's
 /// hash after every event. Bots play at once and turns start at once, since no one watches.
 ///
-/// "Items used" needs the M3 rules (PRD-0004 T-002): `main`'s bots use none. "Sudden death
-/// reached" (a turn played past turn 40) holds already: these games run 56 to 84 turns on `main`
-/// (20 seeds), and the four items each bot brings shouldn't cut that by a third.
+/// Sudden death is set up, not necessarily reached: SearchBot fires S2 and SS when they do more,
+/// at two to three times S1's damage, so eight bots facing each other 300 px apart on `flat` end
+/// in 25 to 60 turns, past turn 40 in a quarter of games (12 seeded sim games; S1-only bots ran
+/// 44 to 78). Rooms only offer 40, 56 and 72, so this test can't start it sooner. The sim's golden
+/// replays (`brawl_4v4`, `duel_big_bomb`, `duel_ss_death`) play each kind through.
 #[tokio::test(flavor = "multi_thread")]
 async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
     let cwd = TempDir::new().unwrap();
@@ -191,5 +193,4 @@ async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
 
     let items = log.events.iter().filter(|event| matches!(event, Event::UseItem { .. })).count();
     assert!(items > 0, "the bots used no items in {} turns", game.turns());
-    assert!(game.turns() > i64::from(sudden_death.turn), "the game ended after {} turns, before sudden death", game.turns());
 }
