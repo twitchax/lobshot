@@ -18,7 +18,9 @@ pub const MOBILE: MobileTuning = MobileTuning {
     item_surcharge: picked(0, "Only Armor pays extra for items (SW-mds)."),
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.25 bars, zero wind, flat ground."),
     // Boomer is "extremely sensitive" to wind (WP06). DBR's coefficients make it 1.9 times Armor's
-    // (1.395 against 0.74, clone, unverified); UC-boomer's hook asks for more (CONTRADICTION).
+    // (1.395 against 0.74, clone, unverified); UC-boomer's hook asks for more (CONTRADICTION). The
+    // fit is to UC-boomer's saving, not its powers: it puts the calm 70-degree shot at 2.8 bars,
+    // where CR-fixed's 2.25 at 60 degrees puts it at 2.64 (CONTRADICTION).
     wind_sensitivity: fitted(
         WIND_SENSITIVITY,
         &["UC-boomer"],
@@ -69,8 +71,8 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites these lines: gravity first (in calm air), then the wind sensitivity on top of it.
-const GRAVITY: f64 = 524.6;
-const WIND_SENSITIVITY: f64 = 2.9;
+const GRAVITY: f64 = 530.7;
+const WIND_SENSITIVITY: f64 = 2.46;
 
 /// S1: a light boomerang; its hook comes from the wind (`WIND_SENSITIVITY`).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 120, max: 160 }, &["DB-mob"]);

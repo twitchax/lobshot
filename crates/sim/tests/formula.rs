@@ -3,10 +3,10 @@
 //! formulas are in, which are out and why, and how the fitted constants were found (the ignored
 //! `tool_fit` below).
 //!
-//! The setup is a duel on flat ground: Coilback (Armor's behavior, GunBound's reference shot) at
-//! x = 300 facing right, the target `distance` px away. "Ideal power" is the continuous power whose
-//! flight passes through the target's hitbox center. Aim limits don't apply here: the formulas are
-//! about the ballistics.
+//! The setup is a duel on flat ground: the shooter (Coilback, Armor's behavior and GunBound's
+//! reference shot, unless a test says otherwise) at x = 300 facing right, and a Coilback target
+//! `distance` px away. "Ideal power" is the continuous power whose flight passes through the
+//! target's hitbox center. Aim limits don't apply here: the formulas are about the ballistics.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -15,20 +15,38 @@ use lobshot_sim::{
     game::{Game, MobileKind, Seat, Setup, Team},
     items::Loadout,
     map::{MapRef, NoAssets},
-    tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, coilback},
+    tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT},
     units::{Facing, Vec2, Wind},
 };
 
 const TOLERANCE_BARS: f64 = 0.05;
 
+/// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub).
+const CBCHUI: [(MobileKind, f64); 5] = [
+    (MobileKind::Coilback, 2.45),
+    (MobileKind::Lanternwing, 2.38),
+    (MobileKind::Hookclaw, 2.25),
+    (MobileKind::Sparkhorn, 2.30),
+    (MobileKind::Marblemole, 2.33),
+];
+
+/// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
+/// shot.
+const BOOMER_HOOK: (i16, u8, f64) = (70, 10, 0.45);
+
 fn duel(distance: i32) -> Game {
+    duel_of(MobileKind::Coilback, distance)
+}
+
+fn duel_of(shooter: MobileKind, distance: i32) -> Game {
     Game::new(
         &Setup {
             map: MapRef::Flat { width: 3200, height: 800, ground: 700 },
             seats: vec![
                 Seat {
                     team: Team::A,
-                    mobile: MobileKind::Coilback,
+                    mobile: shooter,
                     spawn_x: 300,
                     facing: Facing::Right,
                     items: Loadout::default(),
@@ -98,8 +116,21 @@ fn ideal_power(game: &Game, aim: i16, accel: Vec2) -> f64 {
 
 /// The tuned acceleration on Coilback's shots in `wind`.
 fn tuned(wind: Wind) -> Vec2 {
-    let mobile = &coilback::MOBILE;
+    tuned_for(MobileKind::Coilback, wind)
+}
+
+/// The tuned acceleration on `mobile`'s shots in `wind`.
+fn tuned_for(mobile: MobileKind, wind: Wind) -> Vec2 {
+    let mobile = mobile.tuning();
     ballistics::acceleration(mobile.gravity.value, wind, mobile.wind_sensitivity.value)
+}
+
+/// How many bars `wind` toward the target saves `mobile` at `aim` over one screen, with gravity
+/// `gravity` and wind sensitivity `sensitivity`.
+fn wind_saving(mobile: MobileKind, aim: i16, wind: Wind, gravity: f64, sensitivity: f64) -> f64 {
+    let game = duel_of(mobile, 800);
+    let calm = ideal_power(&game, aim, ballistics::acceleration(gravity, Wind::default(), sensitivity));
+    calm - ideal_power(&game, aim, ballistics::acceleration(gravity, wind, sensitivity))
 }
 
 /// The whole-degree aim that lands closest to the target's center at a fixed power. Every reachable
@@ -122,6 +153,24 @@ fn assert_bars(name: &str, actual: f64, expected: f64) {
 fn formula_cbchui_fixed_power_60_degrees_lands_one_screen() {
     // CR-fixed: Armor's fixed power, 60 degrees = 1 screen, zero wind.
     assert_bars("cbchui", ideal_power(&duel(800), 60, tuned(Wind::default())), 2.45);
+}
+
+#[test]
+fn formula_cbchui_fixed_power_by_mobile() {
+    // CR-fixed, per mobile: each fitted gravity puts 60 degrees one screen away at its chart power.
+    for (mobile, bars) in CBCHUI {
+        assert_bars(&format!("cbchui {mobile:?}"), ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())), bars);
+    }
+}
+
+#[test]
+fn formula_boomer_hooks_with_the_wind() {
+    // UC-boomer: Hookclaw's wind sensitivity saves it about 0.45 bars with 10 wind behind a
+    // 70-degree, one-screen shot.
+    let (aim, strength, saving) = BOOMER_HOOK;
+    let tuning = MobileKind::Hookclaw.tuning();
+    let saved = wind_saving(MobileKind::Hookclaw, aim, Wind::new(strength, 0).unwrap(), tuning.gravity.value, tuning.wind_sensitivity.value);
+    assert_bars("boomer hook", saved, saving);
 }
 
 #[test]
@@ -160,23 +209,55 @@ fn formula_side_wind_moves_the_angle_half_a_degree_per_unit() {
     }
 }
 
-/// Derives the fitted constants: Coilback's gravity (cbchui), then the vertical and horizontal
-/// wind factors. Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`
-/// and copy the printed values into `sim::tuning`.
-#[test]
-#[ignore = "a tool, not a test: prints the fitted constants"]
-fn tool_fit() {
-    let game = duel(800);
-    let bisect = |mut low: f64, mut high: f64, too_low: &dyn Fn(f64) -> bool| {
-        for _ in 0..60 {
-            let mid = f64::midpoint(low, high);
-            if too_low(mid) { low = mid } else { high = mid }
-        }
-        f64::midpoint(low, high)
-    };
+fn bisect(mut low: f64, mut high: f64, too_low: &dyn Fn(f64) -> bool) -> f64 {
+    for _ in 0..60 {
+        let mid = f64::midpoint(low, high);
+        if too_low(mid) { low = mid } else { high = mid }
+    }
+    f64::midpoint(low, high)
+}
 
-    // Heavier gravity needs more power: find g where 60 degrees needs exactly 2.45 bars.
-    let gravity = bisect(100.0, 2000.0, &|g| ideal_power(&game, 60, Vec2::new(0.0, g)) < 2.45);
+/// The gravity that lands 60 degrees one screen away at `bars` for `mobile`, in zero wind. Heavier
+/// gravity needs more power.
+fn fit_gravity(mobile: MobileKind, bars: f64) -> f64 {
+    let game = duel_of(mobile, 800);
+    bisect(100.0, 2000.0, &|g| ideal_power(&game, 60, Vec2::new(0.0, g)) < bars)
+}
+
+/// Rewrites `const {name}: f64 = ...;` in `crates/sim/src/tuning/{file}` to `value`.
+fn rewrite(file: &str, name: &str, value: &str) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tuning").join(file);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let prefix = format!("const {name}: f64 = ");
+    let line = text.lines().find(|line| line.starts_with(&prefix)).unwrap_or_else(|| panic!("no {prefix}... in {file}"));
+    std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
+}
+
+/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
+/// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
+/// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
+/// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
+/// acceptance tests (and re-record the golden replays if the constants moved).
+#[test]
+#[ignore = "a tool, not a test: rewrites the fitted constants"]
+fn tool_fit() {
+    for (mobile, bars) in CBCHUI.into_iter().skip(1) {
+        let gravity = fit_gravity(mobile, bars);
+        let file = format!("{}.rs", mobile.tuning().name.to_lowercase());
+        rewrite(&file, "GRAVITY", &format!("{gravity:.1}"));
+        println!("{mobile:?} gravity: {gravity:.1}");
+        if mobile == MobileKind::Hookclaw {
+            // More sensitivity saves more power: find the one that saves exactly UC-boomer's.
+            let (aim, strength, saving) = BOOMER_HOOK;
+            let tail = Wind::new(strength, 0).unwrap();
+            let sensitivity = bisect(0.0, 10.0, &|s| wind_saving(mobile, aim, tail, gravity, s) < saving);
+            rewrite(&file, "WIND_SENSITIVITY", &format!("{sensitivity:.2}"));
+            println!("{mobile:?} wind sensitivity: {sensitivity:.2}");
+        }
+    }
+
+    let game = duel(800);
+    let gravity = fit_gravity(MobileKind::Coilback, 2.45);
     println!("coilback gravity: {gravity:.1}");
 
     // Up-wind 7 should save exactly 0.1 bar.

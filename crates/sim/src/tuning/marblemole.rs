@@ -63,7 +63,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 562.6;
+const GRAVITY: f64 = 569.1;
 
 /// S1: the weakest shot in the game (DB-mob).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 80, max: 130 }, &["DB-mob"]);

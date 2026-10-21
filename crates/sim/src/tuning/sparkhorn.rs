@@ -67,7 +67,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 548.2;
+const GRAVITY: f64 = 548.3;
 
 /// The flat damage a bolt's splash deals each mobile within `BOLT_REACH` of its path, once a turn
 /// even with Dual (GF-max, WP06). Splash ignores armor, angle, weather and items (GF-max).

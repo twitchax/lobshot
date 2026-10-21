@@ -63,7 +63,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 587.0;
+const GRAVITY: f64 = 587.1;
 
 /// S1: a laser bolt with good bunge (DB-mob).
 pub const S1_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 100, max: 160 }, &["DB-mob"]);
