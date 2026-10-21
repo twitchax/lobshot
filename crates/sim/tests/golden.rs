@@ -12,8 +12,8 @@ use pretty_assertions::assert_eq;
 
 use lobshot_sim::{
     drops::{Drop, DropKind},
-    game::{Contact, Event, Game, MobileKind, Phase, Roll, Seat, Setup, Shot, Team},
-    items::Loadout,
+    game::{Contact, Effect, Event, Game, MAX_SEATS, MobileKind, Phase, Roll, Seat, Setup, Shot, SuddenDeath, SuddenDeathKind, Team},
+    items::{Item, Loadout, MAX_ITEMS},
     log::Log,
     map::{MapRef, NoAssets},
     units::{Centis, Facing, Power, Wind},
@@ -30,7 +30,22 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         51,
         0x84c1_a385_0145_7872,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 87, 0x8470_0778_5c46_dbaa),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 101, 0x4ef2_0c93_4e51_5777),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 195, 0x4c31_93f2_dd87_71e0),
+    (
+        "duel_big_bomb",
+        include_str!("golden/duel_big_bomb.json"),
+        include_bytes!("golden/duel_big_bomb.bin"),
+        41,
+        0xee74_06ff_a586_5d10,
+    ),
+    (
+        "duel_ss_death",
+        include_str!("golden/duel_ss_death.json"),
+        include_bytes!("golden/duel_ss_death.bin"),
+        34,
+        0xee25_4124_2c05_083f,
+    ),
 ];
 
 #[test]
@@ -50,6 +65,40 @@ fn golden_games_finish() {
         let game = Log::from_json(json).unwrap().replay(&NoAssets).unwrap();
         assert!(matches!(game.phase(), Phase::Over { .. }), "{name} ends in a finished game");
     }
+}
+
+#[test]
+fn golden_games_play_every_m3_rule() {
+    // Every item used, SS locked, each sudden death begun, a drop landed, and every mobile fired.
+    let mut items = Vec::new();
+    let mut sudden_deaths = Vec::new();
+    let mut mobiles = Vec::new();
+    let (mut locked, mut dropped) = (false, false);
+    for &(_, json, ..) in GOLDEN {
+        let log = Log::from_json(json).unwrap();
+        let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+        for event in &log.events {
+            for effect in game.apply(*event).unwrap() {
+                match effect {
+                    Effect::ItemUsed { item, .. } => items.push(item),
+                    Effect::SuddenDeath { kind } => sudden_deaths.push(kind),
+                    Effect::Volley { seat, .. } => mobiles.push(game.players()[usize::from(seat)].mobile),
+                    Effect::SsLocked { .. } => locked = true,
+                    Effect::Dropped { .. } => dropped = true,
+                    _ => {}
+                }
+            }
+        }
+    }
+    assert!(Item::ALL.iter().all(|item| items.contains(item)), "items used: {items:?}");
+    assert!(
+        [SuddenDeathKind::BigBomb, SuddenDeathKind::Double, SuddenDeathKind::SsDeath]
+            .iter()
+            .all(|kind| sudden_deaths.contains(kind)),
+        "sudden deaths begun: {sudden_deaths:?}"
+    );
+    assert!(MobileKind::ALL.iter().all(|mobile| mobiles.contains(mobile)), "mobiles that fired: {mobiles:?}");
+    assert!(locked && dropped, "SS locked: {locked}; a drop landed: {dropped}");
 }
 
 // ── Recording ────────────────────────────────────────────────────────────────
@@ -76,81 +125,159 @@ fn tool_record() {
 }
 
 fn seat(team: Team, spawn_x: i32, facing: Facing) -> Seat {
+    armed(team, MobileKind::Coilback, spawn_x, facing, &[])
+}
+
+fn armed(team: Team, mobile: MobileKind, spawn_x: i32, facing: Facing, items: &[Item]) -> Seat {
     Seat {
         team,
-        mobile: MobileKind::Coilback,
+        mobile,
         spawn_x,
         facing,
-        items: Loadout::default(),
+        items: Loadout::new(items).unwrap(),
     }
 }
+
+/// Four loadouts that between them carry every item, the ones that don't add damage first so a
+/// short game still gets to them all.
+const LOADOUTS: [&[Item]; 4] = [
+    &[Item::Heal, Item::WindFlip, Item::Dig, Item::PowerUp, Item::Dual],
+    &[Item::Sacrifice, Item::Teleport, Item::Heal, Item::Thunder],
+    &[Item::Swap, Item::BigHeal, Item::DualPlus],
+    &[Item::Dig, Item::Thunder, Item::PowerUp, Item::Dual],
+];
 
 fn scenarios() -> Vec<(&'static str, Log)> {
     let winds = [Wind::new(6, 30).unwrap(), Wind::new(14, 200).unwrap(), Wind::new(3, 270).unwrap(), Wind::new(20, 95).unwrap()];
     vec![
-        (
-            "duel_flat",
-            play(
-                Setup {
-                    map: MapRef::Flat { width: 1600, height: 700, ground: 560 },
-                    seats: vec![seat(Team::A, 350, Facing::Right), seat(Team::B, 1150, Facing::Left)],
-                    order: vec![0, 1],
-                    wind: Wind::default(),
-                    sudden_death: None,
-                },
-                &[],
-            ),
-        ),
-        (
-            "duel_hills_wind",
-            play(
-                Setup {
-                    map: MapRef::Hills {
-                        width: 2000,
-                        height: 900,
-                        ground: 760,
-                        amplitude: 140,
-                        period: 520,
-                    },
-                    seats: vec![seat(Team::A, 420, Facing::Right), seat(Team::B, 1460, Facing::Left)],
-                    order: vec![1, 0],
-                    wind: Wind::new(9, 160).unwrap(),
-                    sudden_death: None,
-                },
-                &winds,
-            ),
-        ),
-        (
-            "brawl_2v2",
-            play(
-                Setup {
-                    map: MapRef::Hills {
-                        width: 2400,
-                        height: 900,
-                        ground: 780,
-                        amplitude: 90,
-                        period: 700,
-                    },
-                    seats: vec![
-                        seat(Team::A, 300, Facing::Right),
-                        seat(Team::B, 1300, Facing::Left),
-                        seat(Team::A, 700, Facing::Right),
-                        seat(Team::B, 2000, Facing::Left),
-                    ],
-                    order: vec![0, 1, 2, 3],
-                    wind: Wind::new(4, 0).unwrap(),
-                    sudden_death: None,
-                },
-                &winds,
-            ),
-        ),
+        ("duel_flat", play(duel_flat(), &[])),
+        ("duel_hills_wind", play(duel_hills_wind(), &winds)),
+        ("brawl_2v2", play(brawl_2v2(), &winds)),
+        ("brawl_4v4", play(brawl_4v4(), &winds)),
+        ("duel_big_bomb", play(duel_big_bomb(), &winds)),
+        ("duel_ss_death", play(duel_ss_death(), &winds)),
     ]
 }
 
-/// Plays a game with a simple scripted player and returns its log. Every third turn the wind
-/// changes (if `winds` has any); every fourth, the player walks toward the nearest enemy; every
-/// seventh, it times out. Otherwise it cycles S1, S2, SS at the middle of the shot's true range,
-/// with the power step that lands closest to the enemy.
+fn duel_flat() -> Setup {
+    Setup {
+        map: MapRef::Flat { width: 1600, height: 700, ground: 560 },
+        seats: vec![seat(Team::A, 350, Facing::Right), seat(Team::B, 1150, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::default(),
+        sudden_death: None,
+    }
+}
+
+fn duel_hills_wind() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 140,
+            period: 520,
+        },
+        seats: vec![seat(Team::A, 420, Facing::Right), seat(Team::B, 1460, Facing::Left)],
+        order: vec![1, 0],
+        wind: Wind::new(9, 160).unwrap(),
+        sudden_death: None,
+    }
+}
+
+fn brawl_2v2() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2400,
+            height: 900,
+            ground: 780,
+            amplitude: 90,
+            period: 700,
+        },
+        seats: vec![
+            seat(Team::A, 300, Facing::Right),
+            seat(Team::B, 1300, Facing::Left),
+            seat(Team::A, 700, Facing::Right),
+            seat(Team::B, 2000, Facing::Left),
+        ],
+        order: vec![0, 1, 2, 3],
+        wind: Wind::new(4, 0).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Every mobile, every item, the slot machine and Double.
+fn brawl_4v4() -> Setup {
+    let mobiles = [
+        MobileKind::Coilback,
+        MobileKind::Marblemole,
+        MobileKind::Lanternwing,
+        MobileKind::Hookclaw,
+        MobileKind::Hookclaw,
+        MobileKind::Sparkhorn,
+        MobileKind::Sparkhorn,
+        MobileKind::Lanternwing,
+    ];
+    let seats = (0_i32..)
+        .zip(mobiles)
+        .map(|(i, mobile)| {
+            let (team, facing) = if i % 2 == 0 { (Team::A, Facing::Right) } else { (Team::B, Facing::Left) };
+            armed(team, mobile, 200 + 350 * i, facing, LOADOUTS[usize::try_from(i).unwrap() % LOADOUTS.len()])
+        })
+        .collect();
+    Setup {
+        map: MapRef::Hills {
+            width: 3000,
+            height: 1000,
+            ground: 860,
+            amplitude: 110,
+            period: 800,
+        },
+        seats,
+        order: (0..8).collect(),
+        wind: Wind::new(8, 20).unwrap(),
+        // Earlier than a room offers (SUDDEN_DEATH_TURNS), so the brawl reaches it.
+        sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 16 }),
+    }
+}
+
+fn duel_big_bomb() -> Setup {
+    Setup {
+        map: MapRef::Flat { width: 1800, height: 700, ground: 560 },
+        seats: vec![
+            armed(Team::A, MobileKind::Sparkhorn, 400, Facing::Right, LOADOUTS[1]),
+            armed(Team::B, MobileKind::Marblemole, 1300, Facing::Left, LOADOUTS[0]),
+        ],
+        order: vec![1, 0],
+        wind: Wind::new(5, 300).unwrap(),
+        sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::BigBomb, turn: 8 }),
+    }
+}
+
+fn duel_ss_death() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 80,
+            period: 600,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Hookclaw, 420, Facing::Right, LOADOUTS[3]),
+            armed(Team::B, MobileKind::Lanternwing, 1380, Facing::Left, LOADOUTS[2]),
+        ],
+        order: vec![0, 1],
+        wind: Wind::new(11, 170).unwrap(),
+        sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Plays a game with a simple scripted player and returns its log. The dead spin their slot
+/// machines whenever they may. Every third turn the wind changes (if `winds` has any); every
+/// fourth, the player walks toward the nearest enemy; every seventh, it times out. Every turn it
+/// first uses the first item it can. Otherwise it cycles S1, S2, SS (S1 when SS is locked or off) at the
+/// middle of the shot's true range, with the power step that lands closest to the enemy.
 fn play(setup: Setup, winds: &[Wind]) -> Log {
     let mut game = Game::new(&setup, &NoAssets).unwrap();
     let mut events = Vec::new();
@@ -160,11 +287,15 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
     };
 
     let mut rolls = 0_usize;
-    for turn in 0..60_usize {
-        let Phase::Turn { seat } = game.phase() else { break };
+    for turn in 0..300_usize {
         // Answer the server's rolls from fixed cycles: weather kinds and columns across the map,
-        // and the given winds (or calm). The calm duel gets only Force far off to the side.
-        while let Some(roll) = game.pending_roll() {
+        // drops likewise, and the given winds (or calm). The calm duel gets only Force far off to
+        // the side. The dead spin first, so their drops are owed too.
+        loop {
+            if let Some(dead) = (0..MAX_SEATS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_spin(s)) {
+                apply(&mut game, Event::Spin { seat: dead });
+            }
+            let Some(roll) = game.pending_roll() else { break };
             rolls += 1;
             let event = match roll {
                 Roll::Weather { .. } if winds.is_empty() => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
@@ -182,6 +313,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             };
             apply(&mut game, event);
         }
+        let Phase::Turn { seat } = game.phase() else { break };
         let me = game.players()[usize::from(seat)];
         let enemy = game
             .players()
@@ -196,6 +328,12 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
             continue;
         }
+        if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {
+            apply(&mut game, Event::UseItem { seat, slot });
+            if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
+                continue;
+            }
+        }
         let time = Centis(u32::try_from(300 + turn * 137 % 1500).unwrap());
         if turn % 7 == 6 {
             apply(&mut game, Event::Pass { seat, time: Centis(2000) });
@@ -208,7 +346,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         let range = shot.tuning(me.tuning()).aim.value;
         let aim = i16::midpoint(range.true_min, range.true_max);
         let enemy_index = game.players().iter().position(|p| *p == enemy).unwrap();
-        let center = game.players()[enemy_index].pose().center(enemy.tuning().hitbox.value);
+        let center = game.players()[enemy_index].center();
         let power = (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;

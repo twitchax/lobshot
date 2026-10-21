@@ -433,6 +433,17 @@
       }
     },
     {
+      "Spin": {
+        "seat": 2
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Dynamite",
+        "x": 2268
+      }
+    },
+    {
       "Walk": {
         "seat": 1,
         "facing": "Left",
@@ -495,8 +506,19 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
-        "x": 2268
+        "kind": "Force",
+        "x": 257
+      }
+    },
+    {
+      "Spin": {
+        "seat": 2
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Bolt",
+        "x": 646
       }
     },
     {
@@ -548,6 +570,17 @@
       }
     },
     {
+      "Spin": {
+        "seat": 1
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Chest",
+        "x": 1035
+      }
+    },
+    {
       "Walk": {
         "seat": 3,
         "facing": "Left",
@@ -562,8 +595,19 @@
     },
     {
       "Weather": {
-        "kind": "Force",
-        "x": 257
+        "kind": "Wind",
+        "x": 1424
+      }
+    },
+    {
+      "Spin": {
+        "seat": 2
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Reverse",
+        "x": 1813
       }
     },
     {
@@ -615,6 +659,17 @@
       }
     },
     {
+      "Spin": {
+        "seat": 1
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Dynamite",
+        "x": 2202
+      }
+    },
+    {
       "Walk": {
         "seat": 3,
         "facing": "Left",
@@ -632,14 +687,25 @@
     },
     {
       "Wind": {
-        "strength": 3,
-        "direction": 270
+        "strength": 20,
+        "direction": 95
       }
     },
     {
       "Weather": {
-        "kind": "Tornado",
-        "x": 1035
+        "kind": "Wind",
+        "x": 580
+      }
+    },
+    {
+      "Spin": {
+        "seat": 2
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Chest",
+        "x": 969
       }
     },
     {
@@ -654,7 +720,7 @@
         "seat": 0,
         "shot": "S1",
         "aim": 32,
-        "power": 68,
+        "power": 59,
         "time": 1684
       }
     },
@@ -670,7 +736,7 @@
         "seat": 3,
         "shot": "S1",
         "aim": 32,
-        "power": 67,
+        "power": 56,
         "time": 321
       }
     },
@@ -688,6 +754,17 @@
       }
     },
     {
+      "Spin": {
+        "seat": 1
+      }
+    },
+    {
+      "Drop": {
+        "kind": "Calm",
+        "x": 1358
+      }
+    },
+    {
       "Walk": {
         "seat": 3,
         "facing": "Left",
@@ -699,7 +776,7 @@
         "seat": 3,
         "shot": "S1",
         "aim": 32,
-        "power": 67,
+        "power": 56,
         "time": 595
       }
     }

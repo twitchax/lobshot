@@ -1,0 +1,339 @@
+{
+  "setup": {
+    "map": {
+      "Flat": {
+        "width": 1800,
+        "height": 700,
+        "ground": 560
+      }
+    },
+    "seats": [
+      {
+        "team": "A",
+        "mobile": "Sparkhorn",
+        "spawn_x": 400,
+        "facing": "Right",
+        "items": [
+          "Sacrifice",
+          "Teleport",
+          "Heal",
+          "Thunder"
+        ]
+      },
+      {
+        "team": "B",
+        "mobile": "Marblemole",
+        "spawn_x": 1300,
+        "facing": "Left",
+        "items": [
+          "Heal",
+          "WindFlip",
+          "Dig",
+          "PowerUp",
+          "Dual"
+        ]
+      }
+    ],
+    "order": [
+      1,
+      0
+    ],
+    "wind": {
+      "strength": 5,
+      "direction": 300
+    },
+    "sudden_death": {
+      "kind": "BigBomb",
+      "turn": 8
+    }
+  },
+  "events": [
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 389
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 778
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Tornado",
+        "x": 1167
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Wind",
+        "x": 1556
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 145
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 45,
+        "power": 48,
+        "time": 300
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S2",
+        "aim": 29,
+        "power": 50,
+        "time": 437
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 534
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 1
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "Ss",
+        "aim": 29,
+        "power": 50,
+        "time": 574
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 1
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 45,
+        "power": 0,
+        "time": 711
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Tornado",
+        "x": 923
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 2
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 45,
+        "power": 0,
+        "time": 848
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Left",
+        "steps": 25
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 2
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 29,
+        "power": 0,
+        "time": 985
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Wind",
+        "x": 1312
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 3
+      }
+    },
+    {
+      "Pass": {
+        "seat": 1,
+        "time": 2000
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 3
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S2",
+        "aim": 29,
+        "power": 0,
+        "time": 1259
+      }
+    },
+    {
+      "Wind": {
+        "strength": 14,
+        "direction": 200
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 290
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 45,
+        "power": 0,
+        "time": 1396
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 29,
+        "power": 0,
+        "time": 1533
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Tornado",
+        "x": 679
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 45,
+        "power": 0,
+        "time": 1670
+      }
+    }
+  ]
+}

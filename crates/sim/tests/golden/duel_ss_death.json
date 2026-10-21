@@ -1,0 +1,289 @@
+{
+  "setup": {
+    "map": {
+      "Hills": {
+        "width": 2000,
+        "height": 900,
+        "ground": 760,
+        "amplitude": 80,
+        "period": 600
+      }
+    },
+    "seats": [
+      {
+        "team": "A",
+        "mobile": "Hookclaw",
+        "spawn_x": 420,
+        "facing": "Right",
+        "items": [
+          "Dig",
+          "Thunder",
+          "PowerUp",
+          "Dual"
+        ]
+      },
+      {
+        "team": "B",
+        "mobile": "Lanternwing",
+        "spawn_x": 1380,
+        "facing": "Left",
+        "items": [
+          "Swap",
+          "BigHeal",
+          "DualPlus"
+        ]
+      }
+    ],
+    "order": [
+      0,
+      1
+    ],
+    "wind": {
+      "strength": 11,
+      "direction": 170
+    },
+    "sudden_death": {
+      "kind": "SsDeath",
+      "turn": 8
+    }
+  },
+  "events": [
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 389
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 778
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Tornado",
+        "x": 1167
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Wind",
+        "x": 1556
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Force",
+        "x": 1945
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 50,
+        "power": 50,
+        "time": 300
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 25
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 1
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 32,
+        "power": 76,
+        "time": 437
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 334
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 1
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "Ss",
+        "aim": 50,
+        "power": 49,
+        "time": 574
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 1,
+        "slot": 2
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 32,
+        "power": 76,
+        "time": 711
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Tornado",
+        "x": 723
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S2",
+        "aim": 32,
+        "power": 61,
+        "time": 848
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 2
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 50,
+        "power": 25,
+        "time": 985
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Wind",
+        "x": 1112
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Pass": {
+        "seat": 1,
+        "time": 2000
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "UseItem": {
+        "seat": 0,
+        "slot": 3
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S2",
+        "aim": 50,
+        "power": 42,
+        "time": 1259
+      }
+    },
+    {
+      "Wind": {
+        "strength": 14,
+        "direction": 200
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Mirror",
+        "x": 1890
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "Ss",
+        "aim": 32,
+        "power": 73,
+        "time": 1396
+      }
+    }
+  ]
+}
