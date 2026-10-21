@@ -4,38 +4,41 @@
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::{Mutex, PoisonError},
 };
 
 use anyhow::Context as _;
 use lobshot_sim::base::{Res, Void};
 
+/// Shared by the threads that render in parallel; each file is written whole, by one of them.
 pub struct Out {
     root: PathBuf,
     /// Relative path to size, in path order.
-    written: BTreeMap<String, u64>,
+    written: Mutex<BTreeMap<String, u64>>,
 }
 
 impl Out {
     pub fn new(root: &Path) -> Self {
         Self {
             root: root.to_owned(),
-            written: BTreeMap::new(),
+            written: Mutex::new(BTreeMap::new()),
         }
     }
 
     /// Writes `bytes` at `path`, relative to the root (`maps/tidewall/map.ron`).
-    pub fn write(&mut self, path: &str, bytes: &[u8]) -> Void {
+    pub fn write(&self, path: &str, bytes: &[u8]) -> Void {
         let full = self.root.join(path);
         if let Some(parent) = full.parent() {
             std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
         std::fs::write(&full, bytes).with_context(|| format!("writing {}", full.display()))?;
-        self.written.insert(path.to_owned(), bytes.len() as u64);
+        // A thread that panicked mid-insert can't leave a half-written entry behind.
+        self.written.lock().unwrap_or_else(PoisonError::into_inner).insert(path.to_owned(), bytes.len() as u64);
         Ok(())
     }
 
-    pub fn written(&self) -> &BTreeMap<String, u64> {
-        &self.written
+    pub fn written(&self) -> BTreeMap<String, u64> {
+        self.written.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
 
     /// Deletes files under the root that this build did not write: output of sources since removed.
@@ -43,18 +46,18 @@ impl Out {
     /// never finds it missing.
     pub fn prune(&self) -> Res<Vec<String>> {
         let mut stale = Vec::new();
-        self.prune_dir(&self.root, &mut stale)?;
+        self.prune_dir(&self.root, &self.written(), &mut stale)?;
         Ok(stale)
     }
 
-    fn prune_dir(&self, dir: &Path, stale: &mut Vec<String>) -> Void {
+    fn prune_dir(&self, dir: &Path, written: &BTreeMap<String, u64>, stale: &mut Vec<String>) -> Void {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return Ok(());
         };
         for entry in entries {
             let path = entry.with_context(|| format!("listing {}", dir.display()))?.path();
             if path.is_dir() {
-                self.prune_dir(&path, stale)?;
+                self.prune_dir(&path, written, stale)?;
                 // A directory pruning emptied held only stale output; trunk would still copy it.
                 if std::fs::read_dir(&path).with_context(|| format!("listing {}", path.display()))?.next().is_none() {
                     std::fs::remove_dir(&path).with_context(|| format!("removing {}", path.display()))?;
@@ -62,7 +65,7 @@ impl Out {
                 continue;
             }
             let relative = path.strip_prefix(&self.root).context("a path outside the output")?.to_string_lossy().replace('\\', "/");
-            if !self.written.contains_key(&relative) {
+            if !written.contains_key(&relative) {
                 std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))?;
                 stale.push(relative);
             }
@@ -86,7 +89,7 @@ mod unit {
         std::fs::create_dir_all(dir.path().join("maps/old")).unwrap();
         std::fs::write(dir.path().join("maps/old/terrain.png"), b"stale").unwrap();
 
-        let mut out = Out::new(dir.path());
+        let out = Out::new(dir.path());
         out.write("maps/new/map.ron", b"fresh").unwrap();
         assert_eq!(out.prune().unwrap(), ["maps/old/terrain.png"]);
         assert!(

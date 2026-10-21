@@ -36,7 +36,7 @@ pub fn drop_source(sources: &Path, drop: DropKind) -> PathBuf {
 
 /// Renders every item icon and drop sprite, refusing a missing one, a misshapen one, or a source
 /// that belongs to no item or drop.
-pub fn build_icons(sources: &Path, out: &mut Out) -> Void {
+pub fn build_icons(sources: &Path, out: &Out) -> Void {
     refuse_strays(&sources.join("items"), Item::ALL.iter().map(|&item| item_source(sources, item)), "Item")?;
     refuse_strays(&sources.join("drops"), DropKind::ALL.iter().map(|&drop| drop_source(sources, drop)), "DropKind")?;
     for item in Item::ALL {
@@ -102,7 +102,7 @@ mod unit {
     #[test]
     fn every_item_and_drop_ships_its_art() {
         let dir = TempDir::new().unwrap();
-        build_icons(&sources(), &mut Out::new(dir.path())).unwrap();
+        build_icons(&sources(), &Out::new(dir.path())).unwrap();
         let png = |path: &str| Pixmap::decode_png(&std::fs::read(dir.path().join(path)).unwrap_or_else(|e| panic!("{path}: {e}"))).unwrap();
         let side = ICON_SIDE * 2;
         for item in Item::ALL {
@@ -150,11 +150,11 @@ mod unit {
 
         let stray = copy();
         std::fs::write(stray.path().join("items/jetpack.svg"), "").unwrap();
-        let error = build_icons(stray.path(), &mut Out::new(out.path())).unwrap_err();
+        let error = build_icons(stray.path(), &Out::new(out.path())).unwrap_err();
         assert!(format!("{error:#}").contains("jetpack.svg is no Item"), "{error:#}");
 
         let missing = copy();
         std::fs::remove_file(drop_source(missing.path(), DropKind::Chest)).unwrap();
-        assert!(build_icons(missing.path(), &mut Out::new(out.path())).is_err(), "no chest");
+        assert!(build_icons(missing.path(), &Out::new(out.path())).is_err(), "no chest");
     }
 }

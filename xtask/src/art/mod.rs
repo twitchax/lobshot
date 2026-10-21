@@ -65,22 +65,33 @@ pub struct Built {
 /// Renders everything in `sources` into `out_dir`, and removes whatever an earlier build left
 /// there that this one did not write.
 pub fn build(sources: &Path, out_dir: &Path) -> Res<Built> {
-    let mut out = Out::new(out_dir);
-    let rigs = mobile::build_mobiles(sources, &mut out)?;
-    let riders = mobile::build_riders(sources, &mut out)?;
-    icons::build_icons(sources, &mut out)?;
-    let maps = map::build_maps(sources, &mut out)?;
-    sound::build_sounds(sources, &mut out)?;
+    let out = Out::new(out_dir);
+    let rigs = mobile::build_mobiles(sources, &out)?;
+    let riders = mobile::build_riders(sources, &out)?;
+    icons::build_icons(sources, &out)?;
+    let maps = map::build_maps(sources, &out)?;
+    sound::build_sounds(sources, &out)?;
     out.prune()?;
     Ok(Built { written: sizes(&out), rigs, riders, maps })
 }
 
 /// Writes the review sheets for a build into `dir`, replacing the last set.
 pub fn write_previews(sources: &Path, dir: &Path, built: &Built) -> Res<Vec<(String, u64)>> {
-    let mut out = Out::new(dir);
-    preview::build_previews(sources, &mut out, &built.rigs, &built.riders, &built.maps)?;
+    let out = Out::new(dir);
+    preview::build_previews(sources, &out, &built.rigs, &built.riders, &built.maps)?;
     out.prune()?;
     Ok(sizes(&out))
+}
+
+/// Runs `work` on every item at once, a thread each, and returns the results in the items' order.
+/// resvg renders on one core, and maps and their variants are independent, so this is where a
+/// build's time goes down; each output is the same bytes whichever thread draws it.
+pub fn in_parallel<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> Res<R> + Sync) -> Res<Vec<R>> {
+    std::thread::scope(|scope| {
+        let work = &work;
+        let threads: Vec<_> = items.iter().map(|item| scope.spawn(move || work(item))).collect();
+        threads.into_iter().map(|thread| thread.join().map_err(|_| anyhow::anyhow!("a render thread panicked"))?).collect()
+    })
 }
 
 fn sizes(out: &Out) -> Vec<(String, u64)> {
@@ -205,7 +216,7 @@ mod unit {
     }
 
     #[test]
-    #[ignore = "renders Tidewall twice at full size: minutes unless resvg is optimized in the dev profile"]
+    #[ignore = "renders every real asset twice at full size: most of a minute, even in parallel"]
     fn the_real_assets_build_byte_identically() {
         let (first, second) = (TempDir::new().unwrap(), TempDir::new().unwrap());
         let written = build(&sources(), first.path()).unwrap().written;

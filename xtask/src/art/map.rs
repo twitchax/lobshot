@@ -16,7 +16,7 @@ use lobshot_sim::{
 use resvg::tiny_skia::Pixmap;
 
 use super::{
-    ART_SCALE,
+    ART_SCALE, in_parallel,
     land::{Land, Shape},
     out::Out,
     raster::{Svg, encode_png},
@@ -37,7 +37,7 @@ pub struct BuiltMap {
 }
 
 /// Builds every map in `assets/maps/`, in name order.
-pub fn build_maps(sources: &Path, out: &mut Out) -> Res<Vec<BuiltMap>> {
+pub fn build_maps(sources: &Path, out: &Out) -> Res<Vec<BuiltMap>> {
     let dir = sources.join("maps");
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("listing {}", dir.display()))? {
@@ -47,22 +47,28 @@ pub fn build_maps(sources: &Path, out: &mut Out) -> Res<Vec<BuiltMap>> {
         }
     }
     names.sort();
-    names.iter().map(|name| build_map(&dir.join(name), out).with_context(|| format!("building map {name}"))).collect()
+    in_parallel(&names, |name| build_map(&dir.join(name), out).with_context(|| format!("building map {name}")))
 }
 
 /// One map: `map.ron` (hand-written: names, variants, spawns), `background.svg`, `terrain.svg` (the
 /// art, with slots for placement, shared by the variants), and per variant `<id>/land.ron` (the
 /// geometry, and where the art's set pieces go). A variant may draw its own `<id>/terrain.svg`.
-pub fn build_map(dir: &Path, out: &mut Out) -> Res<BuiltMap> {
+pub fn build_map(dir: &Path, out: &Out) -> Res<BuiltMap> {
     let mut info = load_info(dir)?;
 
     let background_svg = Svg::load(&dir.join("background.svg"))?;
-    let background = background_svg.render_view(ART_SCALE)?;
+    let ids: Vec<String> = info.variants.iter().map(|variant| variant.id.clone()).collect();
+    // The background and each variant's terrain render at once.
+    let (background, built) = std::thread::scope(|scope| {
+        let background = scope.spawn(|| background_svg.render_view(ART_SCALE));
+        let built = in_parallel(&ids, |id| build_variant(dir, &info.name, id, out).with_context(|| format!("variant {id}")));
+        (background.join(), built)
+    });
+    let background = background.map_err(|_| anyhow::anyhow!("rendering the background panicked"))??;
     out.write(&background_path(&info.name), &encode_png(&background)?)?;
 
     let mut variants = Vec::with_capacity(info.variants.len());
-    for variant in &mut info.variants {
-        let built = build_variant(dir, &info.name, &variant.id, out).with_context(|| format!("variant {}", variant.id))?;
+    for (variant, built) in info.variants.iter_mut().zip(built?) {
         let view = background_svg.view();
         let (width, height) = built.shape.size;
         ensure!(
@@ -102,7 +108,7 @@ pub fn load_shape(dir: &Path, variant: &str) -> Res<(Land, Shape)> {
     Ok((land, shape))
 }
 
-fn build_variant(dir: &Path, map: &str, variant: &str, out: &mut Out) -> Res<BuiltVariant> {
+fn build_variant(dir: &Path, map: &str, variant: &str, out: &Out) -> Res<BuiltVariant> {
     let (land, shape) = load_shape(dir, variant)?;
     let mask = shape.mask()?;
 

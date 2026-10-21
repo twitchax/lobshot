@@ -23,7 +23,7 @@ use resvg::tiny_skia::{Color, FillRule, FilterQuality, Paint, PathBuilder, Pixma
 use super::{
     ART_SCALE,
     compose::{Mobile, Sprite},
-    icons,
+    icons, in_parallel,
     map::BuiltMap,
     out::Out,
     raster::encode_png,
@@ -33,7 +33,7 @@ use super::{
 const VIEW: (f32, f32) = (800.0, 600.0);
 
 /// Writes every review sheet.
-pub fn build_previews(sources: &Path, out: &mut Out, rigs: &[(MobileKind, MobileRig)], riders: &[String], maps: &[BuiltMap]) -> Void {
+pub fn build_previews(sources: &Path, out: &Out, rigs: &[(MobileKind, MobileRig)], riders: &[String], maps: &[BuiltMap]) -> Void {
     let rider = riders.first().context("no riders to pose")?;
     for (mobile, rig) in rigs {
         let slug = mobile_slug(*mobile);
@@ -43,22 +43,21 @@ pub fn build_previews(sources: &Path, out: &mut Out, rigs: &[(MobileKind, Mobile
     out.write("items.png", &encode_png(&icons_sheet(sources)?)?)?;
     let (mobile, rig) = rigs.first().context("no mobiles to place")?;
     let at_game_scale = Mobile::render(sources, *mobile, rig, rider, ART_SCALE)?;
-    for map in maps {
-        for (built, variant) in map.variants.iter().zip(&map.info.variants) {
-            let scene = Scene {
-                background: &map.background,
-                terrain: &built.terrain,
-                mask: &built.mask,
-                spawns: &variant.spawns,
-                mobile: &at_game_scale,
-                kind: *mobile,
-            };
-            let name = format!("{}_{}", map.info.name, variant.id);
-            out.write(&format!("{name}.png"), &encode_png(&scene.whole()?)?)?;
-            out.write(&format!("{name}_view.png"), &encode_png(&scene.view()?)?)?;
-            out.write(&format!("{name}_mask.png"), &encode_png(&scene.mask()?)?)?;
-        }
-    }
+    let variants: Vec<_> = maps.iter().flat_map(|map| map.variants.iter().zip(&map.info.variants).map(move |pair| (map, pair))).collect();
+    in_parallel(&variants, |&(map, (built, variant))| {
+        let scene = Scene {
+            background: &map.background,
+            terrain: &built.terrain,
+            mask: &built.mask,
+            spawns: &variant.spawns,
+            mobile: &at_game_scale,
+            kind: *mobile,
+        };
+        let name = format!("{}_{}", map.info.name, variant.id);
+        out.write(&format!("{name}.png"), &encode_png(&scene.whole()?)?)?;
+        out.write(&format!("{name}_view.png"), &encode_png(&scene.view()?)?)?;
+        out.write(&format!("{name}_mask.png"), &encode_png(&scene.mask()?)?)
+    })?;
     Ok(())
 }
 

@@ -10,7 +10,7 @@ use lobshot_sim::base::Void;
 
 use super::out::Out;
 
-pub fn build_sounds(sources: &Path, out: &mut Out) -> Void {
+pub fn build_sounds(sources: &Path, out: &Out) -> Void {
     for sound in Sound::ALL {
         let path = sound_path(sound);
         let bytes = std::fs::read(sources.join(&path)).with_context(|| format!("reading assets/{path}"))?;
@@ -77,13 +77,13 @@ mod unit {
         for sound in Sound::ALL {
             std::fs::copy(sources().join(sound_path(sound)), dir.path().join(sound_path(sound))).unwrap();
         }
-        let mut out = Out::new(out_dir.path());
-        build_sounds(dir.path(), &mut out).unwrap();
+        let out = Out::new(out_dir.path());
+        build_sounds(dir.path(), &out).unwrap();
         let blast = sound_path(Sound::Blast);
         assert_eq!(std::fs::read(out_dir.path().join(&blast)).unwrap(), std::fs::read(sources().join(&blast)).unwrap());
 
         std::fs::write(dir.path().join(&blast), b"RIFF....WAVEfmt ").unwrap();
-        let error = build_sounds(dir.path(), &mut Out::new(out_dir.path())).unwrap_err();
+        let error = build_sounds(dir.path(), &Out::new(out_dir.path())).unwrap_err();
         assert!(format!("{error:#}").contains("blast.ogg isn't Ogg Vorbis"), "{error:#}");
     }
 }

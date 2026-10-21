@@ -55,7 +55,7 @@ fn close(a: (f64, f64), b: (f64, f64)) -> bool {
 }
 
 /// Renders every mobile's parts and writes its rig beside them.
-pub fn build_mobiles(sources: &Path, out: &mut Out) -> Res<Vec<(MobileKind, MobileRig)>> {
+pub fn build_mobiles(sources: &Path, out: &Out) -> Res<Vec<(MobileKind, MobileRig)>> {
     let mobiles_dir = sources.join("mobiles");
     let known: BTreeSet<String> = MobileKind::ALL.iter().map(|&mobile| mobile_slug(mobile)).collect();
     for entry in std::fs::read_dir(&mobiles_dir).with_context(|| format!("listing {}", mobiles_dir.display()))? {
@@ -80,7 +80,7 @@ pub fn build_mobiles(sources: &Path, out: &mut Out) -> Res<Vec<(MobileKind, Mobi
 }
 
 /// Renders every rider in `assets/riders/`, seat point centered. Returns their names.
-pub fn build_riders(sources: &Path, out: &mut Out) -> Res<Vec<String>> {
+pub fn build_riders(sources: &Path, out: &Out) -> Res<Vec<String>> {
     let dir = sources.join("riders");
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("listing {}", dir.display()))? {
