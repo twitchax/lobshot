@@ -26,13 +26,14 @@ A Cargo workspace; shared metadata, dependency versions and lints live once in t
 ## Commands
 
 ```bash
-cargo make ci           # fmt-check + clippy (native and wasm32, -D warnings) + nextest + determinism: the gate, run verbatim in CI
+cargo make ci           # fmt-check + clippy (native and wasm32, -D warnings) + nextest + client tests + determinism: the gate, run verbatim in CI
 cargo make test         # nextest (native crates)
+cargo make test-client  # the client's unit tests: wasm32, in node, under wasm-bindgen's runner
 cargo make determinism  # sim's tests on wasm32 under wasmtime: replays must match native bit for bit
 cargo make art          # render assets/ into assets/gen/ (art, plus the sounds, checked)
 cargo make dist         # the release client bundle in dist/ (art first)
 cargo make dev          # a quick wasm-dev bundle, then the server on http://127.0.0.1:8080
-cargo make browser      # the browser smoke test: release bundle, headless Chrome, real server
+cargo make browser      # the browser smoke tests: release bundle, headless Chrome, real server
 cargo make uat          # ci + the #[ignore]d slow suites: what PRD UATs point at
 cargo make codecov      # coverage.lcov
 ```
@@ -47,8 +48,11 @@ cargo make codecov      # coverage.lcov
   `lobshot-client`, which allows `needless_pass_by_value` at its crate root because Bevy systems
   must take their parameters by value. `clippy.toml` lists the proper names `doc_markdown` accepts.
 - **The client is wasm32 only.** Native tasks pass `--exclude lobshot-client`; `clippy-wasm` lints
-  it (and `sim`, which must build for wasm32 too) for the browser. Try client changes in practice
-  mode (title, "Practice vs bot"): it needs no server.
+  it (and `sim`, which must build for wasm32 too) for the browser. Its unit tests import
+  `wasm_bindgen_test` as `test` (a plain `#[test]` never runs on wasm32) and run under
+  `cargo make test-client`. Keep rules out of it: what the sim or protocol can decide (loadout
+  legality, option values, SS state) lives there, with native tests. Try client changes in
+  practice mode (title, "Practice vs bot"): it needs no server.
 - **`sim` stays deterministic** (`DESIGN.md`, "Game model"): f64 with `libm`, no `mul_add`, no SIMD,
   no fast-math, no hash-order iteration, and randomness only from server-rolled events.
   `crates/sim/clippy.toml` enforces the bans; the golden replays and `cargo make determinism` prove

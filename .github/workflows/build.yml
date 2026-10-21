@@ -19,7 +19,8 @@ env:
 
 jobs:
   ci:
-    # Literally the local gate: `cargo make ci` (fmt-check, clippy -D warnings, nextest).
+    # Literally the local gate: `cargo make ci` (fmt-check, clippy -D warnings, nextest, the client's
+    # tests, determinism).
     name: CI gate
     runs-on: ubuntu-latest
     steps:
@@ -42,6 +43,10 @@ jobs:
       # `--force`: see the comment on the install-* tasks in Makefile.toml. wasmtime runs sim's
       # tests under wasm32 (`cargo make determinism`).
       - run: cargo binstall cargo-make cargo-nextest wasmtime-cli --no-confirm --force
+      # The client's unit tests run on wasm32 in node (`cargo make test-client`).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - run: cargo make ci
 
   codecov:

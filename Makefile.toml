@@ -1,7 +1,7 @@
 # lobshot: cargo-make tasks. cargo-make is the one entry point for dev commands, and CI runs
 # the same tasks, so "green locally" and "green in CI" mean the same thing.
 #
-#   cargo make ci        fmt-check + clippy (native and wasm, -D warnings) + nextest + determinism: the gate
+#   cargo make ci        fmt-check + clippy (native and wasm, -D warnings) + nextest + client tests + determinism: the gate
 #   cargo make test-client  the client's unit tests, on wasm32 in node
 #   cargo make uat       ci + the #[ignore]d slow suites
 #   cargo make codecov   coverage.lcov via llvm-cov
@@ -148,7 +148,7 @@ args = ["llvm-cov", "nextest", "--workspace", "--exclude", "xtask", "--exclude",
 
 [tasks.ci]
 # The gate, run verbatim by CI.
-dependencies = ["fmt-check", "clippy", "clippy-wasm", "test", "determinism"]
+dependencies = ["fmt-check", "clippy", "clippy-wasm", "test", "test-client", "determinism"]
 
 [tasks.uat]
 # The acceptance gate PRD UATs point at: ci plus everything too slow for every push. The ignored
