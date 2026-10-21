@@ -1,14 +1,17 @@
-//! How long a client takes to show an accepted event: the shell flies its legs in real time, blasts
-//! land on their ticks, mobiles fall a beat after the last blast, and the turn passes a moment
-//! after everything is still. Clients play each event on this schedule, and the server starts the
-//! next turn's clock only once they're done, so a turn is never spent watching the last shot land.
+//! How long a client takes to show an accepted event: projectiles fly their legs in real time,
+//! blasts and bolts land on their ticks, mobiles fall a beat after the last blast, and the turn
+//! passes a moment after everything is still. An event's effects play in stages (see
+//! `lobshot_sim::game::Effect`): a Dual's second volley, or a drop falling at a turn's end, starts
+//! once everything before it has played out, falls included. Clients play each event on this
+//! schedule, and the server starts the next turn's clock only once they're done, so a turn is never
+//! spent watching the last shot land.
 
 use lobshot_sim::{
     game::{Death, Effect, Leg},
     units::TICKS_PER_SECOND,
 };
 
-/// How long a mobile takes to fall to its new footing.
+/// How long a mobile takes to fall to its new footing (and to trade places, for Swap).
 pub const FALL_SECONDS: f32 = 0.35;
 
 /// The beat after the last blast before anything falls (or drowns).
@@ -18,64 +21,123 @@ const SETTLE_SECONDS: f32 = 0.35;
 const DAMAGE_AFTER_BLAST: f32 = 0.05;
 const DEATH_AFTER_BLAST: f32 = 0.1;
 
-/// The pause after everything else before the turn passes.
+/// The pause after everything else before the turn passes, or the next stage starts.
 const TAIL_SECONDS: f32 = 0.3;
+
+/// How long sudden death's announcement holds before the next turn starts.
+pub const SUDDEN_DEATH_SECONDS: f32 = 1.5;
 
 /// When each of an event's effects happens, in seconds after the event, and when the scene ends.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Schedule {
-    /// One time per effect, in order. A turn starting or the game ending happens at `end`.
+    /// One time per effect, in order. A turn starting (with its shield and SS coming back) or the
+    /// game ending happens at `end`, sudden death beginning just before.
     pub at: Vec<f32>,
-    /// When the scene is over: 0 for an event with nothing to watch (a step, a forecast).
+    /// When the scene is over: 0 for an event with nothing to watch (a step, a forecast, a spin).
     pub end: f32,
+}
+
+/// Where the schedule is within the current stage.
+#[derive(Debug, Clone, Copy, Default)]
+struct Stage {
+    /// When it started.
+    base: f32,
+    /// The latest blast, bolt or touch: damage and deaths follow it.
+    blast: f32,
+    /// The stage's last blast: what falls, falls after it.
+    last_blast: f32,
+    /// When this stage's falls happen, once the first is seen.
+    falls_at: Option<f32>,
+}
+
+impl Stage {
+    fn starting(base: f32) -> Self {
+        Self {
+            base,
+            blast: base,
+            last_blast: base,
+            falls_at: None,
+        }
+    }
+
+    /// A blast-like moment at the stage's `tick`.
+    fn blast_at(&mut self, tick: u32) -> f32 {
+        self.blast = self.base + ticks_to_seconds(tick);
+        self.last_blast = self.last_blast.max(self.blast);
+        self.blast
+    }
 }
 
 /// The schedule for one event's effects.
 #[must_use]
 pub fn schedule(effects: &[Effect]) -> Schedule {
     let mut at = Vec::with_capacity(effects.len());
-    let mut blast = 0.0_f32;
-    let mut last_blast = 0.0_f32;
-    let mut falls_at = None;
+    let mut stage = Stage::default();
     let mut busy = 0.0_f32;
     // The finale's indices, filled with `end` once it is known.
     let mut finale = Vec::new();
+    let mut sudden_death = None;
     for (i, effect) in effects.iter().enumerate() {
         let time = match effect {
-            Effect::Fired { legs, .. } => {
-                busy = busy.max(flight_seconds(legs));
-                0.0
+            Effect::Volley { .. } | Effect::Dropped { .. } => {
+                // A new stage waits until the one before has played out, falls included.
+                stage = Stage::starting(if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { stage.base });
+                if let Effect::Dropped { legs, .. } = effect {
+                    // A drop's landing is the stage's blast, for what follows it: a heal, the wind.
+                    stage.blast += flight_seconds(legs);
+                    stage.last_blast = stage.blast;
+                    busy = busy.max(stage.blast);
+                }
+                stage.base
             }
-            Effect::Exploded { tick, .. } => {
-                blast = ticks_to_seconds(*tick);
-                last_blast = last_blast.max(blast);
-                blast
+            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } => {
+                busy = busy.max(stage.base + flight_seconds(legs));
+                stage.base
             }
-            Effect::Damaged { .. } => blast + DAMAGE_AFTER_BLAST,
+            Effect::Helix { strands, .. } => {
+                let last = strands.iter().map(|strand| strand.to).max().unwrap_or(0);
+                busy = busy.max(stage.base + ticks_to_seconds(last));
+                stage.base
+            }
+            Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
+            Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
+            Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
-                Death::Blasted => blast + DEATH_AFTER_BLAST,
-                Death::Bunged => last_blast + SETTLE_SECONDS + FALL_SECONDS,
-                Death::Forfeited => 0.0,
+                Death::Blasted => stage.blast + DEATH_AFTER_BLAST,
+                Death::Bunged => stage.last_blast + SETTLE_SECONDS + FALL_SECONDS,
+                Death::Forfeited => stage.base,
             },
             // Everything that falls falls together, after the blasts that shook it loose.
-            Effect::Fell { .. } => *falls_at.get_or_insert(last_blast + SETTLE_SECONDS),
-            Effect::TurnStarted { .. } | Effect::GameOver { .. } => {
+            Effect::Fell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
+            Effect::Swapped { .. } => stage.base + FALL_SECONDS,
+            Effect::WindChanged(_) => stage.blast,
+            Effect::SuddenDeath { .. } => {
+                sudden_death = Some(i);
+                0.0
+            }
+            Effect::TurnStarted { .. } | Effect::GameOver { .. } | Effect::ShieldRestored { .. } | Effect::SsReady { .. } => {
                 finale.push(i);
                 0.0
             }
-            Effect::Walked { .. } | Effect::WindChanged(_) | Effect::Forecast(_) | Effect::WeatherChanged { .. } => 0.0,
+            Effect::Walked { .. } | Effect::Forecast(_) | Effect::WeatherChanged { .. } | Effect::ItemUsed { .. } | Effect::SsLocked { .. } | Effect::Spun { .. } | Effect::DropRolled { .. } => {
+                stage.base
+            }
         };
         busy = busy.max(time);
         at.push(time);
     }
-    let end = if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { 0.0 };
+    let mut end = if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { 0.0 };
+    if let Some(i) = sudden_death {
+        at[i] = end;
+        end += SUDDEN_DEATH_SECONDS;
+    }
     for i in finale {
         at[i] = end;
     }
     Schedule { at, end }
 }
 
-/// How long a shell flies, holds included.
+/// How long a projectile flies, holds included.
 #[must_use]
 pub fn flight_seconds(legs: &[Leg]) -> f32 {
     legs.last().map_or(0.0, |leg| ticks_to_seconds(leg.offset + leg.to))
@@ -97,7 +159,7 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use lobshot_sim::{
-        game::{Event, Game, MobileKind, Seat, Setup, Shot, Team},
+        game::{Event, Game, MobileKind, Seat, Setup, Shot, Strand, SuddenDeathKind, Team},
         items::Loadout,
         map::{MapRef, NoAssets},
         movement::Footing,
@@ -108,9 +170,15 @@ mod unit {
 
     /// A lob across a flat duel, 700 px apart, in no wind: fired, flown, landed.
     fn shot_effects() -> Vec<Effect> {
+        shot_by(MobileKind::Coilback, Shot::S1)
+    }
+
+    /// `mobile`'s `shot` at the bottom of its true range across a flat duel, 700 px apart, in no
+    /// wind.
+    fn shot_by(mobile: MobileKind, shot: Shot) -> Vec<Effect> {
         let seat = |team, spawn_x, facing| Seat {
             team,
-            mobile: MobileKind::Coilback,
+            mobile,
             spawn_x,
             facing,
             items: Loadout::default(),
@@ -137,10 +205,11 @@ mod unit {
             };
             game.apply(event).unwrap();
         }
+        let aim = if mobile == MobileKind::Coilback { 45 } else { shot.tuning(mobile.tuning()).aim.value.true_min };
         game.apply(Event::Shoot {
             seat: 0,
-            shot: Shot::S1,
-            aim: 45,
+            shot,
+            aim,
             power: Power::from_twentieths(40).unwrap(),
             time: Centis(300),
         })
@@ -186,5 +255,124 @@ mod unit {
         let schedule = schedule(&[Effect::TurnStarted { seat: 1 }]);
         assert_eq!(schedule, Schedule { at: vec![0.0], end: 0.0 });
         assert_eq!(super::schedule(&[]).end, 0.0);
+    }
+
+    #[test]
+    fn a_second_volley_starts_once_the_first_has_played_out() {
+        let effects = vec![
+            Effect::Volley { seat: 0, shot: Shot::S1 },
+            Effect::Exploded {
+                at: Vec2::new(10.0, 10.0),
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Fell { seat: 0, to: Footing { x: 10, y: 20 } },
+            Effect::Volley { seat: 0, shot: Shot::S1 },
+            Effect::Exploded {
+                at: Vec2::new(10.0, 10.0),
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Damaged { seat: 1, amount: 100 },
+        ];
+        let schedule = schedule(&effects);
+        let second = 1.0 + SETTLE_SECONDS + FALL_SECONDS + TAIL_SECONDS;
+        assert_eq!(schedule.at, [0.0, 1.0, 1.0 + SETTLE_SECONDS, second, second + 1.0, second + 1.0 + DAMAGE_AFTER_BLAST]);
+    }
+
+    #[test]
+    fn a_drop_falls_after_the_turn_has_played_out_and_acts_where_it_lands() {
+        let fall = Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: Vec2::ZERO,
+                velocity: Vec2::ZERO,
+                accel: Vec2::new(0.0, 600.0),
+            },
+            from: 0,
+            to: TICKS_PER_SECOND,
+            offset: 0,
+        };
+        let drop = lobshot_sim::drops::Drop {
+            kind: lobshot_sim::drops::DropKind::Chest,
+            x: 0,
+        };
+        let effects = vec![
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Dropped { seat: 2, drop, legs: vec![fall] },
+            Effect::Healed { seat: 1, amount: 120 },
+            Effect::TurnStarted { seat: 1 },
+        ];
+        let schedule = schedule(&effects);
+        let stage = 1.0 + FALL_SECONDS + TAIL_SECONDS;
+        assert_eq!(schedule.at[1], stage);
+        assert_eq!(schedule.at[2], stage + 1.0 + DAMAGE_AFTER_BLAST, "the chest heals on landing");
+        assert_eq!(schedule.end, stage + 1.0 + DAMAGE_AFTER_BLAST + FALL_SECONDS + TAIL_SECONDS);
+    }
+
+    #[test]
+    fn sudden_death_holds_its_announcement_before_the_next_turn() {
+        let schedule = schedule(&[Effect::SuddenDeath { kind: SuddenDeathKind::Double }, Effect::TurnStarted { seat: 0 }]);
+        assert_eq!(
+            schedule,
+            Schedule {
+                at: vec![0.0, SUDDEN_DEATH_SECONDS],
+                end: SUDDEN_DEATH_SECONDS
+            }
+        );
+    }
+
+    #[test]
+    fn a_spin_and_its_roll_are_instant() {
+        let drop = lobshot_sim::drops::Drop {
+            kind: lobshot_sim::drops::DropKind::Bolt,
+            x: 5,
+        };
+        assert_eq!(schedule(&[Effect::Spun { seat: 3 }]).end, 0.0);
+        assert_eq!(schedule(&[Effect::DropRolled { seat: 3, drop }]).end, 0.0);
+    }
+
+    #[test]
+    fn bolts_helices_and_bounces_land_on_their_ticks() {
+        let effects = vec![
+            Effect::Volley { seat: 0, shot: Shot::S2 },
+            Effect::Helix {
+                seat: 0,
+                legs: Vec::new(),
+                amplitude: 15.0,
+                hertz: 1.0,
+                strands: vec![Strand { phase: 0.0, to: TICKS_PER_SECOND }, Strand { phase: 3.0, to: 2 * TICKS_PER_SECOND }],
+            },
+            Effect::Bolt {
+                from: Vec2::ZERO,
+                to: Vec2::new(0.0, 100.0),
+                tick: TICKS_PER_SECOND / 2,
+            },
+            Effect::Shielded { seat: 1, amount: 76 },
+            Effect::Bounced { at: Vec2::ZERO, tick: TICKS_PER_SECOND },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at, [0.0, 0.0, 0.5, 0.5 + DAMAGE_AFTER_BLAST, 1.0]);
+        assert_eq!(schedule.end, 2.0 + FALL_SECONDS + TAIL_SECONDS, "the last strand is the last thing to land");
+    }
+
+    #[test]
+    fn every_effect_of_a_real_game_is_scheduled_in_order_within_the_scene() {
+        // An M3 shot of every kind, from a real game: nothing is scheduled past its scene's end.
+        for mobile in MobileKind::ALL {
+            for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+                let effects = shot_by(mobile, shot);
+                let schedule = schedule(&effects);
+                assert_eq!(schedule.at.len(), effects.len());
+                assert!(schedule.at.iter().all(|&t| (0.0..=schedule.end).contains(&t)), "{mobile:?} {shot:?}: {schedule:?}");
+                assert!(schedule.end > 0.0);
+            }
+        }
     }
 }
