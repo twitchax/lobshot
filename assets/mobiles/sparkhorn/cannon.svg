@@ -1,40 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="42" height="22" viewBox="-9 -11 42 22">
-  <!-- Coilback bell-mortar. Origin = pivot (ball joint center); drawn at aim 0 (pointing +x).
-       Muzzle = (28.8, 0). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="22" viewBox="-11 -11 44 22">
+  <!-- Sparkhorn's head and tesla-coil horn: the beetle raises its head to aim. Origin = pivot (the
+       head's center, on the neck); drawn at aim 0 (pointing +x). Muzzle = (27.6, 0), the
+       discharge ball. -->
   <defs>
-    <!-- Outline: the silhouette's alpha blurred, then thresholded low, grows it by about 1.3 units
-         with round corners (feMorphology's square kernel left square ones at sharp joins), and is
-         filled dark behind the art. -->
     <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
       <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
       <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
       <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
       <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <path id="barrel" d="M 3.5,-5 L 19,-4.2 C 22.5,-4.2 24.5,-7.4 27.6,-8 L 27.6,8 C 24.5,7.4 22.5,4.2 19,4.2 L 3.5,5 Z"/>
-    <clipPath id="barrelClip"><use href="#barrel"/></clipPath>
+    <path id="horn" d="M 4,-5.4 C 11,-5 18,-3.8 24.6,-2.2 L 24.6,2.2 C 18,3.6 11,4.8 4,5.4 Z"/>
+    <clipPath id="hornClip"><use href="#horn"/></clipPath>
+    <clipPath id="headClip"><circle r="7.4"/></clipPath>
   </defs>
   <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
-    <use href="#barrel" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
-    <g clip-path="url(#barrelClip)">
-      <path d="M 0,1.4 H 19 C 22.5,1.4 24.5,2 28,2.4 V 10 H 0 Z" fill="#b9822c"/>
-      <path d="M 0,3.6 H 19 C 22.5,3.4 24.5,5.6 28,6 V 10 H 0 Z" fill="#8a5a22"/>
-      <path d="M 4.5,-3 L 18.6,-2.4 C 21.6,-2.4 23.4,-4.6 26.4,-5.6" stroke="#fff1a8" stroke-width="1.2" fill="none"/>
+    <!-- mandibles, under the horn -->
+    <path d="M 4.8,4.4 C 7.4,5 8.8,6.4 8.6,8.2 M 1.6,6 C 2.6,6.6 3,7.2 2.8,7.8" stroke="#2a1a2e" stroke-width="2.4" fill="none"/>
+    <path d="M 4.8,4.4 C 7.4,5 8.8,6.4 8.6,8.2 M 1.6,6 C 2.6,6.6 3,7.2 2.8,7.8" stroke="#d98a4a" stroke-width="1.1" fill="none"/>
+    <!-- the horn: a copper coil wound on a midnight core -->
+    <use href="#horn" fill="#283563" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#hornClip)">
+      <path d="M 9,6 L 11,-6 M 12,6 L 14,-6 M 15,6 L 17,-6 M 18,6 L 20,-6 M 21,6 L 23,-6" stroke="#d98a4a" stroke-width="1.7"/>
+      <path d="M 4,2 C 11,2.6 18,1.8 26,0.8 V 6 H 4 Z" fill="#0d1226" opacity="0.35"/>
+      <path d="M 6,-3.8 C 12,-3.6 18,-2.6 23.6,-1.6" stroke="#ffc08a" stroke-width="0.8" fill="none"/>
     </g>
-    <!-- bands -->
-    <rect x="8" y="-5.8" width="2.8" height="11.6" rx="0.9" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="0.8"/>
-    <rect x="15.2" y="-5.3" width="2.8" height="10.6" rx="0.9" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="0.8"/>
-    <path d="M 8.4,1.6 H 10.4 V 5.2 H 8.4 Z M 15.6,1.6 H 17.6 V 4.8 H 15.6 Z" fill="#1d7f80"/>
-    <path d="M 8.6,-4.6 V -2 M 15.8,-4.2 V -1.8" stroke="#8be8cf" stroke-width="0.7"/>
-    <!-- bell mouth -->
-    <ellipse cx="27.6" cy="0" rx="2.2" ry="8" fill="#d9a13a" stroke="#2a1a2e" stroke-width="0.9"/>
-    <ellipse cx="28.2" cy="0" rx="1.2" ry="6" fill="#2a1a2e"/>
-    <path d="M 27,-6.6 Q 28.4,-5 28.6,-2.6" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
-    <!-- ball joint with engraved spiral -->
-    <circle r="6.2" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
-    <path d="M 6.2,0 A 6.2 6.2 0 0 1 -6.2,0 A 6.8 4.8 0 0 0 6.2,0 Z" fill="#b9822c"/>
-    <path d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#8a5a22" stroke-width="0.8" fill="none"/>
-    <path d="M -4.4,-2.2 A 5 5 0 0 1 -1.6,-4.8" stroke="#fff8d0" stroke-width="1.1" fill="none"/>
-    <circle cx="22.5" cy="-5.8" r="0.8" fill="#fff8d0"/>
+    <rect x="6" y="-6" width="2.6" height="12" rx="1.2" fill="#f2ead8" stroke="#2a1a2e" stroke-width="0.8"/>
+    <rect x="22.4" y="-3.4" width="2.2" height="6.8" rx="1" fill="#f2ead8" stroke="#2a1a2e" stroke-width="0.7"/>
+    <!-- discharge ball -->
+    <circle cx="27.6" r="3.8" fill="#8ff0ff" stroke="#2a1a2e" stroke-width="0.9"/>
+    <circle cx="27.6" r="2.2" fill="#e6fdff"/>
+    <circle cx="26.4" cy="-1.4" r="0.9" fill="#ffffff"/>
+    <!-- the head, and its big glowing eye -->
+    <circle r="7.4" fill="#3a4a86" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#headClip)">
+      <path d="M -8,2.6 C -3,5 3,5 8,2 V 8 H -8 Z" fill="#283563"/>
+      <path d="M -5.6,-3.2 A 6.2 6.2 0 0 1 -1.4,-6.2" stroke="#a8c4ff" stroke-width="1.1" fill="none"/>
+    </g>
+    <circle cx="-0.2" cy="0.4" r="3.8" fill="#8ff0ff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="0.8" cy="0.6" r="2.2" fill="#1b2445"/>
+    <circle cx="1.5" cy="-0.4" r="0.9" fill="#ffffff"/>
+    <circle cx="-0.3" cy="1.8" r="0.45" fill="#e6fdff"/>
   </g>
 </svg>

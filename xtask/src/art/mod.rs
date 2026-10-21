@@ -5,11 +5,14 @@
 //!
 //! - Mobiles: each rig part at `ART_SCALE`, pivot-centered, and the checked rig beside them.
 //! - Riders: each at `ART_SCALE`, seat-centered.
+//! - Items and drops: each icon and slot-machine drop at `ART_SCALE`, centered, an icon as wide as
+//!   the slots its item fills.
 //! - Maps: the background, and per variant the terrain art and the collision mask, both from one
 //!   land geometry (`land.rs`), plus the generated manifest with sizes and mask hashes.
 //! - Sounds: copied unchanged, once checked to be Ogg Vorbis.
 
 mod compose;
+mod icons;
 mod land;
 mod map;
 mod mobile;
@@ -65,6 +68,7 @@ pub fn build(sources: &Path, out_dir: &Path) -> Res<Built> {
     let mut out = Out::new(out_dir);
     let rigs = mobile::build_mobiles(sources, &mut out)?;
     let riders = mobile::build_riders(sources, &mut out)?;
+    icons::build_icons(sources, &mut out)?;
     let maps = map::build_maps(sources, &mut out)?;
     sound::build_sounds(sources, &mut out)?;
     out.prune()?;
@@ -112,12 +116,13 @@ mod unit {
 
     use super::*;
 
-    /// The real mobiles, riders and sounds beside a small map, so a full build takes a moment.
+    /// The real mobiles, riders, items, drops and sounds beside a small map, so a full build takes
+    /// a moment.
     fn fixture() -> TempDir {
         let dir = TempDir::new().unwrap();
         let assets = dir.path();
         let mobiles = MobileKind::ALL.map(|mobile| format!("mobiles/{}", lobshot_assets::mobile_slug(mobile)));
-        for dir in mobiles.iter().map(String::as_str).chain(["riders", "sounds"]) {
+        for dir in mobiles.iter().map(String::as_str).chain(["riders", "items", "drops", "sounds"]) {
             std::fs::create_dir_all(assets.join(dir)).unwrap();
             for entry in std::fs::read_dir(sources().join(dir)).unwrap() {
                 let path = entry.unwrap().path();
@@ -171,6 +176,8 @@ mod unit {
             assert!(png.width() % 2 == 0 && png.height() % 2 == 0, "{}: the pivot must fall on a pixel corner", part.file);
         }
         Pixmap::decode_png(&read(&lobshot_assets::rider_path("pip"))).unwrap();
+        Pixmap::decode_png(&read(&lobshot_assets::item_path(lobshot_sim::items::Item::Dual))).unwrap();
+        Pixmap::decode_png(&read(&lobshot_assets::drop_path(lobshot_sim::drops::DropKind::Chest))).unwrap();
 
         let info = MapInfo::from_ron(&String::from_utf8(read(&lobshot_assets::map_path("pond"))).unwrap()).unwrap();
         let variant = info.variant("A").unwrap();

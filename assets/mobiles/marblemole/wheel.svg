@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="-9 -9 18 18">
+  <!-- Marblemole's cart wheel: an iron rail wheel with a flange. Origin = axle; spins (the spokes
+       make rotation readable). -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.49" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linecap="round">
+    <!-- Ring shading only: it spins, and a baked light would spin with it. -->
+    <circle r="7.6" fill="#3e3c52"/>
+    <circle r="6.4" fill="#5a5870"/>
+    <circle r="5.4" fill="#8a88a6" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle r="4.4" fill="#6c6a86"/>
+    <g stroke="#2e2c40" stroke-width="1.3"><path d="M 0,-4.4 V 4.4 M -4.4,0 H 4.4 M -3.1,-3.1 L 3.1,3.1 M -3.1,3.1 L 3.1,-3.1"/></g>
+    <circle r="2" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle r="0.8" fill="#8a5a22"/>
+  </g>
+</svg>

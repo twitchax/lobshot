@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="30" viewBox="-5 -15 10 30">
+  <!-- Hookclaw's jar lip, edge on: a glazed ring over the claw's shoulder and the crab's face, so
+       both come out of the jar's mouth. Origin = the mouth's center. -->
+  <defs>
+    <filter id="ol" x="-30%" y="-15%" width="160%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.7" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="ring" fill-rule="evenodd" d="M 0,-12.6 A 3.2 12.6 0 1 0 0,12.6 A 3.2 12.6 0 1 0 0,-12.6 Z M 1,-10.4 A 1.6 10.4 0 1 1 1,10.4 A 1.6 10.4 0 1 1 1,-10.4 Z"/>
+    <clipPath id="ringClip"><use href="#ring"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <use href="#ring" fill="#f6f0e2" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#ringClip)">
+      <rect x="-4" y="4" width="8" height="10" fill="#ddd0b8"/>
+      <path d="M -1.8,-10 C -2.8,-4 -2.8,4 -1.8,10" stroke="#2f62c8" stroke-width="1.2" fill="none"/>
+      <path d="M -2.4,-9.6 C -2.8,-8 -2.9,-6.4 -2.9,-5" stroke="#ffffff" stroke-width="0.9" fill="none"/>
+    </g>
+  </g>
+</svg>

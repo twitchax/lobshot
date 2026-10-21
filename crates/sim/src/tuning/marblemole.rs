@@ -18,10 +18,13 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.33 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "No source sets it apart from the reference shot."),
     move_budget: cited(90, &["OB"]),
-    hitbox: picked(Rect { x: -30.0, y: -58.0, w: 64.0, h: 58.0 }, "Placeholder: Coilback's, until Marblemole's drawing lands."),
-    ground_probes: picked([-18.0, 18.0], "Placeholder: Coilback's, until Marblemole's drawing lands."),
-    cannon_pivot: picked((7.0, -64.0), "Placeholder: above Coilback's, so its whole aim range clears the body, until Marblemole's drawing lands."),
-    barrel_length: picked(28.8, "Placeholder: Coilback's, until Marblemole's drawing lands."),
+    hitbox: picked(
+        Rect { x: -34.0, y: -58.0, w: 64.0, h: 58.0 },
+        "Marblemole's drawn cart and the mole in it, helmet included. The rider and the lever are cosmetic.",
+    ),
+    ground_probes: picked([-15.0, 13.0], "Marblemole's drawn cart wheels."),
+    cannon_pivot: picked((28.0, -39.0), "Marblemole's drawn chute hinge, on the cart's front corner."),
+    barrel_length: picked(28.0, "Marblemole's drawn chute, hinge to the marble at its lip."),
     s1: ShotTuning {
         delay: cited(250, &["CR-mob", "SW-mds"]),
         aim: cited(

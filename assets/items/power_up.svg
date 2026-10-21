@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="-20 -20 40 40">
+  <!-- Power Up: this turn's shot hits harder. A gold arrow up out of a burst. One slot per 40 px of width; origin = the center. -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d">
+        <feFuncA type="linear" slope="14" intercept="-0.25"/>
+      </feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/>
+      <feComposite in2="d" operator="in" result="o"/>
+      <feMerge>
+        <feMergeNode in="o"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="tileClip">
+      <rect x="-18.6" y="-18.6" width="37.2" height="37.2" rx="6"/>
+    </clipPath>
+  </defs>
+  <g filter="url(#ol)">
+    <rect x="-18.6" y="-18.6" width="37.2" height="37.2" rx="6" fill="#e8434f"/>
+    <g clip-path="url(#tileClip)">
+      <path d="M -18.6,-18.6 H 18.6 V -2 C 10,2 -10,-6 -18.6,0 Z" fill="#ff7a7a"/>
+      <rect x="-18.6" y="14.6" width="37.2" height="4" fill="#b52a3a"/>
+      <path d="M -14.6,-16.4 H 14.6" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+    </g>
+  </g>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M 0,-15 L 3.4,-7 L 12,-9.4 L 7.6,-1.6 L 14,4.4 L 5.4,5.6 L 5.6,14 L 0,8 L -5.6,14 L -5.4,5.6 L -14,4.4 L -7.6,-1.6 L -12,-9.4 L -3.4,-7 Z" fill="#fff0a8" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 0,-13.6 L 9.4,-2.6 L 4,-2.6 L 4,11.4 L -4,11.4 L -4,-2.6 L -9.4,-2.6 Z" fill="#ffcf3a" stroke="#2a1a2e" stroke-width="1"/>
+    <path d="M 4,-2.6 L 9.4,-2.6 L 0,-13.6 L 2,-8 L 4,-5 Z M 1.4,-2.6 H 4 V 11.4 H 1.4 Z" fill="#e6a419"/>
+    <path d="M -2.4,9.6 V -1 M -2.4,-4.6 L -1,-9" stroke="#ffffff" stroke-width="1.1" fill="none"/>
+  </g>
+</svg>

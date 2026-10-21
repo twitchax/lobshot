@@ -23,10 +23,13 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.30 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "No source sets it apart from the reference shot."),
     move_budget: cited(90, &["OB"]),
-    hitbox: picked(Rect { x: -30.0, y: -58.0, w: 64.0, h: 58.0 }, "Placeholder: Coilback's, until Sparkhorn's drawing lands."),
-    ground_probes: picked([-18.0, 18.0], "Placeholder: Coilback's, until Sparkhorn's drawing lands."),
-    cannon_pivot: picked((7.0, -48.0), "Placeholder: Coilback's, until Sparkhorn's drawing lands."),
-    barrel_length: picked(28.8, "Placeholder: Coilback's, until Sparkhorn's drawing lands."),
+    hitbox: picked(
+        Rect { x: -32.0, y: -54.0, w: 64.0, h: 54.0 },
+        "Sparkhorn's drawn wing cases, thorax and head, down to its wheels. The rider, the capacitor and the short horn are cosmetic.",
+    ),
+    ground_probes: picked([-23.0, 23.0], "Sparkhorn's drawn rear and front wheels."),
+    cannon_pivot: picked((25.0, -23.0), "Sparkhorn's drawn neck: the head turns with the horn."),
+    barrel_length: picked(27.6, "Sparkhorn's drawn head and horn, neck to discharge ball."),
     s1: ShotTuning {
         delay: cited(250, &["CR-mob", "SW-mds"]),
         aim: cited(

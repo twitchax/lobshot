@@ -1,16 +1,19 @@
 //! Review sheets for the art director, in `target/art-preview/`: each mobile posed at several aims,
-//! its exploded parts, and each map variant whole, at game scale and as its mask. Mobiles are
+//! its exploded parts, every item icon and drop, and each map variant whole, at game scale and as
+//! its mask. Mobiles are
 //! composed from pivot-centered sprites exactly as the client places them (`DESIGN.md`, "Art"), so
 //! what looks right here is right in the game.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use lobshot_assets::{MobileRig, mobile_slug};
 use lobshot_sim::{
     base::{Res, Void},
     body::Pose,
+    drops::DropKind,
     game::MobileKind,
+    items::Item,
     movement::{Footing, Landing, settle, tilt},
     terrain::Terrain,
     units::{Facing, Vec2},
@@ -20,6 +23,7 @@ use resvg::tiny_skia::{Color, FillRule, FilterQuality, Paint, PathBuilder, Pixma
 use super::{
     ART_SCALE,
     compose::{Mobile, Sprite},
+    icons,
     map::BuiltMap,
     out::Out,
     raster::encode_png,
@@ -36,6 +40,7 @@ pub fn build_previews(sources: &Path, out: &mut Out, rigs: &[(MobileKind, Mobile
         out.write(&format!("{slug}.png"), &encode_png(&poses(&Mobile::render(sources, *mobile, rig, rider, 5.0)?, *mobile)?)?)?;
         out.write(&format!("{slug}_parts.png"), &encode_png(&parts_sheet(sources, *mobile, rig, riders)?)?)?;
     }
+    out.write("items.png", &encode_png(&icons_sheet(sources)?)?)?;
     let (mobile, rig) = rigs.first().context("no mobiles to place")?;
     let at_game_scale = Mobile::render(sources, *mobile, rig, rider, ART_SCALE)?;
     for map in maps {
@@ -168,6 +173,46 @@ fn parts_sheet(sources: &Path, mobile: MobileKind, rig: &MobileRig, riders: &[St
             canvas.stroke_path(&cross, &paint((0xff, 0x2d, 0x55)), &Stroke { width: 1.5, ..Stroke::default() }, Transform::identity(), None);
         }
         x += w + gap;
+    }
+    Ok(canvas)
+}
+
+/// Every item icon, then every drop, in a row: at 1x and at game scale on a dark panel like the
+/// HUD's, and at game scale on a light one.
+fn icons_sheet(sources: &Path) -> Res<Pixmap> {
+    let paths: Vec<PathBuf> = Item::ALL
+        .iter()
+        .map(|&item| icons::item_source(sources, item))
+        .chain(DropKind::ALL.iter().map(|&drop| icons::drop_source(sources, drop)))
+        .collect();
+    let bands = [(1.0, (0x2a, 0x24, 0x38)), (ART_SCALE, (0x3a, 0x34, 0x50)), (ART_SCALE, (0xe6, 0xed, 0xf3))];
+    let mut rows = Vec::with_capacity(bands.len());
+    for (scale, color) in bands {
+        let sprites = paths.iter().map(|path| Sprite::render(path, scale)).collect::<Res<Vec<_>>>()?;
+        rows.push((scale, color, sprites));
+    }
+    #[allow(clippy::cast_precision_loss)] // Sprite sides are far below 2^24.
+    let side = |n: u32| n as f32;
+    let gap = 12.0;
+    let width = rows
+        .iter()
+        .map(|(_, _, sprites)| sprites.iter().map(|s| side(s.pixmap.width()) + gap).sum::<f32>() + gap)
+        .fold(0.0, f32::max);
+    let heights: Vec<f32> = rows
+        .iter()
+        .map(|(_, _, sprites)| side(sprites.iter().map(|s| s.pixmap.height()).max().unwrap_or(1)) + 2.0 * gap)
+        .collect();
+    let mut canvas = canvas(width, heights.iter().sum())?;
+    let mut top = 0.0;
+    for ((scale, color, sprites), &height) in rows.iter().zip(&heights) {
+        fill_rect(&mut canvas, Rect::from_xywh(0.0, top, width, height), Transform::identity(), *color);
+        let mut x = gap;
+        for sprite in sprites {
+            let w = side(sprite.pixmap.width());
+            sprite.draw(&mut canvas, Transform::from_translate(x + w / 2.0, top + height / 2.0).pre_scale(*scale, *scale));
+            x += w + gap;
+        }
+        top += height;
     }
     Ok(canvas)
 }
