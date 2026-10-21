@@ -1,0 +1,43 @@
+# Fly.io config for lobshot at https://lobshot.twitchax.com (PRD-0004 T-010; DESIGN.md, "Deployment").
+#
+# Exactly one machine: rooms live in memory, so a second machine would split a room's players. Fly
+# creates two by default, so deploy with `--ha=false`: `cargo make deploy` ships HEAD's CI-built
+# image that way. Open WebSockets count as traffic, so auto-stop never stops a live game; with
+# nobody connected the machine stops, and the next visit starts it. A deploy restarts the machine
+# and drops every game in progress: deploy when nobody is playing.
+
+app = "twitchax-lobshot"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Rate limits key on the client's address, which Fly's proxy passes in this header.
+  LOBSHOT_CLIENT_IP_HEADER = "Fly-Client-IP"
+  RUST_LOG = "info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Each socket is a connection, and a full room holds 8 players and 16 spectators, so Fly's
+  # default limit of 25 connections would turn away the second room.
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 400
+    hard_limit = 500
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    timeout = "2s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

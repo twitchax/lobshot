@@ -6,6 +6,7 @@
 #   cargo make uat       ci + the #[ignore]d slow suites
 #   cargo make codecov   coverage.lcov via llvm-cov
 #   cargo make art       render assets/ into assets/gen/ (SVG to PNG, masks, map manifests)
+#   cargo make deploy    ship HEAD's CI-built image to the one Fly machine (drops live games)
 #   cargo make dist      the release client bundle in dist/ (art, trunk, wasm-opt, brotli and gzip)
 #   cargo make dev       a quick wasm-dev bundle, then the server on 127.0.0.1:8080
 #   cargo make browser   the release bundle in headless Chrome against the real server
@@ -155,6 +156,15 @@ dependencies = ["fmt-check", "clippy", "clippy-wasm", "test", "test-client", "de
 # The acceptance gate PRD UATs point at: ci plus everything too slow for every push. The ignored
 # suites include the browser smoke test, which needs the release bundle.
 dependencies = ["ci", "dist", "test-ignored"]
+
+[tasks.deploy]
+# Ships the image CI built and pushed for HEAD (`sha-<commit>`), so what runs is what CI tested, to
+# the one Fly machine (`--ha=false`; DESIGN.md, "Deployment"). A deploy drops every live game.
+script = '''
+set -eu
+git diff --quiet HEAD || { echo "commit first: the image is CI's build of HEAD"; exit 1; }
+fly deploy --ha=false --image "ghcr.io/twitchax/lobshot:sha-$(git rev-parse HEAD)"
+'''
 
 [tasks.browser]
 # The browser smoke test alone (PRD-0003 uat-003): needs Chrome. To skip the release build, run the
