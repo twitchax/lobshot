@@ -11,9 +11,9 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     sprite::Anchor,
 };
-use lobshot_assets::{ART_SCALE, MobileRig};
+use lobshot_assets::ART_SCALE;
 use lobshot_sim::{
-    game::{MobileKind, Phase},
+    game::Phase,
     map::MapRef,
     terrain::Terrain,
     units::{Facing, Vec2 as SimVec2},
@@ -21,7 +21,7 @@ use lobshot_sim::{
 
 use super::{GameRoot, Timeline, world};
 use crate::{
-    assets::Blob,
+    assets::Rigs,
     model::{Match, Screen, Session},
     ui::{team_color, theme},
 };
@@ -113,6 +113,7 @@ pub struct Shown {
     pub tilt: f64,
     pub facing: Facing,
     pub hp: i32,
+    pub shield: i32,
     pub alive: bool,
     /// The aim to draw the cannon at (this player's live aim, or another's last shot).
     pub aim: i16,
@@ -128,6 +129,9 @@ pub struct Overlay {
 struct HpFill;
 
 #[derive(Component)]
+struct ShieldFill;
+
+#[derive(Component)]
 struct Placeholder;
 
 #[derive(Component)]
@@ -138,13 +142,6 @@ pub struct CannonPart;
 
 #[derive(Component)]
 struct WheelPart;
-
-/// Rigs by mobile, and the rider image.
-#[derive(Resource, Default)]
-struct Rigs {
-    manifests: HashMap<MobileKind, Handle<Blob>>,
-    parsed: HashMap<MobileKind, MobileRig>,
-}
 
 fn art_scale_f32() -> f32 {
     // ART_SCALE is 2.0.
@@ -165,7 +162,7 @@ fn build_map(game: Option<Res<Match>>, art: Option<Res<MapArt>>, server: Res<Ass
     let (Some(game), None) = (game, art) else { return };
     let terrain = game.predicted.terrain();
     let map_size = Vec2::new(as_f32(f64::from(terrain.width())), as_f32(f64::from(terrain.height())));
-    match &game.map {
+    match &game.log.setup.map {
         MapRef::Asset { name, variant, .. } => {
             commands.spawn((
                 GameRoot,
@@ -287,27 +284,11 @@ fn slice_drawn(art: Option<ResMut<MapArt>>, mut images: ResMut<Assets<Image>>, m
     art.source = None;
 }
 
-fn load_rigs(game: Option<Res<Match>>, mut rigs: ResMut<Rigs>, server: Res<AssetServer>, blobs: Res<Assets<Blob>>) {
+fn load_rigs(game: Option<Res<Match>>, mut rigs: ResMut<Rigs>, server: Res<AssetServer>) {
     let Some(game) = game else { return };
     for player in game.predicted.players() {
-        rigs.manifests.entry(player.mobile).or_insert_with(|| server.load(lobshot_assets::rig_path(player.mobile)));
+        rigs.request(&server, player.mobile);
     }
-    let ready: Vec<(MobileKind, MobileRig)> = rigs
-        .manifests
-        .iter()
-        .filter(|(kind, _)| !rigs.parsed.contains_key(*kind))
-        .filter_map(|(kind, handle)| {
-            let text = std::str::from_utf8(&blobs.get(handle)?.0).ok()?;
-            match MobileRig::from_ron(text) {
-                Ok(rig) => Some((*kind, rig)),
-                Err(error) => {
-                    error!("{kind:?}'s rig: {error:#}");
-                    None
-                }
-            }
-        })
-        .collect();
-    rigs.parsed.extend(ready);
 }
 
 /// Spawns each seat's mobile (as a placeholder until its rig arrives) and its overlay.
@@ -323,6 +304,7 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
             tilt: player.tilt,
             facing: player.facing,
             hp: player.hp,
+            shield: player.shield,
             alive: player.alive,
             aim: player.tuning().s1.aim.value.true_min,
         };
@@ -342,6 +324,7 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
                 ));
             });
         let name = session.seat_name(seat);
+        let shielded = player.tuning().shield.value > 0;
         commands.spawn((GameRoot, Overlay { seat }, Transform::default(), Visibility::default())).with_children(|overlay| {
             overlay.spawn((
                 Text2d::new(name),
@@ -350,8 +333,29 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
                     ..default()
                 },
                 TextColor(theme::TEXT),
-                Transform::from_xyz(0.0, 14.0, 0.0),
+                Transform::from_xyz(0.0, if shielded { 19.0 } else { 14.0 }, 0.0),
             ));
+            // Mobiles with a shield show it as a thin bar over the HP bar, as GunBound does.
+            if shielded {
+                overlay.spawn((
+                    Sprite {
+                        color: Color::srgba(0.0, 0.0, 0.0, 0.6),
+                        custom_size: Some(Vec2::new(52.0, 5.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 6.0, 0.0),
+                ));
+                overlay.spawn((
+                    ShieldFill,
+                    Sprite {
+                        color: theme::SHIELD,
+                        custom_size: Some(Vec2::new(50.0, 3.0)),
+                        ..default()
+                    },
+                    Anchor::CENTER_LEFT,
+                    Transform::from_xyz(-25.0, 6.0, 0.1),
+                ));
+            }
             overlay.spawn((
                 Sprite {
                     color: Color::srgba(0.0, 0.0, 0.0, 0.6),
@@ -386,7 +390,7 @@ fn dress_mobiles(
     let Some(game) = game else { return };
     for (entity, view, children) in &views {
         let Some(player) = game.predicted.players().get(usize::from(view.seat)) else { continue };
-        let Some(rig) = rigs.parsed.get(&player.mobile) else { continue };
+        let Some(rig) = rigs.get(player.mobile) else { continue };
         for child in children.iter() {
             if placeholders.contains(child) {
                 commands.entity(child).despawn();
@@ -416,6 +420,9 @@ fn dress_mobiles(
     }
 }
 
+/// The HP and shield bars' fills, and which each is.
+type Fills<'w, 's> = Query<'w, 's, (&'static mut Sprite, Has<ShieldFill>), Or<(With<HpFill>, With<ShieldFill>)>>;
+
 /// The rig parts that move on their own: the cannon and the wheels.
 type MovingPart = (Or<(With<CannonPart>, With<WheelPart>)>, Without<MobileView>, Without<Overlay>);
 
@@ -425,7 +432,7 @@ fn pose_mobiles(
     mut parts: Query<&mut Transform, MovingPart>,
     cannons: Query<(), With<CannonPart>>,
     mut overlays: Query<(&Overlay, &mut Transform, &mut Visibility, &Children), Without<MobileView>>,
-    mut fills: Query<&mut Sprite, With<HpFill>>,
+    mut fills: Fills,
     game: Option<Res<Match>>,
 ) {
     let Some(game) = game else { return };
@@ -453,11 +460,14 @@ fn pose_mobiles(
         // Above the rider's hat: Coilback with Pip stands about 95 px tall.
         transform.translation = (world(shown.foot) + Vec2::new(0.0, 104.0)).extend(depth::OVERLAYS);
         *visibility = if shown.alive { Visibility::Inherited } else { Visibility::Hidden };
-        let max = game.predicted.players().get(usize::from(overlay.seat)).map_or(1, |p| p.tuning().hp.value.max(1));
+        let Some(tuning) = game.predicted.players().get(usize::from(overlay.seat)).map(lobshot_sim::game::Player::tuning) else {
+            continue;
+        };
         for child in children.iter() {
-            if let Ok(mut fill) = fills.get_mut(child) {
-                let fraction = (f64::from(shown.hp.max(0)) / f64::from(max)).clamp(0.0, 1.0);
-                fill.custom_size = Some(Vec2::new(50.0 * as_f32(fraction), 5.0));
+            if let Ok((mut fill, shield)) = fills.get_mut(child) {
+                let (now, max, height) = if shield { (shown.shield, tuning.shield.value, 3.0) } else { (shown.hp, tuning.hp.value, 5.0) };
+                let fraction = (f64::from(now.max(0)) / f64::from(max.max(1))).clamp(0.0, 1.0);
+                fill.custom_size = Some(Vec2::new(50.0 * as_f32(fraction), height));
             }
         }
     }
@@ -484,6 +494,7 @@ fn follow_game(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time
         }
         shown.facing = player.facing;
         shown.hp = player.hp;
+        shown.shield = player.shield;
         shown.alive = player.alive;
     }
 }
@@ -501,7 +512,7 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Rigs>().add_systems(
+        app.add_systems(
             Update,
             (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, pose_mobiles)
                 .chain()

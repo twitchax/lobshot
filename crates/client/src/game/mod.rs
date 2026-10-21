@@ -5,10 +5,12 @@
 //! shows GunBound's 800×600 view, letterboxed to 4:3 so a "screen" stays a fixed ruler. A
 //! backdrop camera clears the whole window first, and the UI camera draws the HUD over everything.
 
+mod fx;
 mod hud;
 mod input;
 mod playback;
 mod practice;
+mod scoreboard;
 mod sounds;
 mod world;
 
@@ -125,8 +127,13 @@ fn follow(focus: Res<Focus>, game: Option<Res<crate::model::Match>>, time: Res<T
     camera.translation = now.extend(camera.translation.z);
 }
 
+/// How long the result and the scoreboard stay up, once the last shot has shown, before an online
+/// game follows its room back to the lobby: long enough to read eight players' tallies.
+const RESULT_SECONDS: f64 = 10.0;
+
 /// Leaving a game. Online, the room went back to its lobby when the game ended; follow it once
-/// the last shot and the result have shown. In practice, Esc goes back to the title.
+/// the last shot, the result and the scoreboard have shown. In practice, Esc goes back to the
+/// title.
 fn wrap_up(
     mut session: ResMut<crate::model::Session>,
     timeline: Res<Timeline>,
@@ -144,7 +151,7 @@ fn wrap_up(
         return;
     }
     let now = time.elapsed_secs_f64();
-    if now - *since.get_or_insert(now) >= 4.0 {
+    if now - *since.get_or_insert(now) >= RESULT_SECONDS {
         *since = None;
         session.lobby_waiting = false;
         next.set(Screen::Lobby);
@@ -170,6 +177,8 @@ impl Plugin for GamePlugin {
             .add_plugins((
                 world::WorldPlugin,
                 playback::PlaybackPlugin,
+                fx::FxPlugin,
+                scoreboard::ScoreboardPlugin,
                 hud::HudPlugin,
                 input::InputPlugin,
                 practice::PracticePlugin,

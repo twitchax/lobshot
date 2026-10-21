@@ -1,24 +1,38 @@
-//! The HUD, in GunBound's functional layout: weather queue, wind dial and turn timer across the top;
-//! turn list, shots, angle, power bar and move bar along the bottom; chat above the turn list; and
-//! the aim arc, with its true-angle wedge, around your mobile.
+//! The HUD, in GunBound's functional layout: weather queue, wind dial and turn timer (with the
+//! sudden-death countdown) across the top; turn list, shots, items, angle, power bar and move bar
+//! along the bottom; chat above the turn list; the aim arc, with its true-angle wedge, around your
+//! mobile. Once you're dead, the slot machine stands beside the controls.
 
-use bevy::{ecs::system::SystemParam, prelude::*};
-use lobshot_sim::{game::Shot, weather::WeatherKind};
+use bevy::{ecs::system::SystemParam, prelude::*, ui::InteractionDisabled};
+use lobshot_sim::{
+    drops::DropKind,
+    game::{Effect, Game, Shot},
+    items::Item,
+    units::Vec2 as SimVec2,
+    weather::WeatherKind,
+};
 
 use super::{
     GameRoot,
-    input::Controls,
-    playback::{Ending, Outcome, TurnClock},
+    input::{Controls, item_key_label, my_turn},
+    playback::{Ending, Herald, Outcome, TurnClock},
     world,
-    world::{MobileView, Shown, current_seat},
+    world::{MobileView, Shown, current_seat, depth},
 };
 use crate::{
-    model::{Match, Screen, Session},
-    ui::{UiAction, button, panel, team_color, text, theme},
+    assets::ImageCache,
+    model::{Match, Played, Screen, Session, Ss, Sudden, sudden_death_name},
+    picks,
+    ui::{Clicked, UiAction, art, button, button_node, chosen, panel, team_color, text, theme},
 };
 
 /// The power bar's width, in UI pixels: 100 per bar, as in GunBound.
 const POWER_WIDTH: f32 = 400.0;
+/// An item slot on the item bar, in UI pixels; a two-slot item is two of these and a gap.
+const ITEM: f32 = 38.0;
+const ITEM_GAP: f32 = 4.0;
+/// How long the sudden-death banner stays up, in seconds.
+const SUDDEN_BANNER_SECONDS: f64 = 3.5;
 
 /// A text the HUD keeps current.
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +41,8 @@ enum Readout {
     Timer,
     Turn,
     Angle,
+    /// The sudden-death countdown, or which one is on.
+    Sudden,
 }
 
 /// A bar the HUD keeps current.
@@ -52,8 +68,22 @@ struct TurnList;
 struct ChatLines;
 #[derive(Component)]
 struct Banner;
+#[derive(Component)]
+struct ItemBar;
+#[derive(Component)]
+struct SlotMachine;
+#[derive(Component)]
+struct SpinButton;
+/// One face of the slot machine's reel: a drop, or `None` for the idle "?".
+#[derive(Component)]
+struct ReelFace(Option<DropKind>);
+#[derive(Component)]
+struct ReelStatus;
+/// A label over a drop on its way down.
+#[derive(Component)]
+struct DropMarker;
 
-fn build(mut commands: Commands) {
+fn build(mut commands: Commands, server: Res<AssetServer>, mut cache: ResMut<ImageCache>) {
     let root = commands
         .spawn((
             GameRoot,
@@ -88,7 +118,7 @@ fn build(mut commands: Commands) {
             row_gap: Val::Px(6.0),
             ..default()
         })
-        .with_children(bottom_bar);
+        .with_children(|bottom| bottom_bar(bottom, &server, &mut cache));
     });
 }
 
@@ -137,6 +167,7 @@ fn top_bar(top: &mut ChildSpawnerCommands) {
     .with_children(|clock| {
         clock.spawn((Readout::Timer, text("20", 34.0, theme::ACCENT)));
         clock.spawn((Readout::Turn, text("", 15.0, theme::TEXT)));
+        clock.spawn((Readout::Sudden, text("", 13.0, theme::MUTED)));
     });
 }
 
@@ -152,8 +183,8 @@ fn round(size: f32) -> Node {
     }
 }
 
-/// Chat over the turn list and the controls.
-fn bottom_bar(bottom: &mut ChildSpawnerCommands) {
+/// Chat over the turn list, the controls and (for the dead) the slot machine.
+fn bottom_bar(bottom: &mut ChildSpawnerCommands, server: &AssetServer, cache: &mut ImageCache) {
     bottom.spawn((
         ChatLines,
         Node {
@@ -182,7 +213,71 @@ fn bottom_bar(bottom: &mut ChildSpawnerCommands) {
                 ..default()
             }))
             .with_children(controls);
+            row.spawn((
+                SlotMachine,
+                panel(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: Val::Px(4.0),
+                    width: Val::Px(150.0),
+                    display: Display::None,
+                    ..default()
+                }),
+            ))
+            .with_children(|machine| slot_machine_parts(machine, server, cache));
         });
+}
+
+/// The slot machine: a reel with a face per drop (one shows at a time), the Spin button and a line
+/// saying what's going on.
+fn slot_machine_parts(machine: &mut ChildSpawnerCommands, server: &AssetServer, cache: &mut ImageCache) {
+    machine.spawn(text("Slot machine", 15.0, theme::ACCENT));
+    machine
+        .spawn((
+            Node {
+                width: Val::Px(64.0),
+                height: Val::Px(64.0),
+                border_radius: BorderRadius::all(Val::Px(6.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.4)),
+        ))
+        .with_children(|reel| {
+            let face = |shown: bool| Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                display: if shown { Display::Flex } else { Display::None },
+                ..default()
+            };
+            reel.spawn((ReelFace(None), face(true), children![text("?", 36.0, theme::ACCENT)]));
+            for kind in DropKind::ALL {
+                let image = cache.get(server, lobshot_assets::drop_path(kind));
+                reel.spawn((ReelFace(Some(kind)), face(false), children![art(image, drop_name(kind), Vec2::splat(56.0), 12.0)]));
+            }
+        });
+    machine.spawn((SpinButton, button("Spin", UiAction::Spin)));
+    machine.spawn((
+        ReelStatus,
+        text("", 12.0, theme::TEXT),
+        TextLayout::justify(Justify::Center),
+        Node { max_width: Val::Px(130.0), ..default() },
+    ));
+}
+
+/// A drop's player-facing name.
+#[must_use]
+fn drop_name(kind: DropKind) -> &'static str {
+    match kind {
+        DropKind::Dynamite => "Dynamite",
+        DropKind::Hammer => "Hammer",
+        DropKind::Bolt => "Bolt",
+        DropKind::Chest => "Chest",
+        DropKind::Calm => "Calm",
+        DropKind::Reverse => "Reverse",
+    }
 }
 
 /// Shots, angle, pass and chat; then the power bar and the move bar.
@@ -201,6 +296,15 @@ fn controls(controls: &mut ChildSpawnerCommands) {
             line.spawn(button("Pass", UiAction::Pass));
             line.spawn(button("Chat", UiAction::Chat));
         });
+    controls.spawn((
+        ItemBar,
+        Node {
+            column_gap: Val::Px(ITEM_GAP),
+            align_items: AlignItems::Center,
+            min_height: Val::Px(ITEM),
+            ..default()
+        },
+    ));
     let track = |height: f32| {
         (
             Node {
@@ -268,6 +372,33 @@ fn shot_label(shot: Shot) -> &'static str {
     }
 }
 
+/// A turn-list row's delay: relative to `base`, except your own, which shows as it stands.
+fn delay_label(delay: i64, base: Option<i64>, yours: bool) -> String {
+    match base {
+        Some(base) if !yours => format!("{:+}", delay - base),
+        _ => delay.to_string(),
+    }
+}
+
+/// The SS button's label: its lock in own turns left, or that sudden death took it.
+fn ss_label(ss: Ss) -> String {
+    match ss {
+        Ss::Ready => shot_label(Shot::Ss).to_owned(),
+        Ss::Locked(turns) => format!("SS in {turns}"),
+        Ss::Off => "SS off".to_owned(),
+    }
+}
+
+/// The sudden-death readout under the turn.
+fn sudden_label(sudden: Sudden) -> String {
+    match sudden {
+        Sudden::Never => String::new(),
+        Sudden::In { turns: 1, .. } => "Sudden death next turn".to_owned(),
+        Sudden::In { turns, .. } => format!("Sudden death in {turns} turns"),
+        Sudden::On(kind) => format!("Sudden death: {}", sudden_death_name(kind)),
+    }
+}
+
 fn weather_look(kind: WeatherKind) -> (&'static str, Color) {
     match kind {
         WeatherKind::Wind => ("W", Color::srgb_u8(0x8f, 0xd3, 0xff)),
@@ -316,6 +447,8 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
                 Some(last) => format!("Angle {} (last {last})", controls.aim),
                 None => format!("Angle {}", controls.aim),
             },
+            Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
+            Readout::Sudden => String::new(),
         };
         if **text != value {
             **text = value;
@@ -343,7 +476,7 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
 #[derive(SystemParam)]
 struct Lists<'w, 's> {
     slots: Query<'w, 's, (&'static WeatherSlot, &'static mut BackgroundColor, &'static Children)>,
-    tabs: Query<'w, 's, (&'static ShotTab, &'static mut BorderColor, &'static mut Node)>,
+    tabs: Query<'w, 's, (Entity, &'static ShotTab, &'static mut BorderColor, &'static mut Node, &'static Children)>,
     texts: Query<'w, 's, &'static mut Text>,
     turns: Query<'w, 's, Entity, With<TurnList>>,
     chats: Query<'w, 's, Entity, With<ChatLines>>,
@@ -364,31 +497,48 @@ fn weather_and_turns(game: Option<Res<Match>>, session: Res<Session>, controls: 
             }
         }
     }
-    for (tab, mut border, mut node) in &mut lists.tabs {
+    // Spectators see SS as ready: it isn't theirs to lock.
+    let ss = session.my_seat().map_or(Ss::Ready, |seat| game.ss(seat));
+    for (entity, tab, mut border, mut node, children) in &mut lists.tabs {
         let selected = tab.0 == controls.shot;
         node.border = UiRect::all(Val::Px(if selected { 2.0 } else { 0.0 }));
         *border = BorderColor::all(if selected { theme::ACCENT } else { Color::NONE });
+        if tab.0 != Shot::Ss {
+            continue;
+        }
+        let label = ss_label(ss);
+        for child in children.iter() {
+            if let Ok(mut text) = lists.texts.get_mut(child)
+                && **text != label
+            {
+                (**text).clone_from(&label);
+            }
+        }
+        if ss == Ss::Ready {
+            commands.entity(entity).remove::<InteractionDisabled>();
+        } else {
+            commands.entity(entity).insert(InteractionDisabled);
+        }
     }
 
-    // The turn list: everyone alive, by delay, shown relative to you (GunBound's ± list).
-    let mine = session.my_seat().and_then(|seat| game.predicted.players().get(usize::from(seat))).map(|p| i64::from(p.clock.delay));
+    // The turn list: everyone alive, by delay (GunBound's ± list), small enough for eight. Delays
+    // count from yours while you play; once you're dead, or watching, from whoever moves next.
     let mut order: Vec<(usize, &lobshot_sim::game::Player)> = game.predicted.players().iter().enumerate().filter(|(_, p)| p.alive).collect();
     order.sort_by_key(|(seat, p)| (p.clock.delay, p.clock.last_turn, *seat));
+    let mine = session.my_seat().and_then(|seat| game.player(seat)).filter(|p| p.alive).map(|p| i64::from(p.clock.delay));
+    let base = mine.or_else(|| order.first().map(|(_, p)| i64::from(p.clock.delay)));
     let current = current_seat(&game);
     for list in &lists.turns {
         commands.entity(list).despawn_children();
         commands.entity(list).with_children(|list| {
-            list.spawn(text("Turn order", 13.0, theme::MUTED));
+            list.spawn(text("Turn order", 12.0, theme::MUTED));
             for (seat, player) in &order {
                 let name = u8::try_from(*seat).map_or_else(|_| String::new(), |seat| session.seat_name(seat));
                 let delay = i64::from(player.clock.delay);
-                let shown = match mine {
-                    Some(_) if Some(*seat) == session.my_seat().map(usize::from) => format!("{name}  {delay}"),
-                    Some(mine) => format!("{name}  {:+}", delay - mine),
-                    None => format!("{name}  {delay}"),
-                };
+                let yours = mine.is_some() && Some(*seat) == session.my_seat().map(usize::from);
+                let shown = format!("{name}  {}", delay_label(delay, base, yours));
                 let marker = if current.map(usize::from) == Some(*seat) { "> " } else { "  " };
-                list.spawn(text(format!("{marker}{shown}"), 15.0, team_color(player.team)));
+                list.spawn(text(format!("{marker}{shown}"), 13.0, team_color(player.team)));
             }
         });
     }
@@ -403,8 +553,9 @@ fn weather_and_turns(game: Option<Res<Match>>, session: Res<Session>, controls: 
     }
 }
 
-fn banner(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>, banners: Query<&Children, With<Banner>>, mut texts: Query<&mut Text>) {
+fn banner(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>, time: Res<Time>, herald: Res<Herald>, banners: Query<&Children, With<Banner>>, mut texts: Query<&mut Text>) {
     let Some(game) = game else { return };
+    let now = time.elapsed_secs_f64();
     let message = if game.desynced {
         "Out of sync with the server. Reload the page to rejoin.".to_owned()
     } else if let Some(ending) = outcome.0 {
@@ -415,6 +566,10 @@ fn banner(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>
             (Ending::Draw, _) => "A draw.".to_owned(),
         };
         if session.practice { format!("{result}  (Esc to leave)") } else { result }
+    } else if let Some((kind, at)) = herald.0
+        && now - at < SUDDEN_BANNER_SECONDS
+    {
+        format!("Sudden death: {}! Items are off.", sudden_death_name(kind))
     } else {
         String::new()
     };
@@ -475,11 +630,353 @@ fn columns(game: Option<Res<Match>>, mut gizmos: Gizmos) {
     }
 }
 
+/// The loadout position this player used this turn, as the sim reports it: with two of the same
+/// item, the armed one alone says which to highlight.
+#[derive(Resource, Default)]
+struct UsedSlot(Option<u8>);
+
+fn track_used(mut played: MessageReader<Played>, session: Res<Session>, mut used: ResMut<UsedSlot>) {
+    for effect in played.read().flat_map(|scene| &scene.effects) {
+        if let Effect::ItemUsed { seat, slot, .. } = *effect
+            && Some(seat) == session.my_seat()
+        {
+            used.0 = Some(slot);
+        }
+    }
+}
+
+/// One item on the item bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ItemSlot {
+    position: u8,
+    item: Item,
+    used: bool,
+    /// Used this turn: it rides on the shot.
+    armed: bool,
+    /// Pressing it now would use it.
+    usable: bool,
+}
+
+/// The item bar for `seat`: its loadout by position, used ones marked, from the sim's state.
+fn item_slots(game: &Match, seat: u8, my_turn: bool, used_slot: Option<u8>) -> Vec<ItemSlot> {
+    let (Some(player), Some(start)) = (game.player(seat), game.log.setup.seats.get(usize::from(seat))) else {
+        return Vec::new();
+    };
+    (0_u8..)
+        .zip(start.items.positions())
+        .filter_map(|(position, item)| {
+            Some(ItemSlot {
+                position,
+                item: item?,
+                used: player.items.get(usize::from(position)).is_some_and(Option::is_none),
+                armed: player.armed.is_some() && used_slot == Some(position),
+                usable: my_turn && game.predicted.can_use_item(seat, position),
+            })
+        })
+        .collect()
+}
+
+/// What the item bar needs.
+#[derive(SystemParam)]
+struct ItemBarParts<'w, 's> {
+    used: Res<'w, UsedSlot>,
+    server: Res<'w, AssetServer>,
+    cache: ResMut<'w, ImageCache>,
+    bars: Query<'w, 's, Entity, With<ItemBar>>,
+}
+
+/// Rebuilds the item bar when what it shows changes (and only then: a rebuild between a press and
+/// its release would lose the click). Used items are greyed, the armed one outlined, each labeled
+/// with its key.
+fn item_bar(game: Option<Res<Match>>, session: Res<Session>, clock: Res<TurnClock>, mut parts: ItemBarParts, mut shown: Local<Option<Vec<ItemSlot>>>, mut commands: Commands) {
+    let Some(game) = game else { return };
+    let Some(seat) = session.my_seat() else { return };
+    let mine = my_turn(&session, &clock, &game).is_some();
+    let slots = item_slots(&game, seat, mine, parts.used.0);
+    if shown.as_ref() == Some(&slots) {
+        return;
+    }
+    for bar in &parts.bars {
+        commands.entity(bar).despawn_children();
+        commands.entity(bar).with_children(|bar| {
+            if slots.is_empty() {
+                bar.spawn(text("No items", 13.0, theme::MUTED));
+            }
+            for slot in &slots {
+                let size = f32::from(slot.item.slots());
+                let node = Node {
+                    width: Val::Px(ITEM * size + ITEM_GAP * (size - 1.0)),
+                    height: Val::Px(ITEM),
+                    border: UiRect::all(Val::Px(2.0)),
+                    ..default()
+                };
+                let mut button = bar.spawn((button_node(UiAction::Item(slot.position), node), chosen(slot.armed)));
+                if !slot.usable {
+                    button.insert(InteractionDisabled);
+                }
+                button.with_children(|inside| {
+                    inside.spawn(picks::item_art(&parts.server, &mut parts.cache, slot.item, ITEM - 8.0));
+                    if slot.used {
+                        inside.spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgba(0.05, 0.05, 0.08, 0.7)),
+                        ));
+                    }
+                    if let Some(key) = item_key_label(slot.position) {
+                        // On a pill over the icon's corner, so it reads on any icon.
+                        inside.spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(-3.0),
+                                top: Val::Px(-5.0),
+                                padding: UiRect::axes(Val::Px(3.0), Val::Px(0.0)),
+                                border_radius: BorderRadius::all(Val::Px(3.0)),
+                                ..default()
+                            },
+                            ZIndex(1),
+                            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.75)),
+                            children![text(key, 11.0, theme::ACCENT)],
+                        ));
+                    }
+                });
+            }
+        });
+    }
+    *shown = Some(slots);
+}
+
+/// The slot machine's reel: when this player last spun, and what it landed on.
+#[derive(Resource, Default)]
+struct Reel {
+    spun: Option<f64>,
+    landed: Option<DropKind>,
+}
+
+/// The reel whirls at least this long, in seconds,
+const REEL_SPIN: f64 = 1.2;
+/// waits at most this long for the drop,
+const REEL_WAIT: f64 = 4.0;
+/// and shows each face this long while it whirls.
+const REEL_STEP: f64 = 0.08;
+
+/// The face the reel shows `since` seconds after a spin, and whether it's still whirling: it lands
+/// on the drop once it has whirled a while, or gives up waiting for one.
+fn reel_face(since: Option<f64>, landed: Option<DropKind>) -> (Option<DropKind>, bool) {
+    match since {
+        Some(since) if since < REEL_SPIN || (landed.is_none() && since < REEL_WAIT) => {
+            // A few seconds of 80 ms steps.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let step = (since.max(0.0) / REEL_STEP) as usize;
+            (Some(DropKind::ALL[step % DropKind::ALL.len()]), true)
+        }
+        _ => (landed, false),
+    }
+}
+
+fn spin_reel(mut clicked: MessageReader<Clicked>, mut played: MessageReader<Played>, session: Res<Session>, time: Res<Time>, mut reel: ResMut<Reel>) {
+    for Clicked(action) in clicked.read() {
+        if *action == UiAction::Spin {
+            reel.spun = Some(time.elapsed_secs_f64());
+            reel.landed = None;
+        }
+    }
+    for effect in played.read().flat_map(|scene| &scene.effects) {
+        if let Effect::DropRolled { seat, drop } = *effect
+            && Some(seat) == session.my_seat()
+        {
+            reel.landed = Some(drop.kind);
+        }
+    }
+}
+
+/// The slot machine's live parts.
+#[derive(SystemParam)]
+struct Machine<'w, 's> {
+    reel: Res<'w, Reel>,
+    time: Res<'w, Time>,
+    views: Query<'w, 's, (&'static MobileView, &'static Shown)>,
+    panels: Query<'w, 's, &'static mut Node, With<SlotMachine>>,
+    faces: Query<'w, 's, (&'static ReelFace, &'static mut Node), Without<SlotMachine>>,
+    spins: Query<'w, 's, (Entity, Has<InteractionDisabled>), With<SpinButton>>,
+    statuses: Query<'w, 's, &'static mut Text, With<ReelStatus>>,
+}
+
+/// Shows the slot machine while this player is dead (as shown) and the game is on. Spin works
+/// whenever the sim allows it, on anyone's turn.
+fn slot_machine(game: Option<Res<Match>>, session: Res<Session>, mut machine: Machine, mut commands: Commands) {
+    let Some(game) = game else { return };
+    let seat = session.my_seat();
+    let dead = seat.is_some_and(|seat| machine.views.iter().any(|(view, shown)| view.seat == seat && !shown.alive));
+    let up = dead && current_seat(&game).is_some();
+    let display = if up { Display::Flex } else { Display::None };
+    for mut node in &mut machine.panels {
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    if !up {
+        return;
+    }
+    let since = machine.reel.spun.map(|spun| machine.time.elapsed_secs_f64() - spun);
+    let (face, whirling) = reel_face(since, machine.reel.landed);
+    for (reel_face, mut node) in &mut machine.faces {
+        let display = if reel_face.0 == face { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    let can_spin = !whirling && seat.is_some_and(|seat| game.confirmed.can_spin(seat));
+    for (button, disabled) in &machine.spins {
+        if can_spin && disabled {
+            commands.entity(button).remove::<InteractionDisabled>();
+        } else if !can_spin && !disabled {
+            commands.entity(button).insert(InteractionDisabled);
+        }
+    }
+    let status = match (whirling, machine.reel.landed, can_spin) {
+        (true, _, _) => "Spinning...".to_owned(),
+        (false, Some(kind), _) => format!("{}! Look out below.", drop_name(kind)),
+        (false, None, true) => "Spin to drop trouble on the living.".to_owned(),
+        (false, None, false) => "The machine is resting.".to_owned(),
+    };
+    for mut text in &mut machine.statuses {
+        if **text != status {
+            (**text).clone_from(&status);
+        }
+    }
+}
+
+/// A drop on its way down: what, its column, and the turns until it lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Incoming {
+    kind: DropKind,
+    x: i32,
+    turns: u32,
+}
+
+/// The drops falling now, from the sim.
+fn incoming(game: &Game) -> Vec<Incoming> {
+    game.drops()
+        .iter()
+        .map(|falling| Incoming {
+            kind: falling.drop.kind,
+            x: falling.drop.x,
+            turns: u32::try_from(falling.lands - game.turns()).unwrap_or(0),
+        })
+        .collect()
+}
+
+/// Marks each incoming drop's column, with what it is and the turns until it lands just over the
+/// ground there.
+fn drop_markers(game: Option<Res<Match>>, markers: Query<Entity, With<DropMarker>>, mut shown: Local<Vec<Incoming>>, mut gizmos: Gizmos, mut commands: Commands) {
+    let Some(game) = game else { return };
+    let falling = incoming(&game.predicted);
+    let terrain = game.predicted.terrain();
+    let ground = |x: i32| (0..i32::try_from(terrain.height()).unwrap_or(0)).find(|&y| terrain.is_solid(x, y)).unwrap_or(0);
+    for drop in &falling {
+        let x = f64::from(drop.x);
+        gizmos.line_2d(world(SimVec2::new(x, 0.0)), world(SimVec2::new(x, f64::from(ground(drop.x)))), theme::ACCENT.with_alpha(0.5));
+    }
+    if *shown == falling {
+        return;
+    }
+    for marker in &markers {
+        commands.entity(marker).despawn();
+    }
+    for drop in &falling {
+        // Clear of the mobiles' name tags, which stand about 120 px over the ground.
+        let at = world(SimVec2::new(f64::from(drop.x), f64::from(ground(drop.x) - 150)));
+        commands.spawn((
+            GameRoot,
+            DropMarker,
+            Text2d::new(format!("{} in {}", drop_name(drop.kind), drop.turns)),
+            TextFont {
+                font_size: bevy::text::FontSize::Px(14.0),
+                ..default()
+            },
+            TextColor(theme::ACCENT),
+            Transform::from_translation(at.extend(depth::OVERLAYS)),
+        ));
+    }
+    *shown = falling;
+}
+
+fn reset(mut used: ResMut<UsedSlot>, mut reel: ResMut<Reel>) {
+    *used = UsedSlot::default();
+    *reel = Reel::default();
+}
+
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(Screen::Game), build)
-            .add_systems(Update, (update, weather_and_turns, banner, aim_arc, columns).run_if(in_state(Screen::Game)));
+        app.init_resource::<UsedSlot>()
+            .init_resource::<Reel>()
+            .add_systems(OnEnter(Screen::Game), build)
+            .add_systems(OnExit(Screen::Game), reset)
+            .add_systems(
+                Update,
+                (
+                    update,
+                    weather_and_turns,
+                    banner,
+                    aim_arc,
+                    columns,
+                    (track_used, item_bar).chain(),
+                    (spin_reel, slot_machine).chain(),
+                    drop_markers,
+                )
+                    .run_if(in_state(Screen::Game)),
+            );
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    // The runner only runs `wasm_bindgen_test`s; this makes `#[test]` one.
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn the_turn_list_counts_delay_from_you_or_the_next_mover() {
+        assert_eq!(delay_label(780, Some(760), false), "+20");
+        assert_eq!(delay_label(760, Some(760), true), "760", "your own stands as it is");
+        assert_eq!(delay_label(700, Some(760), false), "-60");
+        assert_eq!(delay_label(700, None, false), "700");
+    }
+
+    #[test]
+    fn the_ss_button_shows_its_lock() {
+        assert_eq!(ss_label(Ss::Ready), "SS");
+        assert_eq!(ss_label(Ss::Locked(3)), "SS in 3");
+        assert_eq!(ss_label(Ss::Off), "SS off");
+    }
+
+    #[test]
+    fn sudden_death_counts_down_in_turns() {
+        use lobshot_sim::game::SuddenDeathKind;
+        assert_eq!(sudden_label(Sudden::Never), "");
+        assert_eq!(sudden_label(Sudden::In { turns: 12, kind: SuddenDeathKind::Double }), "Sudden death in 12 turns");
+        assert_eq!(sudden_label(Sudden::In { turns: 1, kind: SuddenDeathKind::Double }), "Sudden death next turn");
+        assert_eq!(sudden_label(Sudden::On(SuddenDeathKind::BigBomb)), "Sudden death: Big Bomb");
+    }
+
+    #[test]
+    fn the_reel_whirls_then_lands_or_gives_up() {
+        assert_eq!(reel_face(None, None), (None, false), "idle");
+        assert!(reel_face(Some(0.5), Some(DropKind::Hammer)).1, "whirls a while even with the drop known");
+        assert_eq!(reel_face(Some(REEL_SPIN + 0.1), Some(DropKind::Hammer)), (Some(DropKind::Hammer), false));
+        assert!(reel_face(Some(REEL_SPIN + 0.1), None).1, "waits for the drop");
+        assert_eq!(reel_face(Some(REEL_WAIT + 0.1), None), (None, false), "gives up");
+        let faces: Vec<Option<DropKind>> = (0..6).map(|step| reel_face(Some(f64::from(step) * REEL_STEP + 0.01), None).0).collect();
+        assert_eq!(faces, DropKind::ALL.map(Some).to_vec(), "every face comes up in turn");
     }
 }

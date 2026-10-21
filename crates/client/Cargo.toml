@@ -65,5 +65,8 @@ features = [
     "webgl2",
 ]
 
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+
 [lints]
 workspace = true

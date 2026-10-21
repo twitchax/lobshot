@@ -1,18 +1,27 @@
-//! The screens outside the game: the title (new game, practice), the name prompt, and the lobby
-//! (teams, readiness, the master's options, bots, kicks, the invite link).
+//! The screens outside the game: the title (new game, practice), the garage (your mobile and
+//! items), the name prompt, and the lobby (teams, picks, readiness, the master's options, bots,
+//! kicks, the invite link).
 
 use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
-use lobshot_protocol::{ClientMsg, Member, RoomOptions, Token};
-use lobshot_sim::game::Team;
+use lobshot_protocol::{ClientMsg, Member, MemberId, RoomOptions, RoomView, Token};
+use lobshot_sim::{
+    game::{MAX_SEATS, SuddenDeath, SuddenDeathKind, Team},
+    tuning::SUDDEN_DEATH_TURNS,
+};
 
 use crate::{
-    model::{Screen, Session},
+    assets::ImageCache,
+    model::{Screen, Session, sudden_death_name},
     net::{Link, Socket},
-    ui::{Clicked, UiAction, button, panel, team_color, text, theme},
+    picks::{self, Picks},
+    ui::{Clicked, UiAction, button, panel, small_button, team_color, text, theme},
     web::{self, Page, TextInput, Typed},
 };
+
+/// The synthetic map the server builds in, for testing: one flat field.
+const FLAT: &str = "flat";
 
 /// The root of whichever screen is up, so it can be torn down.
 #[derive(Component)]
@@ -74,10 +83,46 @@ fn title(mut commands: Commands) {
                     margin: UiRect::top(Val::Px(28.0)),
                     ..default()
                 },
-                children![button("New game", UiAction::NewGame), button("Practice vs bot", UiAction::Practice)]
+                children![
+                    button("New game", UiAction::NewGame),
+                    button("Practice vs bot", UiAction::Practice),
+                    button("Practice 2v2", UiAction::PracticeTeams),
+                    button("Mobile and items", UiAction::Garage)
+                ]
             ),
         ],
     ));
+}
+
+/// Your mobile and items, outside any room: rebuilt whenever they change.
+fn garage(mut commands: Commands, session: Res<Session>, picks: Res<Picks>, server: Res<AssetServer>, mut cache: ResMut<ImageCache>, roots: Query<Entity, With<ScreenRoot>>) {
+    if !picks.is_changed() && !session.is_changed() && !roots.is_empty() {
+        return;
+    }
+    for root in &roots {
+        commands.entity(root).despawn();
+    }
+    let root = commands.spawn((ScreenRoot, full_screen())).id();
+    commands.entity(root).with_children(|screen| {
+        screen.spawn(text("Mobile and items", 36.0, theme::ACCENT));
+        screen.spawn(text("You bring these into every room, and into practice.", 18.0, theme::MUTED));
+        screen
+            .spawn(panel(Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(4.0),
+                margin: UiRect::vertical(Val::Px(14.0)),
+                width: Val::Px(PICKS_PANEL),
+                ..default()
+            }))
+            .with_children(|column| {
+                picks::mobile_picker(column, picks.mobile, None);
+                picks::loadout_editor(column, &picks, &server, &mut cache);
+            });
+        if let Some(notice) = &session.notice {
+            screen.spawn(text(notice.clone(), 18.0, theme::TEAM_B));
+        }
+        screen.spawn(button("Back", UiAction::Title));
+    });
 }
 
 fn name_prompt(mut commands: Commands) {
@@ -123,9 +168,31 @@ fn gone(mut commands: Commands, session: Res<Session>) {
     });
 }
 
-/// Rebuilds the lobby whenever the room changes.
-fn lobby(mut commands: Commands, session: Res<Session>, roots: Query<Entity, With<ScreenRoot>>) {
-    if !session.is_changed() {
+/// Whose mobile the lobby's picker sets: this player's (`None`), or, for the room master, a bot's.
+#[derive(Resource, Default)]
+pub struct PickingFor(pub Option<MemberId>);
+
+/// What the lobby needs besides the room: this player's picks, whose the picker sets, and the art.
+#[derive(bevy::ecs::system::SystemParam)]
+struct LobbyArt<'w> {
+    picks: Res<'w, Picks>,
+    picking: Res<'w, PickingFor>,
+    server: Res<'w, AssetServer>,
+    cache: ResMut<'w, ImageCache>,
+}
+
+/// The picks panel: the picker and editor, and a panel's 12 px padding either side.
+const PICKS_PANEL: f32 = picks::PICKS_WIDTH + 24.0;
+
+/// The lobby's width for two team panels side by side.
+const ROSTER_WIDTH: f32 = 2.0 * TEAM_WIDTH + 10.0;
+const TEAM_WIDTH: f32 = 232.0;
+
+/// Rebuilds the lobby whenever the room or this player's picks change, or it isn't up. Laid out for
+/// eight players and a room of spectators in a 1024x768 window: the roster on the left, your picks
+/// on the right, the buttons and the master's options under both.
+fn lobby(mut commands: Commands, session: Res<Session>, mut art: LobbyArt, roots: Query<Entity, With<ScreenRoot>>) {
+    if !session.is_changed() && !art.picks.is_changed() && !art.picking.is_changed() && !roots.is_empty() {
         return;
     }
     for root in &roots {
@@ -140,81 +207,70 @@ fn lobby(mut commands: Commands, session: Res<Session>, roots: Query<Entity, Wit
         .spawn((
             ScreenRoot,
             Node {
-                padding: UiRect::all(Val::Px(24.0)),
+                padding: UiRect::all(Val::Px(12.0)),
+                justify_content: JustifyContent::FlexStart,
+                row_gap: Val::Px(6.0),
                 ..full_screen()
             },
         ))
         .id();
     commands.entity(lobby_root).with_children(|screen| {
-        screen.spawn(text(format!("Room {}", room.code.as_str()), 36.0, theme::ACCENT));
-        screen.spawn((
-            Node {
-                margin: UiRect::bottom(Val::Px(12.0)),
-                ..default()
-            },
-            children![button("Copy invite link", UiAction::CopyLink)],
-        ));
-
-        // Teams side by side, spectators under them.
-        screen.spawn(Node { column_gap: Val::Px(16.0), ..default() }).with_children(|row| {
-            for team in [Team::A, Team::B] {
-                row.spawn(panel(Node {
-                    flex_direction: FlexDirection::Column,
-                    min_width: Val::Px(260.0),
-                    ..default()
-                }))
-                .with_children(|column| {
-                    column.spawn(text(format!("Team {team:?}  ({} max)", room.options.team_size), 22.0, team_color(team)));
-                    for member in room.members.iter().filter(|m| m.team == Some(team)) {
-                        member_row(column, member, room.master, master && Some(member.id) != me);
-                    }
-                    if mine.is_some_and(|m| m.team != Some(team)) {
-                        column.spawn(button("Join", UiAction::Join(Some(team))));
-                    }
-                    if master {
-                        column.spawn(button("Add bot", UiAction::AddBot(team)));
-                    }
-                });
-            }
-        });
-        let spectators: Vec<&Member> = room.members.iter().filter(|m| m.team.is_none()).collect();
-        if !spectators.is_empty() {
-            screen
-                .spawn(panel(Node {
-                    flex_direction: FlexDirection::Column,
-                    margin: UiRect::top(Val::Px(12.0)),
-                    min_width: Val::Px(536.0),
-                    ..default()
-                }))
-                .with_children(|column| {
-                    column.spawn(text("Watching", 20.0, theme::MUTED));
-                    for member in spectators {
-                        member_row(column, member, room.master, master && Some(member.id) != me);
-                    }
-                });
-        }
-
-        // This player's controls, then the master's.
         screen
             .spawn(Node {
-                margin: UiRect::top(Val::Px(16.0)),
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(12.0),
                 ..default()
             })
-            .with_children(|row| {
-                if let Some(mine) = mine
-                    && mine.team.is_some()
-                {
-                    row.spawn(button(if mine.ready { "Not ready" } else { "Ready" }, UiAction::Ready(!mine.ready)));
-                    row.spawn(button("Watch instead", UiAction::Join(None)));
-                }
-                if master {
-                    row.spawn(button("Start", UiAction::Start));
-                }
+            .with_children(|header| {
+                header.spawn(text(format!("Room {}", room.code.as_str()), 26.0, theme::ACCENT));
+                header.spawn(small_button("Copy invite link", UiAction::CopyLink));
             });
+
+        screen
+            .spawn(Node {
+                column_gap: Val::Px(14.0),
+                align_items: AlignItems::FlexStart,
+                flex_wrap: FlexWrap::Wrap,
+                justify_content: JustifyContent::Center,
+                ..default()
+            })
+            .with_children(|main| {
+                roster(main, room, me);
+                main.spawn(panel(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(3.0),
+                    width: Val::Px(PICKS_PANEL),
+                    ..default()
+                }))
+                .with_children(|column| {
+                    // The master may be picking for one of the room's bots.
+                    let bot = art.picking.0.filter(|_| master).and_then(|id| room.members.iter().find(|m| m.id == id && m.bot));
+                    if let Some(bot) = bot {
+                        picks::mobile_picker(column, bot.mobile, Some(&bot.name));
+                        column.spawn(text("Bots bring SearchBot's items.", 13.0, theme::MUTED));
+                    } else {
+                        picks::mobile_picker(column, art.picks.mobile, None);
+                        picks::loadout_editor(column, &art.picks, &art.server, &mut art.cache);
+                    }
+                });
+            });
+
+        // This player's controls, then the master's.
+        screen.spawn(Node::default()).with_children(|row| {
+            if let Some(mine) = mine
+                && mine.team.is_some()
+            {
+                row.spawn(button(if mine.ready { "Not ready" } else { "Ready" }, UiAction::Ready(!mine.ready)));
+                row.spawn(button("Watch instead", UiAction::Join(None)));
+            }
+            if master {
+                row.spawn(button("Start", UiAction::Start));
+            }
+        });
         if master {
             options_row(screen, &room.options);
         } else {
-            screen.spawn(text(describe(&room.options), 18.0, theme::MUTED));
+            screen.spawn(text(describe(&room.options), 16.0, theme::MUTED));
         }
         if let Some(notice) = &session.notice {
             screen.spawn(text(notice.clone(), 18.0, theme::TEAM_B));
@@ -222,63 +278,226 @@ fn lobby(mut commands: Commands, session: Res<Session>, roots: Query<Entity, Wit
     });
 }
 
-fn member_row(column: &mut ChildSpawnerCommands, member: &Member, master_id: lobshot_protocol::MemberId, can_kick: bool) {
-    let mut label = member.name.clone();
-    if member.id == master_id {
-        label.push_str("  (host)");
-    }
-    if member.bot {
-        label.push_str("  (bot)");
-    }
-    if !member.connected {
-        label.push_str("  (away)");
-    }
-    let status = if member.ready { theme::GOOD } else { theme::MUTED };
+/// The teams side by side, and whoever's watching under them.
+fn roster(main: &mut ChildSpawnerCommands, room: &RoomView, me: Option<MemberId>) {
+    let master = me == Some(room.master);
+    main.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: Val::Px(10.0),
+        width: Val::Px(ROSTER_WIDTH),
+        ..default()
+    })
+    .with_children(|roster| {
+        roster.spawn(Node { column_gap: Val::Px(10.0), ..default() }).with_children(|row| {
+            for team in [Team::A, Team::B] {
+                team_panel(row, room, team, me);
+            }
+        });
+        let spectators: Vec<&Member> = room.members.iter().filter(|m| m.team.is_none()).collect();
+        if spectators.is_empty() {
+            return;
+        }
+        roster
+            .spawn(panel(Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(4.0),
+                ..default()
+            }))
+            .with_children(|column| {
+                column.spawn(text(format!("Watching  {}", spectators.len()), 16.0, theme::MUTED));
+                column
+                    .spawn(Node {
+                        flex_wrap: FlexWrap::Wrap,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    })
+                    .with_children(|names| {
+                        for member in spectators {
+                            spectator_chip(names, member, room.master, master && Some(member.id) != me);
+                        }
+                    });
+            });
+    });
+}
+
+/// A team's members, and the buttons to join it or (for the master) add a bot to it.
+fn team_panel(row: &mut ChildSpawnerCommands, room: &RoomView, team: Team, me: Option<MemberId>) {
+    let master = me == Some(room.master);
+    let members: Vec<&Member> = room.members.iter().filter(|m| m.team == Some(team)).collect();
+    let seated = room.members.iter().filter(|m| m.team.is_some()).count();
+    let mine = room.members.iter().find(|m| Some(m.id) == me);
+    row.spawn(panel(Node {
+        flex_direction: FlexDirection::Column,
+        width: Val::Px(TEAM_WIDTH),
+        row_gap: Val::Px(4.0),
+        ..default()
+    }))
+    .with_children(|column| {
+        column.spawn(text(format!("Team {team:?}  {}/{}", members.len(), room.options.team_size), 18.0, team_color(team)));
+        for member in members {
+            member_row(column, member, room.master, master && Some(member.id) != me);
+        }
+        column.spawn(Node::default()).with_children(|buttons| {
+            if mine.is_some_and(|m| m.team != Some(team)) {
+                buttons.spawn(small_button("Join", UiAction::Join(Some(team))));
+            }
+            if master && seated < MAX_SEATS {
+                buttons.spawn(small_button("Add bot", UiAction::AddBot(team)));
+            }
+        });
+    });
+}
+
+/// What sets a member apart: host, bot, away.
+fn tags(member: &Member, master: MemberId) -> Vec<&'static str> {
+    [(member.id == master, "host"), (member.bot, "bot"), (!member.connected, "away")]
+        .into_iter()
+        .filter_map(|(on, tag)| on.then_some(tag))
+        .collect()
+}
+
+/// A seated member: readiness, name, then their mobile and tags underneath.
+fn member_row(column: &mut ChildSpawnerCommands, member: &Member, master: MemberId, can_kick: bool) {
+    let mut details = vec![picks::mobile_name(member.mobile)];
+    details.extend(tags(member, master));
     column
         .spawn(Node {
             align_items: AlignItems::Center,
-            column_gap: Val::Px(8.0),
+            column_gap: Val::Px(7.0),
             ..default()
         })
         .with_children(|row| {
-            row.spawn(text(if member.ready { "ready" } else { "-" }, 16.0, status));
-            row.spawn(text(label, 18.0, theme::TEXT));
+            row.spawn((
+                Node {
+                    width: Val::Px(9.0),
+                    height: Val::Px(9.0),
+                    border_radius: BorderRadius::all(Val::Percent(50.0)),
+                    ..default()
+                },
+                BackgroundColor(if member.ready { theme::GOOD } else { theme::BUTTON }),
+            ));
+            row.spawn(Node {
+                flex_direction: FlexDirection::Column,
+                flex_grow: 1.0,
+                ..default()
+            })
+            .with_children(|who| {
+                who.spawn(text(member.name.clone(), 15.0, theme::TEXT));
+                who.spawn(text(details.join(", "), 11.0, theme::MUTED));
+            });
+            // The master picks the bots' mobiles.
+            if can_kick && member.bot {
+                row.spawn(small_button("Mobile", UiAction::PickFor(Some(member.id))));
+            }
             if can_kick {
-                row.spawn(button("Kick", UiAction::Kick(member.id)));
+                row.spawn(small_button("Kick", UiAction::Kick(member.id)));
+            }
+        });
+}
+
+/// A spectator: a name (and tags) in a wrapping row.
+fn spectator_chip(names: &mut ChildSpawnerCommands, member: &Member, master: MemberId, can_kick: bool) {
+    let mut label = vec![member.name.clone()];
+    label.extend(tags(member, master).into_iter().map(|tag| format!("({tag})")));
+    let label = label.join(" ");
+    names
+        .spawn(Node {
+            align_items: AlignItems::Center,
+            ..default()
+        })
+        .with_children(|chip| {
+            chip.spawn(text(label, 14.0, theme::TEXT));
+            if can_kick {
+                chip.spawn(small_button("Kick", UiAction::Kick(member.id)));
             }
         });
 }
 
 fn describe(options: &RoomOptions) -> String {
-    format!("{}  /  wind up to {}  /  {} s turns", options.map, options.max_wind, options.turn_seconds)
+    let size = options.team_size;
+    let mut parts = vec![
+        options.map.clone(),
+        format!("{size}v{size}"),
+        format!("wind up to {}", options.max_wind),
+        format!("{} s turns", options.turn_seconds),
+    ];
+    if options.random_teams {
+        parts.push("random teams".to_owned());
+    }
+    parts.push(
+        options
+            .sudden_death
+            .map_or_else(|| "no sudden death".to_owned(), |rule| format!("sudden death: {} at turn {}", sudden_death_name(rule.kind), rule.turn)),
+    );
+    parts.join(", ")
+}
+
+/// The value after `current` in `values`, wrapping around; the first if `current` isn't there.
+fn next_of<T: PartialEq + Copy>(values: &[T], current: T) -> T {
+    let at = values.iter().position(|&value| value == current).map_or(0, |at| at + 1);
+    values.get(at % values.len().max(1)).copied().unwrap_or(current)
+}
+
+/// The map after `current`: the drawn maps in the lobby's order, then the synthetic `flat`.
+fn next_map(current: &str) -> &'static str {
+    let maps: Vec<&'static str> = lobshot_assets::MAPS.iter().copied().chain([FLAT]).collect();
+    let at = maps.iter().position(|&map| map == current).map_or(0, |at| at + 1);
+    maps[at % maps.len()]
+}
+
+/// The next sudden death: off, Big Bomb, Double, SS Death, then off again, keeping its turn.
+fn next_sudden_death(current: Option<SuddenDeath>) -> Option<SuddenDeath> {
+    let kinds = [None, Some(SuddenDeathKind::BigBomb), Some(SuddenDeathKind::Double), Some(SuddenDeathKind::SsDeath)];
+    let turn = current.map_or(SUDDEN_DEATH_TURNS.value[0], |rule| rule.turn);
+    next_of(&kinds, current.map(|rule| rule.kind)).map(|kind| SuddenDeath { kind, turn })
 }
 
 /// The master's option buttons: each one moves its option to the next value.
 fn options_row(screen: &mut ChildSpawnerCommands, options: &RoomOptions) {
-    let next_of = |values: &[u8], current: u8| values[(values.iter().position(|&v| v == current).unwrap_or(0) + 1) % values.len()];
     let with = |change: &dyn Fn(&mut RoomOptions)| {
         let mut options = options.clone();
         change(&mut options);
         UiAction::Configure(options)
     };
-    let map = if options.map == "flat" { "tidewall" } else { "flat" };
+    let on_off = |on: bool| if on { "on" } else { "off" };
     screen
         .spawn(Node {
-            margin: UiRect::top(Val::Px(8.0)),
             flex_wrap: FlexWrap::Wrap,
             justify_content: JustifyContent::Center,
+            max_width: Val::Px(980.0),
             ..default()
         })
         .with_children(|row| {
-            row.spawn(button(format!("Map: {}", options.map), with(&|o| map.clone_into(&mut o.map))));
-            row.spawn(button(format!("Team size: {}", options.team_size), with(&|o| o.team_size = next_of(&[1, 2, 3, 4], o.team_size))));
-            row.spawn(button(format!("Max wind: {}", options.max_wind), with(&|o| o.max_wind = next_of(&[0, 12, 26], o.max_wind))));
-            row.spawn(button(format!("Turn: {} s", options.turn_seconds), with(&|o| o.turn_seconds = next_of(&[5, 10, 20], o.turn_seconds))));
+            row.spawn(small_button(format!("Map: {}", options.map), with(&|o| next_map(&o.map).clone_into(&mut o.map))));
+            row.spawn(small_button(format!("Team size: {}", options.team_size), with(&|o| o.team_size = next_of(&[1, 2, 3, 4], o.team_size))));
+            row.spawn(small_button(format!("Max wind: {}", options.max_wind), with(&|o| o.max_wind = next_of(&[0, 12, 26], o.max_wind))));
+            row.spawn(small_button(
+                format!("Turn: {} s", options.turn_seconds),
+                with(&|o| o.turn_seconds = next_of(&[5, 10, 20], o.turn_seconds)),
+            ));
+            row.spawn(small_button(format!("Random teams: {}", on_off(options.random_teams)), with(&|o| o.random_teams = !o.random_teams)));
+            let sudden = options.sudden_death.map_or("off", |rule| sudden_death_name(rule.kind));
+            row.spawn(small_button(format!("Sudden death: {sudden}"), with(&|o| o.sudden_death = next_sudden_death(o.sudden_death))));
+            if let Some(rule) = options.sudden_death {
+                let turn = SuddenDeath {
+                    turn: next_of(&SUDDEN_DEATH_TURNS.value, rule.turn),
+                    ..rule
+                };
+                row.spawn(small_button(format!("At turn {}", rule.turn), with(&|o| o.sudden_death = Some(turn))));
+            }
         });
 }
 
 /// Turns lobby and title clicks into messages to the server, or browser calls.
-fn act(mut clicked: MessageReader<Clicked>, mut socket: NonSendMut<Socket>, mut session: ResMut<Session>, errors: Res<WebErrors>, mut next: ResMut<NextState<Screen>>) {
+fn act(
+    mut clicked: MessageReader<Clicked>,
+    mut socket: NonSendMut<Socket>,
+    mut session: ResMut<Session>,
+    mut picks: ResMut<Picks>,
+    mut picking: ResMut<PickingFor>,
+    errors: Res<WebErrors>,
+    mut next: ResMut<NextState<Screen>>,
+) {
     for Clicked(action) in clicked.read() {
         // A notice answers the last thing the player did; a new action makes it stale.
         session.notice = None;
@@ -287,9 +506,44 @@ fn act(mut clicked: MessageReader<Clicked>, mut socket: NonSendMut<Socket>, mut 
                 web::create_room(Arc::clone(&errors.0));
                 None
             }
-            UiAction::Practice => {
+            UiAction::Practice | UiAction::PracticeTeams => {
                 session.practice = true;
+                session.practice_team_size = if *action == UiAction::PracticeTeams { 2 } else { 1 };
                 next.set(Screen::Game);
+                None
+            }
+            UiAction::Garage => {
+                next.set(Screen::Garage);
+                None
+            }
+            UiAction::Title => {
+                next.set(Screen::Title);
+                None
+            }
+            // A pick for a bot goes to the room, and the picker comes back to this player's own.
+            UiAction::PickMobile(mobile) => {
+                let bot = picking.0.take();
+                if bot.is_none() {
+                    picks.pick(mobile);
+                }
+                bot.map(|bot| ClientMsg::BotMobile { bot, mobile })
+            }
+            UiAction::PickFor(target) => {
+                picking.0 = target;
+                None
+            }
+            UiAction::AddItem(item) => {
+                if let Err(refused) = picks.add(item) {
+                    session.notice = Some(refused.to_string());
+                }
+                None
+            }
+            UiAction::RemoveItem(position) => {
+                picks.remove(position);
+                None
+            }
+            UiAction::ClearItems => {
+                picks.clear();
                 None
             }
             UiAction::CopyLink => {
@@ -315,7 +569,7 @@ fn act(mut clicked: MessageReader<Clicked>, mut socket: NonSendMut<Socket>, mut 
             UiAction::Kick(member) => Some(ClientMsg::Kick(member)),
             UiAction::Start => Some(ClientMsg::Start),
             UiAction::Configure(options) => Some(ClientMsg::Configure(options)),
-            UiAction::Shot(_) | UiAction::Pass | UiAction::Chat => None,
+            UiAction::Shot(_) | UiAction::Item(_) | UiAction::Spin | UiAction::Pass | UiAction::Chat => None,
         };
         if let Some(message) = message {
             socket.send(&message);
@@ -345,19 +599,85 @@ pub struct ScreensPlugin;
 impl Plugin for ScreensPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WebErrors>()
+            .init_resource::<PickingFor>()
             .add_systems(Startup, boot)
             .add_systems(OnEnter(Screen::Title), title)
             .add_systems(OnEnter(Screen::Name), name_prompt)
             .add_systems(OnEnter(Screen::Joining), joining)
             .add_systems(OnEnter(Screen::Gone), gone)
             .add_systems(OnExit(Screen::Title), clear)
+            .add_systems(OnExit(Screen::Garage), clear)
             .add_systems(OnExit(Screen::Name), clear)
             .add_systems(OnExit(Screen::Joining), clear)
-            .add_systems(OnExit(Screen::Lobby), clear)
+            .add_systems(OnExit(Screen::Lobby), (clear, |mut picking: ResMut<PickingFor>| picking.0 = None))
             .add_systems(OnExit(Screen::Gone), clear)
             .add_systems(
                 Update,
-                (take_name.run_if(in_state(Screen::Name)), lobby.run_if(in_state(Screen::Lobby)), act, show_web_errors, watch_link),
+                (
+                    take_name.run_if(in_state(Screen::Name)),
+                    (garage.run_if(in_state(Screen::Garage)), lobby.run_if(in_state(Screen::Lobby))).after(picks::DrawPortraits),
+                    act,
+                    show_web_errors,
+                    watch_link,
+                ),
             );
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    // The runner only runs `wasm_bindgen_test`s; this makes `#[test]` one.
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn options_cycle_through_their_values_and_wrap() {
+        assert_eq!(next_of(&[1, 2, 3, 4], 1), 2);
+        assert_eq!(next_of(&[1, 2, 3, 4], 4), 1);
+        assert_eq!(next_of(&[0, 12, 26], 7), 0, "an unknown value starts over");
+        assert_eq!(next_of(&SUDDEN_DEATH_TURNS.value, 72), 40);
+    }
+
+    #[test]
+    fn maps_cycle_through_the_drawn_ones_then_flat() {
+        let mut seen = vec![lobshot_assets::MAPS[0]];
+        loop {
+            let next = next_map(seen.last().unwrap());
+            if next == seen[0] {
+                break;
+            }
+            seen.push(next);
+        }
+        let mut expected = lobshot_assets::MAPS.to_vec();
+        expected.push(FLAT);
+        assert_eq!(seen, expected);
+        assert_eq!(next_map("gone"), lobshot_assets::MAPS[0]);
+    }
+
+    #[test]
+    fn sudden_death_cycles_its_kinds_through_off_and_keeps_its_turn() {
+        let at = |kind, turn| Some(SuddenDeath { kind, turn });
+        assert_eq!(next_sudden_death(None), at(SuddenDeathKind::BigBomb, 40));
+        assert_eq!(next_sudden_death(at(SuddenDeathKind::BigBomb, 56)), at(SuddenDeathKind::Double, 56));
+        assert_eq!(next_sudden_death(at(SuddenDeathKind::Double, 72)), at(SuddenDeathKind::SsDeath, 72));
+        assert_eq!(next_sudden_death(at(SuddenDeathKind::SsDeath, 72)), None);
+    }
+
+    #[test]
+    fn everyone_else_reads_the_options_in_a_line() {
+        let options = RoomOptions {
+            team_size: 4,
+            random_teams: true,
+            ..RoomOptions::default()
+        };
+        assert_eq!(describe(&options), "tidewall, 4v4, wind up to 26, 20 s turns, random teams, sudden death: Double at turn 40");
+        let options = RoomOptions {
+            sudden_death: None,
+            ..RoomOptions::default()
+        };
+        assert!(describe(&options).ends_with("no sudden death"));
     }
 }

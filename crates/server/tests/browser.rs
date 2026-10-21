@@ -8,6 +8,8 @@
 //!   client follows the game to its second turn, sounding the shots it shows.
 //! - Practice: the browser clicks "Practice vs bot" and lets its turn run out, which chimes and
 //!   ticks.
+//! - Practice, with items: on its turn the browser arms Power Up with its key, then fires SS, and
+//!   the page shows the item used and SS locked.
 //!
 //! In both, each turn's clock starts only once the shot before it has shown.
 //!
@@ -158,6 +160,11 @@ fn click_until(tab: &headless_chrome::Tab, action: &str, what: &str, mut done: i
     }
 }
 
+/// Whether the page's buttons offer `action`, enabled.
+fn enabled(state: &Value, action: &str) -> Option<bool> {
+    state["buttons"].as_array()?.iter().find(|button| button["action"] == action)?["enabled"].as_bool()
+}
+
 /// The turn clock starts each turn once, when the shot before it has shown, so it never counts
 /// more turns started than the game has played, plus the first.
 fn clock_on_time(state: &Value) {
@@ -257,6 +264,46 @@ async fn e2e_browser_practice_turns_start_after_the_shot_before() {
     assert_eq!(state["seat"], 0, "the player sits first: {state}");
     let played = &state["sounds"]["played"];
     assert!(played["click"].as_u64() >= Some(1) && played["turn"].as_u64() >= Some(1), "{state}");
+    drop(browser);
+    drop(server);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs Chrome and a client bundle; run `cargo make browser`"]
+async fn e2e_browser_practice_arms_an_item_and_locks_ss() {
+    let dist = bundle();
+    let cwd = TempDir::new().unwrap();
+    let server = start(&dist, cwd.path());
+    let browser = launch();
+    let tab = browser.new_tab().unwrap();
+    let origin = format!("http://{}", server.addr);
+
+    // A fresh profile brings the starter loadout: Dual, Power Up, Heal, Wind Flip, Dig. Its items
+    // are usable only on its own turn, which the enabled item buttons show.
+    let state = tokio::task::spawn_blocking(move || {
+        tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
+        click_until(&tab, "Practice", "a practice game", |state| state["screen"] == "Game");
+        let mine = wait_for(&tab, "the player's turn", |state| enabled(state, "Item(1)") == Some(true));
+        assert_eq!(mine["me"]["items"][1], "PowerUp", "{mine}");
+        assert_eq!(mine["me"]["ss"], "ready", "{mine}");
+
+        // 5 uses the second item, Power Up: it's armed, and no other item can join it this turn.
+        tab.press_key("5").unwrap();
+        let armed = wait_for(&tab, "Power Up armed", |state| state["me"]["armed"] == "PowerUp");
+        assert!(armed["me"]["items"][1].is_null(), "used up: {armed}");
+        wait_for(&tab, "the other items disabled", |state| enabled(state, "Item(0)") == Some(false));
+
+        // 3 picks SS and a tap of Space fires it, at once: SS locks for the next own turns.
+        tab.press_key("3").unwrap();
+        tab.press_key(" ").unwrap();
+        wait_for(&tab, "SS locked", |state| {
+            clock_on_time(state);
+            state["me"]["ss_lock"].as_u64() > Some(0) && state["me"]["ss"] == "locked" && enabled(state, "Shot(Ss)") == Some(false)
+        })
+    })
+    .await
+    .unwrap();
+    assert_eq!(state["seat"], 0, "{state}");
     drop(browser);
     drop(server);
 }

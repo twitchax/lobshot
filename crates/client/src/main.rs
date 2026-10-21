@@ -12,6 +12,7 @@ mod assets;
 mod game;
 mod model;
 mod net;
+mod picks;
 mod screens;
 mod sound;
 mod ui;
@@ -45,6 +46,7 @@ fn main() -> AppExit {
             assets::AssetsPlugin,
             net::NetPlugin,
             model::ModelPlugin,
+            picks::PicksPlugin,
             sound::SoundPlugin,
             ui::UiPlugin,
             screens::ScreensPlugin,

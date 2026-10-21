@@ -5,9 +5,15 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use lobshot_protocol::RoomCode;
+use lobshot_sim::game::Player;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
-use crate::{sound::SoundLog, ui::ButtonSpots};
+use crate::{
+    model::{Ss, Sudden},
+    picks::Picks,
+    sound::SoundLog,
+    ui::ButtonSpots,
+};
 
 /// Where the page is: the title screen (`/`), or a room (`/r/{code}`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,13 +191,36 @@ pub struct Published<'a> {
     /// Turns the clock has begun: one per turn shown.
     pub started: u32,
     pub seat: Option<u8>,
+    /// The mobile and loadout this player picked.
+    pub picks: &'a Picks,
+    /// This player in the game, if they have a seat.
+    pub me: Option<Me<'a>>,
+    pub sudden_death: Option<Sudden>,
     pub sounds: &'a SoundLog,
     pub buttons: &'a ButtonSpots,
 }
 
-/// Publishes what the client is doing as `window.lobshot` (`{ screen, turns, started, seat,
-/// sounds: { loaded, played: { blast: 2, .. } }, buttons: [{ action, x, y }] }`), for the browser
-/// smoke test to watch and click. Cheap enough to do every frame.
+/// This player in the game.
+pub struct Me<'a> {
+    pub player: &'a Player,
+    pub ss: Ss,
+    pub can_spin: bool,
+}
+
+/// Publishes what the client is doing as `window.lobshot`, for the browser smoke test to watch and
+/// click. Cheap enough to do every frame:
+///
+/// ```text
+/// { screen, turns, started, seat,
+///   picks: { mobile: "Coilback" | "Random", loadout: ["Dual", ..] },
+///   me: { mobile, alive, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin } | null,
+///   sudden_death: { kind, in, on } | null,
+///   sounds: { loaded, played: { blast: 2, .. } },
+///   buttons: [{ action, x, y, enabled }] }
+/// ```
+///
+/// Items, mobiles and sudden-death kinds are named as `Debug` prints them, the same as in button
+/// actions (`AddItem(PowerUp)`).
 pub fn publish(now: &Published) {
     let Some(window) = web_sys::window() else { return };
     let set = |object: &js_sys::Object, key: &str, value: &JsValue| {
@@ -205,6 +234,56 @@ pub fn publish(now: &Published) {
     set(&state, "turns", &turns);
     set(&state, "started", &now.started.into());
     set(&state, "seat", &now.seat.map_or(JsValue::NULL, JsValue::from));
+    let name = |value: &dyn std::fmt::Debug| JsValue::from(format!("{value:?}"));
+
+    let picks = js_sys::Object::new();
+    set(&picks, "mobile", &now.picks.mobile.map_or_else(|| "Random".into(), |mobile| name(&mobile)));
+    let loadout: js_sys::Array = now.picks.loadout.items().map(|item| name(&item)).collect();
+    set(&picks, "loadout", &loadout);
+    set(&state, "picks", &picks);
+
+    let me = now.me.as_ref().map_or(JsValue::NULL, |me| {
+        let player = me.player;
+        let object = js_sys::Object::new();
+        set(&object, "mobile", &name(&player.mobile));
+        set(&object, "alive", &player.alive.into());
+        set(&object, "hp", &player.hp.into());
+        set(&object, "shield", &player.shield.into());
+        let items: js_sys::Array = player.items.iter().map(|item| item.map_or(JsValue::NULL, |item| name(&item))).collect();
+        set(&object, "items", &items);
+        set(&object, "armed", &player.armed.map_or(JsValue::NULL, |item| name(&item)));
+        set(&object, "ss_lock", &player.ss_lock.into());
+        let ss = match me.ss {
+            Ss::Ready => "ready",
+            Ss::Locked(_) => "locked",
+            Ss::Off => "off",
+        };
+        set(&object, "ss", &ss.into());
+        set(&object, "can_spin", &me.can_spin.into());
+        object.into()
+    });
+    set(&state, "me", &me);
+
+    let sudden = now.sudden_death.and_then(|sudden| {
+        let object = js_sys::Object::new();
+        match sudden {
+            Sudden::Never => return None,
+            // Turn counts stay far below 2^53, exact as a JS number.
+            #[allow(clippy::cast_precision_loss)]
+            Sudden::In { turns, kind } => {
+                set(&object, "kind", &name(&kind));
+                set(&object, "in", &JsValue::from_f64(turns as f64));
+                set(&object, "on", &false.into());
+            }
+            Sudden::On(kind) => {
+                set(&object, "kind", &name(&kind));
+                set(&object, "in", &0.into());
+                set(&object, "on", &true.into());
+            }
+        }
+        Some(object)
+    });
+    set(&state, "sudden_death", &sudden.map_or(JsValue::NULL, JsValue::from));
 
     let played = js_sys::Object::new();
     for (&name, &count) in &now.sounds.played {
@@ -216,11 +295,12 @@ pub fn publish(now: &Published) {
     set(&state, "sounds", &sounds);
 
     let buttons = js_sys::Array::new();
-    for (action, at) in &now.buttons.0 {
+    for spot in &now.buttons.0 {
         let button = js_sys::Object::new();
-        set(&button, "action", &action.as_str().into());
-        set(&button, "x", &at.x.into());
-        set(&button, "y", &at.y.into());
+        set(&button, "action", &spot.action.as_str().into());
+        set(&button, "x", &spot.at.x.into());
+        set(&button, "y", &spot.at.y.into());
+        set(&button, "enabled", &spot.enabled.into());
         buttons.push(&button);
     }
     set(&state, "buttons", &buttons);

@@ -44,6 +44,8 @@ ewebsock = "0.8"
 web-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+# The client's unit tests: it builds for wasm32 only, where a plain `#[test]` never runs.
+wasm-bindgen-test = "0.3"
 js-sys = "0.3"
 # xtask art: SVG to PNG.
 resvg = "0.48"

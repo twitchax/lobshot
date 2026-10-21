@@ -2,6 +2,7 @@
 # the same tasks, so "green locally" and "green in CI" mean the same thing.
 #
 #   cargo make ci        fmt-check + clippy (native and wasm, -D warnings) + nextest + determinism: the gate
+#   cargo make test-client  the client's unit tests, on wasm32 in node
 #   cargo make uat       ci + the #[ignore]d slow suites
 #   cargo make codecov   coverage.lcov via llvm-cov
 #   cargo make art       render assets/ into assets/gen/ (SVG to PNG, masks, map manifests)
@@ -58,6 +59,21 @@ dependencies = ["install-cargo-binstall"]
 command = "cargo"
 args = ["binstall", "wasmtime-cli", "--no-confirm", "--locked", "--force"]
 
+[tasks.install-wasm-bindgen-test]
+# wasm-bindgen's test runner, which must match the wasm-bindgen in Cargo.lock, so the version comes
+# from there. Repo-local in target/tools, never on the PATH: a global wasm-bindgen breaks
+# cargo-leptos in other projects.
+dependencies = ["install-cargo-binstall"]
+script = '''
+set -eu
+version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock)
+runner=target/tools/bin/wasm-bindgen-test-runner
+if [ -x "$runner" ] && "$runner" --version | grep -qx "wasm-bindgen-test-runner $version"; then
+  exit 0
+fi
+cargo binstall wasm-bindgen-cli --version "$version" --root target/tools --no-confirm --locked --force
+'''
+
 [tasks.tools]
 dependencies = ["install-nextest", "install-llvm-cov", "install-trunk", "install-wasmtime"]
 
@@ -104,6 +120,15 @@ dependencies = ["install-wasmtime"]
 env = { CARGO_TARGET_WASM32_WASIP1_RUNNER = "wasmtime" }
 command = "cargo"
 args = ["test", "--package", "lobshot-sim", "--target", "wasm32-wasip1", "--lib", "--test", "golden", "--test", "formula"]
+
+[tasks.test-client]
+# The client builds for wasm32 only, so its unit tests run there too, in node (22 or newer) under
+# wasm-bindgen's runner. Each test module imports `wasm_bindgen_test` as `test`; the runner skips a
+# plain `#[test]`.
+dependencies = ["install-wasm-bindgen-test"]
+env = { CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER = "${CARGO_MAKE_WORKING_DIRECTORY}/target/tools/bin/wasm-bindgen-test-runner" }
+command = "cargo"
+args = ["test", "--package", "lobshot-client", "--target", "wasm32-unknown-unknown"]
 
 [tasks.test-ignored]
 # Slow or infra-bound suites are `#[ignore = "reason"]`; this runs exactly those. Ignored tests

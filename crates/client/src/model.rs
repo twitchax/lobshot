@@ -8,18 +8,20 @@ use std::collections::VecDeque;
 use bevy::prelude::*;
 use lobshot_protocol::{MemberId, RoomCode, RoomView, ServerMsg, Stage};
 use lobshot_sim::{
-    game::{Effect, Event, Game, Team},
+    game::{Effect, Event, Game, Phase, Player, Shot, SuddenDeath, SuddenDeathKind, Team},
     log::Log,
     map::{MapAssets, MapRef},
 };
 
-use crate::{assets::Masks, game::TurnClock, net::Inbound, sound::SoundLog, ui::ButtonSpots, web};
+use crate::{assets::Masks, game::TurnClock, net::Inbound, picks::Picks, sound::SoundLog, ui::ButtonSpots, web};
 
 /// Which screen is up.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Screen {
     #[default]
     Title,
+    /// Your mobile and items, outside any room (they're used in rooms and in practice).
+    Garage,
     /// Asking for a name before joining.
     Name,
     /// Connected or connecting, waiting for the room.
@@ -49,6 +51,8 @@ pub struct Session {
     pub notice: Option<String>,
     /// Practice against a bot, with no server.
     pub practice: bool,
+    /// Players per team in practice: 1 (you against a bot) or 2 (you and a bot against two).
+    pub practice_team_size: u8,
     /// The master removed this player (the token is revoked, so there is no rejoining).
     pub kicked: bool,
     /// Who sat where in the current (or just-finished) game, by seat.
@@ -91,29 +95,34 @@ impl Session {
 /// A game in progress.
 #[derive(Resource)]
 pub struct Match {
-    /// The map the game is on, for drawing it.
-    pub map: MapRef,
+    /// The game so far: its setup (the map to draw, each seat's loadout, sudden death) and the
+    /// events applied to `confirmed`, which the scoreboard tallies when it ends.
+    pub log: Log,
     pub confirmed: Game,
     pub predicted: Game,
     /// This player's walks, sent but not yet echoed.
     pub pending: VecDeque<Event>,
-    /// Events applied to `confirmed` (the log index of the next).
-    pub applied: u32,
     /// The server's hash disagreed with ours: the client is out of sync and says so.
     pub desynced: bool,
 }
 
 impl Match {
+    /// A match at the end of `log`, which `game` is.
     #[must_use]
-    pub fn new(map: MapRef, game: Game, applied: u32) -> Self {
+    pub fn new(log: Log, game: Game) -> Self {
         Self {
-            map,
+            log,
             predicted: game.clone(),
             confirmed: game,
             pending: VecDeque::new(),
-            applied,
             desynced: false,
         }
+    }
+
+    /// Events applied so far: the log index of the next.
+    #[must_use]
+    pub fn applied(&self) -> u32 {
+        u32::try_from(self.log.events.len()).unwrap_or(u32::MAX)
     }
 
     /// Applies an event with no server (practice): the client is its own referee.
@@ -123,7 +132,7 @@ impl Match {
     /// Fails when the sim refuses the event.
     pub fn referee(&mut self, event: Event) -> lobshot_sim::base::Res<Vec<Effect>> {
         let effects = self.confirmed.apply(event)?;
-        self.applied += 1;
+        self.log.events.push(event);
         self.predicted = self.confirmed.clone();
         Ok(effects)
     }
@@ -138,6 +147,32 @@ impl Match {
         }
     }
 
+    /// The seat's player in the predicted game.
+    #[must_use]
+    pub fn player(&self, seat: u8) -> Option<&Player> {
+        self.predicted.players().get(usize::from(seat))
+    }
+
+    /// Where sudden death stands now: the sim says whether it's on, the setup when it will be.
+    #[must_use]
+    pub fn sudden_death(&self) -> Sudden {
+        sudden(self.predicted.sudden_death(), self.log.setup.sudden_death, self.predicted.turns())
+    }
+
+    /// Whether `seat` may pick SS, and if not, why. On the seat's own turn the sim has the last
+    /// word (an armed Dual or Dual+ fires no SS either).
+    #[must_use]
+    pub fn ss(&self, seat: u8) -> Ss {
+        let Some(player) = self.player(seat) else { return Ss::Off };
+        let shown = ss(self.sudden_death(), player.ss_lock);
+        let deciding = self.predicted.phase() == (Phase::Turn { seat }) && self.predicted.pending_roll().is_none();
+        if shown == Ss::Ready && deciding && !self.predicted.can_shoot(seat, Shot::Ss) {
+            Ss::Off
+        } else {
+            shown
+        }
+    }
+
     /// Applies the server's next event; returns its effects for playback.
     fn confirm(&mut self, event: Event, hash: u64) -> Vec<Effect> {
         let effects = match self.confirmed.apply(event) {
@@ -148,7 +183,8 @@ impl Match {
                 Vec::new()
             }
         };
-        self.applied += 1;
+        // Logged even when it didn't apply here: the server's log has it, and indices must agree.
+        self.log.events.push(event);
         if self.confirmed.state_hash().ok() != Some(hash) {
             self.desynced = true;
         }
@@ -168,6 +204,60 @@ impl Match {
             }
         }
         effects
+    }
+}
+
+/// Where a game's sudden death stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sudden {
+    /// The room plays without it.
+    Never,
+    /// It starts once this many more turns are done.
+    In { turns: i64, kind: SuddenDeathKind },
+    /// It's on: items are off, and SS follows `kind`.
+    On(SuddenDeathKind),
+}
+
+/// Sudden death: `on` (the sim's `Game::sudden_death`) once it has started, otherwise counting the
+/// turns until the setup's `rule` starts it.
+#[must_use]
+pub fn sudden(on: Option<SuddenDeathKind>, rule: Option<SuddenDeath>, turns: i64) -> Sudden {
+    match (on, rule) {
+        (Some(kind), _) => Sudden::On(kind),
+        (None, Some(SuddenDeath { kind, turn })) if i64::from(turn) > turns => Sudden::In { turns: i64::from(turn) - turns, kind },
+        (None, _) => Sudden::Never,
+    }
+}
+
+/// A sudden death's player-facing name.
+#[must_use]
+pub fn sudden_death_name(kind: SuddenDeathKind) -> &'static str {
+    match kind {
+        SuddenDeathKind::BigBomb => "Big Bomb",
+        SuddenDeathKind::Double => "Double",
+        SuddenDeathKind::SsDeath => "SS Death",
+    }
+}
+
+/// Whether a player may pick SS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ss {
+    Ready,
+    /// Locked for this many more of the player's own turns.
+    Locked(u8),
+    /// Off: for the rest of the game (Big Bomb and Double sudden deaths), or this turn (the sim
+    /// refuses it, as with Dual armed).
+    Off,
+}
+
+/// SS as the HUD shows it for a player with `ss_lock` own turns to wait: SS Death lifts the lock,
+/// Big Bomb and Double take SS away.
+#[must_use]
+pub fn ss(sudden: Sudden, ss_lock: u8) -> Ss {
+    match sudden {
+        Sudden::On(SuddenDeathKind::BigBomb | SuddenDeathKind::Double) => Ss::Off,
+        Sudden::Never | Sudden::In { .. } if ss_lock > 0 => Ss::Locked(ss_lock),
+        Sudden::On(SuddenDeathKind::SsDeath) | Sudden::Never | Sudden::In { .. } => Ss::Ready,
     }
 }
 
@@ -220,7 +310,9 @@ pub fn receive(
                     session.lobby_waiting = true;
                 } else {
                     commands.remove_resource::<Loading>();
-                    next.set(Screen::Lobby);
+                    // Every room update lands here; `set` would re-run the lobby's exit and enter
+                    // (Bevy 0.20 transitions to the same state too), wiping the screen each time.
+                    next.set_if_different(Screen::Lobby);
                 }
                 session.room = Some(room);
             }
@@ -243,11 +335,11 @@ pub fn receive(
                 if let Some(fresh) = fresh.as_mut() {
                     fresh.queued.push((index, event, hash));
                 } else if let Some(game) = game.as_deref_mut() {
-                    if index == game.applied {
+                    if index == game.applied() {
                         let effects = game.confirm(event, hash);
                         played.write(Played { event, effects });
                     } else {
-                        warn!("event {index} arrived, but {} was next", game.applied);
+                        warn!("event {index} arrived, but {} was next", game.applied());
                         game.desynced = true;
                     }
                 } else if let Some(loading) = loading.as_deref_mut() {
@@ -284,9 +376,9 @@ pub fn finish_loading(loading: Option<Res<Loading>>, mut masks: Masks, mut comma
             return;
         }
     };
-    let mut started = Match::new(loading.log.setup.map.clone(), game, u32::try_from(loading.log.events.len()).unwrap_or(u32::MAX));
+    let mut started = Match::new(loading.log.clone(), game);
     for &(index, event, hash) in &loading.queued {
-        if index == started.applied {
+        if index == started.applied() {
             let effects = started.confirm(event, hash);
             played.write(Played { event, effects });
         }
@@ -296,14 +388,25 @@ pub fn finish_loading(loading: Option<Res<Loading>>, mut masks: Masks, mut comma
     next.set(Screen::Game);
 }
 
-/// Lets the browser smoke test see the screen, the game's progress (applied, and shown), the
-/// sounds, and where to click.
-fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, clock: Res<TurnClock>, sounds: Res<SoundLog>, buttons: Res<ButtonSpots>) {
+/// Lets the browser smoke test see the screen, the game's progress (applied, and shown), this
+/// player's picks and state, the sounds, and where to click.
+fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, picks: Res<Picks>, clock: Res<TurnClock>, sounds: Res<SoundLog>, buttons: Res<ButtonSpots>) {
+    let seat = session.my_seat();
+    let me = game.as_deref().zip(seat).and_then(|(game, seat)| {
+        game.player(seat).map(|player| web::Me {
+            player,
+            ss: game.ss(seat),
+            can_spin: game.confirmed.can_spin(seat),
+        })
+    });
     web::publish(&web::Published {
         screen: format!("{:?}", screen.get()),
-        turns: game.map(|game| game.confirmed.turns()),
+        turns: game.as_ref().map(|game| game.confirmed.turns()),
         started: clock.starts,
-        seat: session.my_seat(),
+        seat,
+        picks: &picks,
+        me,
+        sudden_death: game.as_ref().map(|game| game.sudden_death()),
         sounds: &sounds,
         buttons: &buttons,
     });
@@ -317,5 +420,125 @@ impl Plugin for ModelPlugin {
             .init_resource::<Session>()
             .add_message::<Played>()
             .add_systems(Update, ((receive, finish_loading).chain().in_set(ApplyEvents), publish));
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    // The runner only runs `wasm_bindgen_test`s; this makes `#[test]` one.
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use lobshot_sim::{
+        drops::{Drop, DropKind},
+        game::{MobileKind, Roll, Seat, Setup},
+        items::{Item, Loadout},
+        map::NoAssets,
+        units::{Facing, Wind},
+        weather::{Forecast, WeatherKind},
+    };
+
+    use super::*;
+
+    fn setup(items: &[Item]) -> Setup {
+        let seat = |team, spawn_x, facing| Seat {
+            team,
+            mobile: MobileKind::Coilback,
+            spawn_x,
+            facing,
+            items: Loadout::new(items).unwrap(),
+        };
+        Setup {
+            map: MapRef::Flat { width: 1600, height: 900, ground: 700 },
+            seats: vec![seat(Team::A, 400, Facing::Right), seat(Team::B, 1100, Facing::Left)],
+            order: vec![0, 1],
+            wind: Wind::default(),
+            sudden_death: None,
+        }
+    }
+
+    /// Answers whatever the game owes, as a server would (any answer will do).
+    fn answer_rolls(game: &mut Match) {
+        while let Some(roll) = game.confirmed.pending_roll() {
+            let event = match roll {
+                Roll::Weather { .. } => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
+                Roll::Wind => Event::Wind(Wind::default()),
+                Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
+            };
+            game.referee(event).unwrap();
+        }
+    }
+
+    #[derive(Resource, Default)]
+    struct Exits(u32);
+
+    #[test]
+    fn room_updates_in_the_lobby_stay_in_it() {
+        let mut app = App::new();
+        app.add_plugins(bevy::state::app::StatesPlugin)
+            .init_state::<Screen>()
+            .init_resource::<Session>()
+            .init_resource::<Exits>()
+            .add_message::<Inbound>()
+            .add_message::<Played>()
+            .add_systems(OnExit(Screen::Lobby), |mut exits: ResMut<Exits>| exits.0 += 1)
+            .add_systems(Update, receive);
+        let room = RoomView {
+            code: lobshot_protocol::RoomCode::from_indices([0; lobshot_protocol::RoomCode::LEN]),
+            master: MemberId(1),
+            options: lobshot_protocol::RoomOptions::default(),
+            members: Vec::new(),
+            stage: Stage::Lobby,
+        };
+        for _ in 0..4 {
+            app.world_mut().write_message(Inbound(ServerMsg::Room(room.clone())));
+            app.update();
+        }
+        assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Lobby);
+        assert_eq!(app.world().resource::<Exits>().0, 0, "each update re-entered the lobby, which clears it");
+    }
+
+    #[test]
+    fn sudden_death_counts_down_until_the_sim_starts_it() {
+        let kind = SuddenDeathKind::Double;
+        let rule = Some(SuddenDeath { kind, turn: 40 });
+        assert_eq!(sudden(None, None, 100), Sudden::Never);
+        assert_eq!(sudden(None, rule, 0), Sudden::In { turns: 40, kind });
+        assert_eq!(sudden(None, rule, 39), Sudden::In { turns: 1, kind });
+        assert_eq!(sudden(Some(kind), rule, 40), Sudden::On(kind));
+        assert_eq!(sudden(Some(kind), rule, 90), Sudden::On(kind));
+    }
+
+    #[test]
+    fn ss_follows_its_lock_until_sudden_death_decides() {
+        let before = Sudden::In { turns: 5, kind: SuddenDeathKind::BigBomb };
+        assert_eq!(ss(Sudden::Never, 0), Ss::Ready);
+        assert_eq!(ss(Sudden::Never, 3), Ss::Locked(3));
+        assert_eq!(ss(before, 2), Ss::Locked(2));
+        assert_eq!(ss(Sudden::On(SuddenDeathKind::SsDeath), 3), Ss::Ready, "SS every turn");
+        assert_eq!(ss(Sudden::On(SuddenDeathKind::BigBomb), 0), Ss::Off);
+        assert_eq!(ss(Sudden::On(SuddenDeathKind::Double), 0), Ss::Off);
+    }
+
+    #[test]
+    fn a_match_reads_ss_and_sudden_death_from_the_sim() {
+        let mut setup = setup(&[Item::Dual]);
+        setup.sudden_death = Some(SuddenDeath { kind: SuddenDeathKind::BigBomb, turn: 40 });
+        let game = Game::new(&setup, &NoAssets).unwrap();
+        let mut game = Match::new(Log { setup, events: Vec::new() }, game);
+        answer_rolls(&mut game);
+        assert_eq!(
+            game.sudden_death(),
+            Sudden::In {
+                turns: 40,
+                kind: SuddenDeathKind::BigBomb
+            }
+        );
+        assert_eq!(game.ss(0), Ss::Ready);
+        // Seat 0 moves first and arms Dual, which fires no SS.
+        game.referee(Event::UseItem { seat: 0, slot: 0 }).unwrap();
+        assert_eq!(game.ss(0), Ss::Off);
+        assert_eq!(game.ss(1), Ss::Ready, "not its turn: its lock decides");
     }
 }

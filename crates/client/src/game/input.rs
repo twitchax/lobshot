@@ -1,21 +1,58 @@
 //! Your turn's controls. Left/Right (or A/D) walk, Up/Down (or W/S) aim, Tab or 1/2/3 pick the
-//! shot, and holding Space charges power until you let go (or it maxes out and fires). F8 or P
-//! passes, Enter chats. Walks are predicted: applied at once and sent in 100 ms batches.
+//! shot (SS only while it's ready), 4 to 9 use the loadout's items, and holding Space charges
+//! power until you let go (or it maxes out and fires). F8 or P passes, Enter chats. Walks are
+//! predicted: applied at once and sent in 100 ms batches. A dead player's Spin works on anyone's
+//! turn.
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, ClientMsg};
 use lobshot_sim::{
     game::{Event, Player, Shot},
+    items::MAX_ITEMS,
     units::{Facing, Power},
 };
 
 use super::playback::TurnClock;
 use crate::{
-    model::{ChatLine, Match, Screen, Session},
+    model::{ChatLine, Match, Screen, Session, Ss},
     net::Socket,
     ui::{Clicked, UiAction},
     web::{TextInput, Typed},
 };
+
+/// The keys that use the loadout's items, by position, and how the item bar labels them: the
+/// number row after the shots' 1, 2 and 3. GunBound used F1 to F6, but browsers keep those (F5
+/// reloads the page).
+const ITEM_KEYS: [(KeyCode, &str); MAX_ITEMS] = [
+    (KeyCode::Digit4, "4"),
+    (KeyCode::Digit5, "5"),
+    (KeyCode::Digit6, "6"),
+    (KeyCode::Digit7, "7"),
+    (KeyCode::Digit8, "8"),
+    (KeyCode::Digit9, "9"),
+];
+
+/// The loadout position a key uses, if it's an item key.
+#[must_use]
+pub fn item_for_key(key: KeyCode) -> Option<u8> {
+    ITEM_KEYS.iter().position(|&(item_key, _)| item_key == key).and_then(|position| u8::try_from(position).ok())
+}
+
+/// The key that uses the item at `position`, as the item bar shows it.
+#[must_use]
+pub fn item_key_label(position: u8) -> Option<&'static str> {
+    ITEM_KEYS.get(usize::from(position)).map(|&(_, label)| label)
+}
+
+/// The shot Tab moves to from `shot`: S1, S2, then SS if it's ready.
+#[must_use]
+pub fn next_shot(shot: Shot, ss: Ss) -> Shot {
+    match shot {
+        Shot::S1 => Shot::S2,
+        Shot::S2 if ss == Ss::Ready => Shot::Ss,
+        Shot::S2 | Shot::Ss => Shot::S1,
+    }
+}
 
 /// Power fills 4 bars in 2.5 s while Space is held (OB), so a 0.05-bar step is about 31 ms.
 const BARS_PER_SECOND: f32 = 1.6;
@@ -67,7 +104,7 @@ impl Default for Controls {
 pub struct Act(pub Action);
 
 /// Whether it's this player's turn and they can act now.
-fn my_turn(session: &Session, clock: &TurnClock, game: &Match) -> Option<u8> {
+pub fn my_turn(session: &Session, clock: &TurnClock, game: &Match) -> Option<u8> {
     let seat = session.my_seat()?;
     (clock.seat == Some(seat) && super::world::current_seat(game) == Some(seat) && game.predicted.pending_roll().is_none()).then_some(seat)
 }
@@ -88,13 +125,23 @@ fn keys(keyboard: Res<ButtonInput<KeyCode>>, turn: Turn, game: Option<ResMut<Mat
         controls.power = 0.0;
         return;
     };
-    let Some(me) = game.predicted.players().get(usize::from(seat)).copied() else { return };
+    let Some(me) = game.player(seat).copied() else { return };
+    let ss = game.ss(seat);
     start_turn(&mut controls, seat, turn.clock.started, &me);
+    // A locked SS can't stay picked (it locks once fired; sudden death can take it away).
+    if controls.shot == Shot::Ss && ss != Ss::Ready {
+        controls.shot = Shot::S1;
+    }
     if turn.typing.is_open() {
         return;
     }
     let dt = turn.time.delta_secs();
-    pick_shot(&keyboard, &mut controls);
+    pick_shot(&keyboard, &mut controls, ss);
+    for position in keyboard.get_just_pressed().filter_map(|&key| item_for_key(key)) {
+        if game.predicted.can_use_item(seat, position) {
+            acts.write(Act(Action::Item { slot: position }));
+        }
+    }
     aim(&keyboard, &mut controls, &me, dt);
     let mut hands = Hands {
         controls: &mut controls,
@@ -122,16 +169,12 @@ fn start_turn(controls: &mut Controls, seat: u8, started: f64, me: &Player) {
     controls.charging = false;
 }
 
-fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls) {
+fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, ss: Ss) {
     if keyboard.just_pressed(KeyCode::Tab) {
-        controls.shot = match controls.shot {
-            Shot::S1 => Shot::S2,
-            Shot::S2 => Shot::Ss,
-            Shot::Ss => Shot::S1,
-        };
+        controls.shot = next_shot(controls.shot, ss);
     }
     for (key, shot) in [(KeyCode::Digit1, Shot::S1), (KeyCode::Digit2, Shot::S2), (KeyCode::Digit3, Shot::Ss)] {
-        if keyboard.just_pressed(key) {
+        if keyboard.just_pressed(key) && (shot != Shot::Ss || ss == Ss::Ready) {
             controls.shot = shot;
         }
     }
@@ -243,11 +286,18 @@ impl Hands<'_, '_> {
     }
 }
 
-/// Buttons on the game screen.
+/// Buttons on the game screen. The HUD disables SS while it's locked, and items that can't be used
+/// now, so a click here is one the player could make.
 fn buttons(mut clicked: MessageReader<Clicked>, mut controls: ResMut<Controls>, mut acts: MessageWriter<Act>, typing: Res<TextInput>) {
     for Clicked(action) in clicked.read() {
         match action {
             UiAction::Shot(shot) => controls.shot = *shot,
+            UiAction::Item(slot) => {
+                acts.write(Act(Action::Item { slot: *slot }));
+            }
+            UiAction::Spin => {
+                acts.write(Act(Action::Spin));
+            }
             UiAction::Pass => {
                 acts.write(Act(Action::Pass));
             }
@@ -293,5 +343,40 @@ impl Plugin for InputPlugin {
         app.init_resource::<Controls>()
             .add_message::<Act>()
             .add_systems(Update, (keys, buttons, chat, send).chain().run_if(in_state(Screen::Game)));
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    // The runner only runs `wasm_bindgen_test`s; this makes `#[test]` one.
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn items_sit_on_the_number_row_after_the_shots() {
+        assert_eq!(item_for_key(KeyCode::Digit4), Some(0));
+        assert_eq!(item_for_key(KeyCode::Digit9), Some(5));
+        for key in [KeyCode::Digit1, KeyCode::Digit3, KeyCode::F5, KeyCode::KeyP] {
+            assert_eq!(item_for_key(key), None, "{key:?}");
+        }
+        assert_eq!(item_key_label(0), Some("4"));
+        assert_eq!(item_key_label(5), Some("9"));
+        assert_eq!(item_key_label(6), None);
+        for position in 0..6 {
+            let (key, label) = ITEM_KEYS[usize::from(position)];
+            assert_eq!((item_for_key(key), item_key_label(position)), (Some(position), Some(label)));
+        }
+    }
+
+    #[test]
+    fn tab_skips_ss_unless_it_is_ready() {
+        assert_eq!(next_shot(Shot::S1, Ss::Ready), Shot::S2);
+        assert_eq!(next_shot(Shot::S2, Ss::Ready), Shot::Ss);
+        assert_eq!(next_shot(Shot::Ss, Ss::Ready), Shot::S1);
+        assert_eq!(next_shot(Shot::S2, Ss::Locked(3)), Shot::S1);
+        assert_eq!(next_shot(Shot::S2, Ss::Off), Shot::S1);
     }
 }
