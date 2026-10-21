@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1300" viewBox="0 0 1800 1300">
+  <!-- Ashspine background: dawn over an ashen volcanic range, seen from among its ridges. The whole
+       map (1800 x 1300), shared by every variant. Warm (peach to gold), soft and low in contrast so
+       the dark basalt reads hard in front of it, and no noise texture: a noise blotch over the
+       sky alone cost a quarter of the PNG.
+       The sun rises on the left behind the far range, so its light agrees with the sprites' (upper
+       left). Far ranges carry plated crests of their own: the archetype, told by the skyline. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b98a8c"/>
+      <stop offset="0.22" stop-color="#d3a087"/>
+      <stop offset="0.45" stop-color="#ebba8b"/>
+      <stop offset="0.6" stop-color="#f6d098"/>
+      <stop offset="0.72" stop-color="#fbe0b0"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="430" cy="760" r="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6d8" stop-opacity="0.95"/>
+      <stop offset="0.14" stop-color="#ffe6b0" stop-opacity="0.6"/>
+      <stop offset="0.5" stop-color="#ffd49c" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ffd49c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff0c8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff0c8" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#fff0c8" stop-opacity="0"/>
+    </linearGradient>
+    <!-- haze between ranges: each band lifts the range behind it toward the sky -->
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde2b4" stop-opacity="0"/>
+      <stop offset="0.6" stop-color="#fde2b4" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fde2b4" stop-opacity="0"/>
+    </linearGradient>
+    <!-- the abyss: valley mist far below, where whatever falls is lost -->
+    <linearGradient id="abyss" x1="0" y1="1040" x2="0" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2cfae" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#eec6ac" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#e2b4a6" stop-opacity="0.95"/>
+    </linearGradient>
+    <!-- smoke fades as it drifts west from the cone -->
+    <linearGradient id="smokeDrift" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#a89096" stop-opacity="0.65"/>
+      <stop offset="0.5" stop-color="#bca4a4" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#d0b8b0" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="plume" x="-50%" y="-20%" width="200%" height="140%"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.6"/></filter>
+    <filter id="cloudSoft" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>
+    <!-- a gentle brush wobble on the ranges' edges, so they read painted rather than plotted -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018 0.04" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1.1"/>
+    </filter>
+    <!-- a far cluster of basalt pinnacles, tapering and broken (origin = base center) -->
+    <path id="stack" d="M -24,0 C -22,-14 -20,-26 -17,-38 L -14,-52 L -11,-44 L -7,-70 L -3,-84 L 1,-66 L 5,-76 L 9,-58 L 13,-40 L 16,-48 L 20,-26 C 22,-14 24,-6 26,0 Z"/>
+    <!-- a stratus streak, lit from the low sun on the left -->
+    <g id="streak">
+      <path d="M -150,0 C -120,-10 -60,-16 0,-16 C 70,-16 130,-10 170,0 C 120,4 -100,4 -150,0 Z" fill="#e8b49c"/>
+      <path d="M -150,0 C -120,-10 -60,-16 0,-16 C -40,-12 -100,-8 -126,-1 Z" fill="#fbd8b8"/>
+    </g>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="1800" height="1300" fill="url(#sky)"/>
+    <rect width="1800" height="1300" fill="url(#sunGlow)"/>
+    <g opacity="0.38">
+      <path d="M 430,760 L 40,-20 L 170,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 430,760 L 380,-20 L 470,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 430,760 L 700,-20 L 830,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 430,760 L 1180,-20 L 1360,-20 Z" fill="url(#ray)" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <g id="layer-high-clouds" filter="url(#softer)" opacity="0.55">
+    <ellipse cx="320" cy="140" rx="320" ry="18" fill="#c99c9a"/>
+    <ellipse cx="1060" cy="96" rx="360" ry="15" fill="#c2949a"/>
+    <ellipse cx="1560" cy="210" rx="280" ry="15" fill="#d6a8a0"/>
+    <ellipse cx="760" cy="300" rx="240" ry="11" fill="#e2b4a2"/>
+  </g>
+
+  <g id="layer-streaks" filter="url(#cloudSoft)" opacity="0.85">
+    <use href="#streak" transform="translate(1340,430)"/>
+    <use href="#streak" transform="translate(1520,470) scale(0.7)"/>
+    <use href="#streak" transform="translate(200,380) scale(0.8)"/>
+    <use href="#streak" transform="translate(860,520) scale(0.55 0.6)"/>
+  </g>
+
+  <!-- the farthest range, barely darker than the sky, with a smoking cone -->
+  <g id="layer-farthest" filter="url(#hazy)">
+    <path filter="url(#brush)" d="M -10,800 C 40,780 80,752 130,744 C 170,738 196,712 236,690 L 262,676 L 290,694 C 330,716 372,722 420,736 C 480,754 540,742 600,748 C 660,754 700,770 760,768 C 830,766 880,742 940,738 C 1000,734 1040,756 1100,754 C 1150,752 1200,700 1256,664 L 1290,640 L 1312,640 L 1346,666 C 1400,704 1450,726 1510,734 C 1580,744 1640,722 1700,728 C 1750,732 1790,748 1810,756 L 1810,900 L -10,900 Z" fill="#efc9a2"/>
+    <!-- the cone's crater rim catches the sun -->
+    <path d="M 1256,664 L 1290,640 L 1312,640" fill="none" stroke="#fde0b8" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
+  </g>
+  <!-- the cones' smoke: low and wide, drifting west along the horizon haze. Never a column: a
+       tall plume would read as the game's tornado weather. -->
+  <g id="layer-smoke">
+    <path d="M 1292,642 C 1288,628 1294,614 1282,604 C 1232,590 1150,598 1080,592 C 1028,588 986,596 936,602 L 940,620 C 998,616 1060,614 1122,616 C 1192,618 1250,622 1298,642 Z" fill="url(#smokeDrift)" filter="url(#plume)"/>
+    <path d="M 258,676 C 254,664 260,654 250,648 C 220,640 180,646 136,642 L 138,656 C 180,660 224,662 266,676 Z" fill="url(#smokeDrift)" filter="url(#plume)" opacity="0.7"/>
+  </g>
+
+  <g id="layer-sun">
+    <circle cx="430" cy="760" r="64" fill="#fff4d4" filter="url(#soft)" opacity="0.9"/>
+    <circle cx="430" cy="760" r="44" fill="#fffbea"/>
+  </g>
+
+  <!-- the far range, in front of the sun: plated crests like the Spine's, far off -->
+  <g id="layer-far" filter="url(#hazy)">
+    <path filter="url(#brush)" d="M -10,846 C 50,830 100,800 150,790 L 172,768 L 184,786 L 204,760 L 216,780 L 236,758 L 250,782 C 290,800 340,808 400,812 C 470,816 520,826 580,822 C 640,818 690,792 740,782 C 790,772 830,788 880,800 C 940,814 990,812 1040,806 C 1100,798 1140,778 1190,770 L 1212,746 L 1226,766 L 1246,738 L 1262,760 L 1282,734 L 1298,758 L 1318,744 L 1330,770 C 1380,790 1440,800 1500,806 C 1570,812 1630,796 1690,800 C 1740,804 1780,816 1810,822 L 1810,960 L -10,960 Z" fill="#e6b897"/>
+    <g fill="none" stroke="#f8d6b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+      <path d="M 150,790 L 172,768 M 184,786 L 204,760 M 216,780 L 236,758"/>
+      <path d="M 1190,770 L 1212,746 M 1226,766 L 1246,738 M 1262,760 L 1282,734"/>
+    </g>
+  </g>
+  <rect y="760" width="1800" height="200" fill="url(#haze)"/>
+
+  <!-- the mid range: rounder shoulders rolling across the whole width, basalt pinnacles on its
+       crests -->
+  <g id="layer-mid">
+    <path filter="url(#brush)" d="M -10,930 C 40,912 90,880 150,872 C 210,864 250,886 300,896 C 360,908 410,890 470,900 C 530,910 560,940 620,944 C 700,950 760,922 820,920 C 900,918 960,944 1040,940 C 1110,936 1160,912 1220,904 C 1290,896 1330,890 1380,884 C 1440,876 1480,860 1540,866 C 1600,872 1640,900 1700,904 C 1750,908 1790,896 1810,890 L 1810,1080 L -10,1080 Z" fill="#dba98e"/>
+    <g fill="#d2a08a">
+      <use href="#stack" transform="translate(150,874) scale(0.9)"/>
+      <use href="#stack" transform="translate(118,884) scale(0.55)"/>
+      <use href="#stack" transform="translate(1560,868) scale(0.8)"/>
+      <use href="#stack" transform="translate(1600,876) scale(0.5)"/>
+      <use href="#stack" transform="translate(820,922) scale(0.7)"/>
+    </g>
+    <!-- sun-side rims (left) -->
+    <g fill="none" stroke="#f6cfae" stroke-width="1.8" stroke-linecap="round" opacity="0.75">
+      <path d="M 135,840 L 140,812 L 143,798"/>
+      <path d="M 1549,836 L 1553,812 L 1556,800"/>
+      <path d="M 813,886 L 816,866"/>
+    </g>
+  </g>
+  <rect y="880" width="1800" height="200" fill="url(#haze)"/>
+
+  <!-- the near range: low, warm, half sunk in the valley haze, dipping where the valley runs -->
+  <g id="layer-near">
+    <path filter="url(#brush)" d="M -10,1050 C 60,1026 130,1010 200,1014 C 260,1018 310,1040 360,1046 C 420,1052 470,1036 530,1044 C 590,1052 620,1090 680,1100 C 760,1112 830,1084 900,1086 C 980,1088 1040,1112 1120,1104 C 1180,1098 1220,1060 1290,1046 C 1350,1034 1400,1030 1460,1018 C 1530,1004 1600,1012 1660,1028 C 1720,1044 1770,1040 1810,1032 L 1810,1300 L -10,1300 Z" fill="#cf9a86"/>
+    <g fill="#c79381">
+      <use href="#stack" transform="translate(240,1018) scale(1.1 0.9)"/>
+      <use href="#stack" transform="translate(1480,1016) scale(1.2 0.95)"/>
+      <use href="#stack" transform="translate(1512,1020) scale(0.7)"/>
+    </g>
+  </g>
+
+  <!-- the abyss: valley mist, soft banks rolling far below -->
+  <rect y="1040" width="1800" height="260" fill="url(#abyss)"/>
+  <g filter="url(#softer)" fill="#f6dcc4" opacity="0.8">
+    <ellipse cx="260" cy="1250" rx="300" ry="34"/>
+    <ellipse cx="900" cy="1270" rx="340" ry="30"/>
+    <ellipse cx="1540" cy="1250" rx="300" ry="34"/>
+  </g>
+
+  <!-- ash kites: a few birds riding the warm air over the ridge -->
+  <g fill="none" stroke="#8a6a72" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.6">
+    <path d="M 600,360 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 636,382 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 1260,300 q 5,-5 9,0 q 4,-5 9,0"/>
+  </g>
+</svg>

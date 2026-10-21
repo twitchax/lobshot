@@ -1,0 +1,18 @@
+// Rimewake: ice floes on a polar sea at twilight, long and low. Hand-written; `cargo xtask art`
+// copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 1100) so neither side starts with the better
+// ice: four on the west floes, four on the east. Every gap between floes runs to the bottom of the
+// map, so a mobile that walks or is knocked off a floe is lost. `cargo xtask art` refuses any spawn
+// that leaves a mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "rimewake",
+    title: "Rimewake",
+    variants: [
+        // A chain of floes and one tall berg (the Twins) in the middle as the only cover.
+        (id: "A", spawns: [100, 240, 560, 815, 1385, 1640, 1960, 2100]),
+        // A wreck frozen into the ice in the middle, its broken mast for cover; long floes split
+        // by crevasses, and small floes on the flanks.
+        (id: "B", spawns: [255, 500, 715, 1000, 1200, 1485, 1700, 1945]),
+    ],
+)

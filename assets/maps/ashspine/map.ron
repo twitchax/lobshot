@@ -1,0 +1,14 @@
+// Ashspine: a basalt ridge in an ashen range at dawn, its crest lined with plates. Hand-written;
+// `cargo xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 900) so neither side starts with the better
+// ground: two on the floating crags and two on the ridge's flank a side. `cargo xtask art`
+// refuses any spawn that leaves a mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "ashspine",
+    title: "Ashspine",
+    variants: [
+        (id: "A", spawns: [100, 296, 465, 645, 1155, 1335, 1504, 1700]),
+        (id: "B", spawns: [110, 330, 530, 705, 1095, 1270, 1470, 1690]),
+    ],
+)

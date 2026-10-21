@@ -1,0 +1,14 @@
+// Gablewick: a canal town's rooftops on a spring morning. Hand-written; `cargo xtask art` copies it
+// to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 950) so neither side starts with the better
+// roof: four on the west roofs, four on the east. `cargo xtask art` refuses any spawn that leaves a
+// mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "gablewick",
+    title: "Gablewick",
+    variants: [
+        (id: "A", spawns: [130, 395, 610, 830, 1070, 1290, 1505, 1770]),
+        (id: "B", spawns: [125, 360, 590, 840, 1060, 1310, 1540, 1775]),
+    ],
+)

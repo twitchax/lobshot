@@ -4,10 +4,14 @@
 // Spawns are columns, mirrored about the middle (x = 900) so neither side starts with the better
 // ground: four on the west islands, four on the east. `cargo xtask art` refuses any spawn that
 // leaves a mobile hanging off an edge or under an overhang.
+//
+// A: two bluffs, two islets, two shelves and a needle. B: high perches at the edges, low shelves,
+// islands at middle height, and a spire between two shoulders in the middle.
 MapInfo(
     name: "tidewall",
     title: "Tidewall",
     variants: [
         (id: "A", spawns: [130, 330, 575, 800, 1000, 1225, 1470, 1670]),
+        (id: "B", spawns: [130, 300, 580, 790, 1010, 1220, 1500, 1670]),
     ],
 )

@@ -1,0 +1,18 @@
+// Glintvein: a mine under slate, its ore veins glinting in the lamplight. Hand-written;
+// `cargo xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 1000) so neither side starts with the better
+// ground. Each sits in a shaft or in the open, never under a roof: a spawn drops from the top of
+// the map onto the first ground in its column. `cargo xtask art` refuses any spawn that leaves a
+// mobile hanging off an edge, under an overhang, or on a roof that runs off the top.
+MapInfo(
+    name: "glintvein",
+    title: "Glintvein",
+    variants: [
+        // Galleries: two shafts through each side's roof, a shelf and a scaffold either side of
+        // the pillar.
+        (id: "A", spawns: [170, 440, 705, 865, 1135, 1295, 1560, 1830]),
+        // Shafts: each side steps down from a high ledge to the low floor by the great slab.
+        (id: "B", spawns: [110, 270, 470, 660, 1340, 1530, 1730, 1890]),
+    ],
+)

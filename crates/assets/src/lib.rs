@@ -40,7 +40,7 @@ pub fn rider_path(rider: &str) -> String {
 
 /// The drawn maps a room can pick, in the order the lobby offers them; `cargo xtask art` checks
 /// this matches `assets/maps/`.
-pub const MAPS: &[&str] = &["tidewall"];
+pub const MAPS: &[&str] = &["tidewall", "gablewick", "rimewake", "glintvein", "ashspine"];
 
 /// The synthetic map the server builds in, for testing: one flat field. Not drawn, so not one of
 /// `MAPS`; the lobby offers it after them.

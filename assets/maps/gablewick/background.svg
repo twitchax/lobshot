@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1000" viewBox="0 0 1900 1000">
+  <!-- Gablewick background: a canal town's spring morning, seen over its own rooftops. The whole
+       map (1900 x 1000), shared by every variant. Soft and low in contrast so the terrain reads in
+       front of it, and no per-pixel grain, which would bloat the PNG. The sun is up on the left,
+       so its light agrees with the sprites' (upper left). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#86b9e2"/>
+      <stop offset="0.3" stop-color="#a9d0ec"/>
+      <stop offset="0.55" stop-color="#cfe7ee"/>
+      <stop offset="0.72" stop-color="#e2f1e6"/>
+      <stop offset="1" stop-color="#e8f3e2"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="300" cy="150" r="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffbe6" stop-opacity="0.95"/>
+      <stop offset="0.14" stop-color="#fff4d2" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#fff0d8" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#fff0d8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="haze" x1="0" y1="560" x2="0" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2f8ee" stop-opacity="0"/>
+      <stop offset="0.6" stop-color="#f2f8ee" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f2f8ee" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="canal" x1="0" y1="950" x2="0" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8cc2c4"/>
+      <stop offset="1" stop-color="#5c96a4"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fffbe6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fffbe6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#fffbe6" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.3"/></filter>
+    <filter id="cloudSoft" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    <!-- a gentle brush wobble on organic edges only (hills, trees), never on buildings -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.05" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="0.9"/>
+    </filter>
+    <!-- a fair-weather cumulus: flat-bottomed, cel shaded, lit from the upper left -->
+    <g id="cumulus">
+      <path d="M -120,0 C -124,-16 -104,-26 -88,-18 C -86,-40 -58,-50 -40,-34 C -32,-60 4,-64 16,-42 C 28,-58 60,-52 64,-30 C 82,-38 106,-28 104,-10 C 120,-10 130,-2 128,0 Z" fill="#d4e3ef"/>
+      <path d="M -120,0 C -124,-16 -104,-26 -88,-18 C -86,-40 -58,-50 -40,-34 C -32,-60 4,-64 16,-42 C 6,-50 -22,-48 -32,-28 C -46,-38 -72,-30 -74,-12 C -90,-16 -106,-10 -106,0 Z" fill="#fbfdff"/>
+      <path d="M -110,-8 C -108,-16 -98,-20 -90,-16 M -80,-24 C -76,-36 -60,-42 -46,-34 M -28,-42 C -22,-54 -2,-56 8,-46" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+      <path d="M -60,0 C -40,-6 -10,-8 20,-6 C 50,-4 80,-6 110,-2 L 128,0 Z" fill="#bfd3e4"/>
+    </g>
+    <!-- far houses: a gabled block and a tower, for the hill towns (origin at the foot, middle) -->
+    <path id="farHouse" d="M -16,0 V -20 L -18,-20 L 0,-36 L 18,-20 L 16,-20 V 0 Z"/>
+    <path id="farHouseWide" d="M -26,0 V -18 L -28,-18 L -16,-32 H 16 L 28,-18 L 26,-18 V 0 Z"/>
+    <path id="farTower" d="M -7,0 V -44 L -8,-44 L 0,-66 L 8,-44 L 7,-44 V 0 Z"/>
+    <!-- a poplar and a round tree -->
+    <path id="poplar" d="M 0,0 C -9,-10 -10,-34 -6,-50 C -3,-62 3,-62 6,-50 C 10,-34 9,-10 0,0 Z"/>
+    <path id="roundTree" d="M -2,0 V -8 C -16,-8 -20,-22 -12,-30 C -12,-42 6,-46 12,-34 C 22,-30 20,-12 4,-8 V 0 Z"/>
+    <!-- a windmill, sails turned (origin at the foot) -->
+    <g id="windmill">
+      <path d="M -11,0 L -7,-40 H 7 L 11,0 Z"/>
+      <path d="M -9,-40 L 0,-50 L 9,-40 Z"/>
+      <path d="M 0,-44 L -26,-70 L -22,-74 L 0,-48 Z M 0,-44 L 26,-18 L 22,-14 L 0,-40 Z M 0,-44 L 26,-70 L 30,-66 L 4,-44 Z M 0,-44 L -26,-18 L -30,-22 L -4,-44 Z"/>
+    </g>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="1900" height="1000" fill="url(#sky)"/>
+    <rect width="1900" height="1000" fill="url(#sunGlow)"/>
+    <g opacity="0.45">
+      <path d="M 300,150 L 620,1000 L 820,1000 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 300,150 L 1060,1000 L 1220,1000 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 300,150 L 1500,820 L 1580,700 Z" fill="url(#ray)" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <g id="layer-high-clouds" filter="url(#softer)" opacity="0.7">
+    <ellipse cx="760" cy="90" rx="320" ry="14" fill="#f4f9ff"/>
+    <ellipse cx="1420" cy="140" rx="300" ry="16" fill="#eef6fd"/>
+    <ellipse cx="1180" cy="60" rx="220" ry="10" fill="#f8fbff"/>
+    <ellipse cx="380" cy="300" rx="200" ry="10" fill="#f6fbff"/>
+  </g>
+
+  <g id="layer-sun">
+    <circle cx="300" cy="150" r="64" fill="#fffbea" filter="url(#soft)" opacity="0.9"/>
+    <circle cx="300" cy="150" r="42" fill="#fffef6"/>
+  </g>
+
+  <g id="layer-clouds" filter="url(#cloudSoft)">
+    <use href="#cumulus" transform="translate(1520,260)"/>
+    <use href="#cumulus" transform="translate(1690,300) scale(0.6)"/>
+    <use href="#cumulus" transform="translate(640,220) scale(0.8)"/>
+    <use href="#cumulus" transform="translate(1110,380) scale(0.55 0.5)"/>
+    <use href="#cumulus" transform="translate(140,420) scale(0.7)"/>
+    <use href="#cumulus" transform="translate(880,470) scale(0.45)"/>
+  </g>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- far downs, and a hill town on the eastern one, nearly lost in the haze -->
+    <path filter="url(#brush)" d="M -10,640 C 120,600 260,574 420,590 C 560,604 640,630 760,626 C 900,622 1000,590 1140,560 C 1260,536 1360,520 1480,536 C 1620,554 1760,590 1910,600 L 1910,800 L -10,800 Z" fill="#b9d8d0"/>
+    <g fill="#a5cac1">
+      <use href="#farHouse" transform="translate(1290,534) scale(0.8)"/>
+      <use href="#farHouseWide" transform="translate(1330,530) scale(0.8)"/>
+      <use href="#farTower" transform="translate(1372,526) scale(0.9)"/>
+      <use href="#farHouse" transform="translate(1408,528) scale(0.75)"/>
+      <use href="#farHouseWide" transform="translate(1446,532) scale(0.7)"/>
+      <use href="#farHouse" transform="translate(1482,537) scale(0.65)"/>
+      <use href="#farHouse" transform="translate(1250,542) scale(0.6)"/>
+      <use href="#windmill" transform="translate(300,590) scale(0.8)"/>
+    </g>
+    <!-- the sun's rim on their west faces -->
+    <g fill="none" stroke="#eef8f0" stroke-width="1.6" stroke-linecap="round" opacity="0.8">
+      <path d="M 1360,486 L 1365,504 M 1280,508 L 1292,500 M 1318,510 L 1325,505"/>
+      <path d="M 100,616 C 200,590 300,580 420,590"/>
+    </g>
+  </g>
+
+  <g id="layer-mid" filter="url(#hazy)">
+    <!-- nearer hills with orchards and poplars -->
+    <path filter="url(#brush)" d="M -10,720 C 90,690 200,672 320,680 C 440,688 520,716 640,712 C 760,708 860,676 980,672 C 1100,668 1200,700 1320,700 C 1440,700 1520,670 1640,664 C 1760,658 1840,676 1910,684 L 1910,860 L -10,860 Z" fill="#a3cabe"/>
+    <g fill="#94bfb2" filter="url(#brush)">
+      <use href="#poplar" transform="translate(212,682)"/><use href="#poplar" transform="translate(232,684) scale(0.8)"/><use href="#poplar" transform="translate(252,682) scale(0.9)"/>
+      <use href="#roundTree" transform="translate(560,712) scale(0.9)"/><use href="#roundTree" transform="translate(600,714) scale(0.7)"/>
+      <use href="#poplar" transform="translate(1080,676) scale(0.9)"/><use href="#poplar" transform="translate(1100,678) scale(0.7)"/>
+      <use href="#roundTree" transform="translate(1500,686) scale(0.8)"/><use href="#roundTree" transform="translate(1540,680)"/><use href="#roundTree" transform="translate(1580,676) scale(0.75)"/>
+      <use href="#poplar" transform="translate(1760,664) scale(0.85)"/>
+    </g>
+    <!-- hedgerows tracing the fields -->
+    <g fill="none" stroke="#97c1b4" stroke-width="2.4" stroke-linecap="round" opacity="0.8">
+      <path d="M 20,760 C 160,744 280,740 400,748 M 700,742 C 820,730 900,724 1000,726 M 1180,744 C 1300,736 1420,728 1560,726 M 1640,736 C 1740,730 1820,734 1900,740"/>
+      <path d="M 120,800 C 300,784 480,786 620,794 M 900,788 C 1060,776 1220,780 1380,790 M 1500,800 C 1640,790 1760,792 1880,798"/>
+    </g>
+  </g>
+  <rect y="560" width="1900" height="300" fill="url(#haze)"/>
+
+  <g id="layer-near">
+    <!-- the far bank of the canal: a row of houses, soft and blue, under their own roofs -->
+    <g fill="#9fc1bd">
+      <path d="M -10,962 V 846 H 40 L 74,816 L 108,846 H 160 V 830 L 190,806 L 220,830 V 852 H 290 L 318,822 L 346,852 H 420 V 838 L 452,810 L 484,838 V 858 H 540 L 566,832 L 592,858 H 660 L 690,828 L 720,858 V 840 H 790 L 818,812 L 846,840 V 860 H 900 L 930,834 L 960,860 H 1030 V 842 L 1062,814 L 1094,842 H 1160 L 1186,820 L 1212,850 H 1280 L 1310,826 L 1340,850 V 836 H 1400 L 1432,806 L 1464,836 V 856 H 1530 L 1556,830 L 1582,856 H 1650 L 1680,822 L 1710,852 H 1770 L 1798,826 L 1826,852 H 1910 V 962 Z"/>
+    </g>
+    <!-- their roofs, a shade warmer -->
+    <g fill="#b9aeac">
+      <path d="M 36,846 L 74,812 L 112,846 Z M 156,830 L 190,802 L 224,830 Z M 286,852 L 318,818 L 350,852 Z M 416,838 L 452,806 L 488,838 Z M 536,858 L 566,828 L 596,858 Z M 656,858 L 690,824 L 724,858 Z M 786,840 L 818,808 L 850,840 Z M 896,860 L 930,830 L 964,860 Z M 1026,842 L 1062,810 L 1098,842 Z M 1156,850 L 1186,816 L 1216,850 Z M 1276,850 L 1310,822 L 1344,850 Z M 1396,836 L 1432,802 L 1468,836 Z M 1526,856 L 1556,826 L 1586,856 Z M 1646,852 L 1680,818 L 1714,852 Z M 1766,852 L 1798,822 L 1830,852 Z"/>
+    </g>
+    <!-- windows, barely there -->
+    <g fill="#b8d4d0">
+      <rect x="60" y="866" width="8" height="12"/><rect x="84" y="866" width="8" height="12"/><rect x="182" y="850" width="8" height="12"/><rect x="306" y="872" width="8" height="12"/>
+      <rect x="440" y="858" width="8" height="12"/><rect x="462" y="858" width="8" height="12"/><rect x="558" y="876" width="8" height="12"/><rect x="680" y="876" width="8" height="12"/>
+      <rect x="808" y="862" width="8" height="12"/><rect x="920" y="880" width="8" height="12"/><rect x="1050" y="862" width="8" height="12"/><rect x="1074" y="862" width="8" height="12"/>
+      <rect x="1176" y="870" width="8" height="12"/><rect x="1300" y="870" width="8" height="12"/><rect x="1420" y="856" width="8" height="12"/><rect x="1446" y="856" width="8" height="12"/>
+      <rect x="1546" y="876" width="8" height="12"/><rect x="1670" y="872" width="8" height="12"/><rect x="1790" y="872" width="8" height="12"/>
+      <rect x="60" y="904" width="8" height="12"/><rect x="306" y="906" width="8" height="12"/><rect x="558" y="910" width="8" height="12"/><rect x="808" y="900" width="8" height="12"/>
+      <rect x="1050" y="900" width="8" height="12"/><rect x="1300" y="906" width="8" height="12"/><rect x="1546" y="910" width="8" height="12"/><rect x="1790" y="906" width="8" height="12"/>
+    </g>
+    <!-- the far quay -->
+    <rect y="940" width="1900" height="22" fill="#a9c3c0"/>
+    <rect y="938" width="1900" height="3" fill="#c6dad6"/>
+  </g>
+
+  <g id="layer-canal">
+    <rect y="962" width="1900" height="38" fill="url(#canal)"/>
+    <rect y="961" width="1900" height="2.4" fill="#e4f6f2" opacity="0.9"/>
+    <!-- the far bank's reflection, broken by ripples -->
+    <g fill="#88bcbe" opacity="0.7">
+      <rect x="40" y="966" width="70" height="4" rx="2"/><rect x="290" y="968" width="56" height="3" rx="1.5"/><rect x="530" y="966" width="64" height="4" rx="2"/>
+      <rect x="780" y="969" width="70" height="3" rx="1.5"/><rect x="1020" y="966" width="76" height="4" rx="2"/><rect x="1270" y="968" width="60" height="3" rx="1.5"/>
+      <rect x="1520" y="966" width="68" height="4" rx="2"/><rect x="1760" y="969" width="60" height="3" rx="1.5"/>
+    </g>
+    <g stroke="#e2f4f0" stroke-width="1.6" stroke-linecap="round" opacity="0.55">
+      <path d="M 120,976 h 40 M 420,984 h 30 M 640,974 h 50 M 900,988 h 40 M 1140,978 h 46 M 1400,986 h 34 M 1620,976 h 44 M 1820,990 h 30 M 260,992 h 36 M 1000,996 h 30"/>
+    </g>
+  </g>
+
+  <!-- two hot-air balloons drifting over the downs, hazed by distance -->
+  <g id="layer-balloons" filter="url(#hazy)" opacity="0.75" stroke-linejoin="round">
+    <g transform="translate(1390,330)">
+      <path d="M 0,-44 C 24,-44 34,-26 30,-8 C 27,6 14,16 7,24 H -7 C -14,16 -27,6 -30,-8 C -34,-26 -24,-44 0,-44 Z" fill="#e7b9b0"/>
+      <path d="M 0,-44 C 10,-44 14,-26 12,-8 C 11,6 6,16 3,24 H -3 C -6,16 -11,6 -12,-8 C -14,-26 -10,-44 0,-44 Z" fill="#f4dcc4"/>
+      <path d="M 0,-44 C 24,-44 34,-26 30,-8 C 27,6 14,16 7,24 H 3 C 6,16 11,6 12,-8 C 14,-26 10,-44 0,-44 Z" fill="#c9a2a8"/>
+      <path d="M -6,24 L -5,32 M 6,24 L 5,32" stroke="#a69aa6" stroke-width="1.2"/>
+      <rect x="-6" y="32" width="12" height="8" rx="1.5" fill="#b49a8a"/>
+    </g>
+    <g transform="translate(720,420) scale(0.62)">
+      <path d="M 0,-44 C 24,-44 34,-26 30,-8 C 27,6 14,16 7,24 H -7 C -14,16 -27,6 -30,-8 C -34,-26 -24,-44 0,-44 Z" fill="#b9d3c4"/>
+      <path d="M 0,-44 C 10,-44 14,-26 12,-8 C 11,6 6,16 3,24 H -3 C -6,16 -11,6 -12,-8 C -14,-26 -10,-44 0,-44 Z" fill="#eef0d4"/>
+      <path d="M 0,-44 C 24,-44 34,-26 30,-8 C 27,6 14,16 7,24 H 3 C 6,16 11,6 12,-8 C 14,-26 10,-44 0,-44 Z" fill="#9fbcb4"/>
+      <path d="M -6,24 L -5,32 M 6,24 L 5,32" stroke="#93a8aa" stroke-width="1.6"/>
+      <rect x="-6" y="32" width="12" height="8" rx="1.5" fill="#a8a090"/>
+    </g>
+  </g>
+
+  <g id="layer-birds" fill="none" stroke="#6f8faa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.6">
+    <path d="M 520,330 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 552,346 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 1240,180 q 5,-5 9,0 q 4,-5 9,0"/>
+    <path d="M 1270,200 q 4,-4 7,0 q 3,-4 7,0"/>
+  </g>
+</svg>

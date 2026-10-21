@@ -3,7 +3,8 @@
 // World pixels, y down. Each island is a closed chain of cubic Béziers (two control points, then
 // the end), run clockwise on screen: walkable `Top`s left to right, then `Rock` down the far side,
 // back along the underside and up to the start. Tops are roughened along their normals and capped
-// with turf; rock stays smooth. `dress` places decorations into terrain.svg's slots (`{{name}}`).
+// with turf; rock stays smooth. `dress` places decorations into the map's terrain.svg, one rule
+// per slot (`{{name}}`).
 Land(
     size: (1800, 1000),
     islands: [
@@ -157,5 +158,16 @@ Land(
         Fill(slot: "boulders", symbols: ["stoneA", "stoneC", "stoneD"], tints: ["#a8705a", "#9c7484", "#b57c5c"], spacing: 95.0, depth: (100.0, 600.0), scale: (1.3, 1.9), turn: 20.0, seed: 41),
         Fill(slot: "pebbles", symbols: ["pebble"], tints: ["#c98a60", "#b97a56", "#a98a8e", "#d8a474"], spacing: 30.0, depth: (18.0, 600.0), scale: (0.5, 1.0), turn: 30.0, seed: 23),
         Fill(slot: "fossils", symbols: ["fossil", "star", "scallop"], spacing: 130.0, depth: (40.0, 400.0), scale: (1.0, 1.5), turn: 40.0, seed: 31),
+        // On chains under the islets' points: a ship's lantern (Lantern Islet), a brass bell (Bell
+        // Islet).
+        Place(slot: "hung", props: [(symbol: "lantern", at: (580.0, 636.0)), (symbol: "bell", at: (1226.0, 660.0))]),
+        // Set into the bluffs: an arched window and a spiral roundel (West), a porthole and an old
+        // anchor (East).
+        Place(slot: "set", props: [
+            (symbol: "window", at: (118.0, 700.0)),
+            (symbol: "roundel", at: (330.0, 668.0)),
+            (symbol: "porthole", at: (1600.0, 682.0)),
+            (symbol: "anchor", at: (1712.0, 700.0), turn: -24.0),
+        ]),
     ],
 )

@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1000" viewBox="0 0 1800 1000">
-  <!-- Tidewall A terrain: sandstone islands under a turf cap, light from the upper left.
-       A template: `cargo xtask art` fills the land slot with the path built from land.ron (the
-       same path the collision mask is drawn from) and every other slot with the <use>s its dress
-       rule in land.ron places. Everything else here is drawn by hand. Opaque = ground. -->
+  <!-- Tidewall terrain, shared by every variant: sandstone islands under a turf cap, light from
+       the upper left. A template: `cargo xtask art` fills the land slot with the path built from
+       the variant's land.ron (the same path the collision mask is drawn from) and every other slot
+       with the <use>s its dress rules in land.ron place. Everything else here is drawn by hand.
+       Opaque = ground. -->
   <defs>
     <path id="land" d="{{land}}"/>
     <clipPath id="landClip"><use href="#land"/></clipPath>
@@ -158,15 +159,9 @@
       <path d="M 1,8 C 2,12 -2,16 0,20 M 2,30 C 3,34 0,38 1,42" stroke="#1f5e56" stroke-width="1.2"/>
       <path d="M 0.6,2 C 3.6,8 -2.4,14 1.4,21" stroke="#6cc0a8" stroke-width="0.9"/>
     </g>
-  </defs>
 
-  <!-- behind the rock: hanging roots and kelp, then the lantern and the bell on their chains -->
-  <g>
-{{hangers}}
-  </g>
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <!-- Lantern Islet: a ship's lantern under the point -->
-    <g transform="translate(580,636)">
+    <!-- set pieces, placed per variant by land.ron: origin = attach point (a hook, a carving's center) -->
+    <g id="lantern" stroke-linecap="round" stroke-linejoin="round">
       <path d="M 0,0 V 40" stroke="#2a1a2e" stroke-width="3.4"/>
       <path d="M 0,0 V 40" stroke="#8a7ca6" stroke-width="1.4" stroke-dasharray="2.4 1.6"/>
       <circle cy="58" r="26" fill="#ffc45a" opacity="0.22"/>
@@ -177,8 +172,7 @@
       <path d="M -8,66 H 8 L 5,71 H -5 Z" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="1.6"/>
       <path d="M -5.6,50 L -5.2,64" stroke="#fff8d8" stroke-width="1" opacity="0.8"/>
     </g>
-    <!-- Bell Islet: a brass bell under the point -->
-    <g transform="translate(1226,660)">
+    <g id="bell" stroke-linecap="round" stroke-linejoin="round">
       <path d="M 0,0 V 30" stroke="#2a1a2e" stroke-width="3.4"/>
       <path d="M 0,0 V 30" stroke="#8a7ca6" stroke-width="1.4" stroke-dasharray="2.4 1.6"/>
       <circle cy="30" r="3" fill="#e9b949" stroke="#2a1a2e" stroke-width="1.4"/>
@@ -189,8 +183,44 @@
       <circle cy="58" r="2.6" fill="#b9822c" stroke="#2a1a2e" stroke-width="1.4"/>
       <path d="M -11,49.5 H 11" stroke="#2bb3a3" stroke-width="2"/>
     </g>
-  </g>
+    <g id="window">
+      <path d="M -22,32 L -22,-6 A 22 22 0 0 1 22,-6 L 22,32 Z" fill="#f2b67e" stroke="#7a3d3c" stroke-width="2"/>
+      <path d="M -15,32 L -15,-6 A 15 15 0 0 1 15,-6 L 15,32 Z" fill="#2c1630" stroke="#2a1a2e" stroke-width="1.5"/>
+      <circle cy="7" r="15" fill="#ffb84a" opacity="0.25"/>
+      <path d="M 0,-21 V -2" stroke="#2a1a2e" stroke-width="1"/>
+      <path d="M -3.8,-2 H 3.8 L 3.2,8.6 H -3.2 Z" fill="#ffd36b" stroke="#2a1a2e" stroke-width="1"/>
+      <path d="M -2,0 H 2 V 6.4 H -2 Z" fill="#fff6c0"/>
+      <path d="M -4.4,-25 L 0,-29.4 L 4.4,-25 L 2.8,-20.6 H -2.8 Z" fill="#f6e0b4" stroke="#7a3d3c" stroke-width="1.2"/>
+    </g>
+    <g id="roundel">
+      <circle r="25" fill="#c47a4c" stroke="#7a3d3c" stroke-width="2"/>
+      <g transform="scale(3)"><use href="#fossil"/></g>
+      <circle r="25" fill="none" stroke="#f2b67e" stroke-width="1.2" stroke-dasharray="3 4"/>
+    </g>
+    <g id="porthole">
+      <circle r="17" fill="#e9b949" stroke="#2a1a2e" stroke-width="2"/>
+      <circle r="12" fill="#2c4a6a" stroke="#2a1a2e" stroke-width="1.6"/>
+      <path d="M -8,-3 A 9 9 0 0 1 2,-10" fill="none" stroke="#9fd8e8" stroke-width="2.2" stroke-linecap="round"/>
+      <g fill="#b9822c"><circle cx="0" cy="-14.6" r="1.2"/><circle cx="14.6" cy="0" r="1.2"/><circle cx="0" cy="14.6" r="1.2"/><circle cx="-14.6" cy="0" r="1.2"/></g>
+    </g>
+    <g id="anchor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-34 V 22 M -12,-22 H 12 M -22,6 C -20,20 -10,26 0,26 C 10,26 20,20 22,6" fill="none" stroke="#2a1a2e" stroke-width="7.4"/>
+      <path d="M 0,-34 V 22 M -12,-22 H 12 M -22,6 C -20,20 -10,26 0,26 C 10,26 20,20 22,6" fill="none" stroke="#7d8aa6" stroke-width="4.2"/>
+      <path d="M -22,6 L -27,1 M -22,6 L -16,4 M 22,6 L 27,1 M 22,6 L 16,4" fill="none" stroke="#2a1a2e" stroke-width="6"/>
+      <path d="M -22,6 L -27,1 M -22,6 L -16,4 M 22,6 L 27,1 M 22,6 L 16,4" fill="none" stroke="#7d8aa6" stroke-width="3"/>
+      <circle cy="-38" r="5.4" fill="none" stroke="#2a1a2e" stroke-width="6"/>
+      <circle cy="-38" r="5.4" fill="none" stroke="#7d8aa6" stroke-width="2.8"/>
+      <path d="M -1.4,-30 V 18" stroke="#c4d0e4" stroke-width="1.2"/>
+    </g>
+  </defs>
 
+  <!-- behind the rock: hanging roots and kelp, then whatever hangs on chains (lanterns, bells) -->
+  <g>
+{{hangers}}
+  </g>
+  <g>
+{{hung}}
+  </g>
   <g clip-path="url(#landClip)">
     <rect width="1800" height="1000" fill="#e2a46c"/>
     <!-- strata follow the surface: each is the land shifted down. Kept shallow (under 100 px) so
@@ -225,36 +255,9 @@
 {{fossils}}
     </g>
 
-    <!-- West Bluff: an arched window with a lantern inside, and a carved spiral roundel -->
-    <g transform="translate(118,700)">
-      <path d="M -22,32 L -22,-6 A 22 22 0 0 1 22,-6 L 22,32 Z" fill="#f2b67e" stroke="#7a3d3c" stroke-width="2"/>
-      <path d="M -15,32 L -15,-6 A 15 15 0 0 1 15,-6 L 15,32 Z" fill="#2c1630" stroke="#2a1a2e" stroke-width="1.5"/>
-      <circle cy="7" r="15" fill="#ffb84a" opacity="0.25"/>
-      <path d="M 0,-21 V -2" stroke="#2a1a2e" stroke-width="1"/>
-      <path d="M -3.8,-2 H 3.8 L 3.2,8.6 H -3.2 Z" fill="#ffd36b" stroke="#2a1a2e" stroke-width="1"/>
-      <path d="M -2,0 H 2 V 6.4 H -2 Z" fill="#fff6c0"/>
-      <path d="M -4.4,-25 L 0,-29.4 L 4.4,-25 L 2.8,-20.6 H -2.8 Z" fill="#f6e0b4" stroke="#7a3d3c" stroke-width="1.2"/>
-    </g>
-    <g transform="translate(330,668)">
-      <circle r="25" fill="#c47a4c" stroke="#7a3d3c" stroke-width="2"/>
-      <g transform="scale(3)"><use href="#fossil"/></g>
-      <circle r="25" fill="none" stroke="#f2b67e" stroke-width="1.2" stroke-dasharray="3 4"/>
-    </g>
-    <!-- East Bluff: a round porthole, and an old anchor sunk in the rock -->
-    <g transform="translate(1600,682)">
-      <circle r="17" fill="#e9b949" stroke="#2a1a2e" stroke-width="2"/>
-      <circle r="12" fill="#2c4a6a" stroke="#2a1a2e" stroke-width="1.6"/>
-      <path d="M -8,-3 A 9 9 0 0 1 2,-10" fill="none" stroke="#9fd8e8" stroke-width="2.2" stroke-linecap="round"/>
-      <g fill="#b9822c"><circle cx="0" cy="-14.6" r="1.2"/><circle cx="14.6" cy="0" r="1.2"/><circle cx="0" cy="14.6" r="1.2"/><circle cx="-14.6" cy="0" r="1.2"/></g>
-    </g>
-    <g transform="translate(1712,700) rotate(-24)" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M 0,-34 V 22 M -12,-22 H 12 M -22,6 C -20,20 -10,26 0,26 C 10,26 20,20 22,6" fill="none" stroke="#2a1a2e" stroke-width="7.4"/>
-      <path d="M 0,-34 V 22 M -12,-22 H 12 M -22,6 C -20,20 -10,26 0,26 C 10,26 20,20 22,6" fill="none" stroke="#7d8aa6" stroke-width="4.2"/>
-      <path d="M -22,6 L -27,1 M -22,6 L -16,4 M 22,6 L 27,1 M 22,6 L 16,4" fill="none" stroke="#2a1a2e" stroke-width="6"/>
-      <path d="M -22,6 L -27,1 M -22,6 L -16,4 M 22,6 L 27,1 M 22,6 L 16,4" fill="none" stroke="#7d8aa6" stroke-width="3"/>
-      <circle cy="-38" r="5.4" fill="none" stroke="#2a1a2e" stroke-width="6"/>
-      <circle cy="-38" r="5.4" fill="none" stroke="#7d8aa6" stroke-width="2.8"/>
-      <path d="M -1.4,-30 V 18" stroke="#c4d0e4" stroke-width="1.2"/>
+    <!-- carvings set into the rock: windows, roundels, portholes, an anchor -->
+    <g>
+{{set}}
     </g>
 
     <!-- form light, inner-edge occlusion, then the turf cap: shade band, base, lit lip -->

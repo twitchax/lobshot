@@ -1,0 +1,360 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1300" viewBox="0 0 1800 1300">
+  <!-- Ashspine terrain, shared by every variant: dark basalt under a cap of dry straw grass, crimson
+       crystal in the crest's plates and embers deep in the rock; light from the upper left. A
+       template: `cargo xtask art` fills the land slot with the path built from the variant's
+       land.ron (the same path the collision mask is drawn from) and every other slot with the
+       <use>s its dress rules in land.ron place. Everything else here is drawn by hand.
+       Opaque = ground. -->
+  <defs>
+    <path id="land" d="{{land}}"/>
+    <clipPath id="landClip"><use href="#land"/></clipPath>
+
+    <!-- mottle in three flat tones, cel-shaded like the sprites: posterizing keeps the big ridge's
+         PNG small (smooth noise over it cost about 700 KB) -->
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.007 0.02" numOctaves="2" seed="27" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.06  0 0 0 0 0.16  0 0 0 2.4 -1.15" result="m"/>
+      <feComponentTransfer in="m"><feFuncA type="discrete" tableValues="0 0 0.5 0.85"/></feComponentTransfer>
+    </filter>
+    <!-- grass cap: land minus land shifted down; a ragged lower edge from vertical-only displacement -->
+    <filter id="drip" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.09 0.012" numOctaves="2" seed="6" result="n"/>
+      <!-- R := 0.5 so displacement is vertical only; otherwise the cap leaks down walls -->
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.5  0 1.8 0 0 -0.4  0 0 0 0 0  0 0 0 0 1" result="ny"/>
+      <feDisplacementMap in="SourceGraphic" in2="ny" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <!-- blur + alpha threshold breaks the fringe into straw ends instead of streaks -->
+      <feGaussianBlur in="d" stdDeviation="1.1" result="b"/>
+      <feComponentTransfer in="b"><feFuncA type="linear" slope="8" intercept="-3.5"/></feComponentTransfer>
+    </filter>
+    <filter id="feather" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="featherWide" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="26"/></filter>
+    <filter id="soften" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="1.5"/></filter>
+    <!-- embers: the crack drawn sharp over its own blurred glow -->
+    <filter id="glow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="steamy" x="-80%" y="-30%" width="260%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+    <mask id="capMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,7)" fill="#000"/>
+    </mask>
+    <mask id="fringeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,10)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <mask id="capLitMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,2.6)" fill="#000"/>
+    </mask>
+    <mask id="capShadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,16)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <!-- form light: the top ~40 px of every mass catches the dawn -->
+    <mask id="topLightMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,40)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <!-- the sun side: faces that look west catch the low sun (land minus land shifted west) -->
+    <mask id="sunSideMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(-12,0)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <!-- depth: below ~110 px the rock sinks into shadow, following the surface -->
+    <mask id="deepMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <use href="#land" transform="translate(0,110)" fill="#fff" filter="url(#featherWide)"/>
+    </mask>
+    <!-- bounce light: undersides catch the warm valley haze in a thin band (land minus land shifted up) -->
+    <mask id="bounceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1800" height="1300">
+      <rect width="1800" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,-8)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <!-- heat from deep below warms the roots of the ridge -->
+    <linearGradient id="underHeat" gradientUnits="userSpaceOnUse" x1="0" y1="860" x2="0" y2="1300">
+      <stop offset="0" stop-color="#ff5a2a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ff5a2a" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- basalt columns: uneven column widths, each lit on its west face, with joints at uneven
+         heights; one 360 x 420 tile, broken up by the scattered joints and shards on top -->
+    <pattern id="columns" patternUnits="userSpaceOnUse" width="360" height="420">
+      <g fill="none" stroke-linecap="round">
+        <g stroke="#1a1222" stroke-width="2.4" opacity="0.55">
+          <path d="M 0,0 V 420 M 38,0 V 420 M 82,0 V 420 M 116,0 V 420 M 160,0 V 420 M 206,0 V 420 M 240,0 V 420 M 286,0 V 420 M 322,0 V 420"/>
+        </g>
+        <g stroke="#6e5c80" stroke-width="1.3" opacity="0.5">
+          <path d="M 2.6,0 V 420 M 40.6,0 V 420 M 84.6,0 V 420 M 118.6,0 V 420 M 162.6,0 V 420 M 208.6,0 V 420 M 242.6,0 V 420 M 288.6,0 V 420 M 324.6,0 V 420"/>
+        </g>
+        <!-- joints: a dark crack with a lit lip under it -->
+        <g stroke="#1a1222" stroke-width="2" opacity="0.5">
+          <path d="M 2,64 L 36,70 M 2,250 L 36,244 M 40,140 L 80,134 M 40,330 L 80,338 M 84,40 L 114,46 M 84,214 L 114,208 M 118,110 L 158,116 M 118,296 L 158,290 M 162,60 L 204,54 M 162,232 L 204,240 M 162,388 L 204,382 M 208,150 L 238,156 M 208,320 L 238,314 M 242,90 L 284,84 M 242,270 L 284,278 M 288,30 L 320,36 M 288,200 L 320,194 M 324,120 L 358,126 M 324,350 L 358,344"/>
+        </g>
+        <g stroke="#6e5c80" stroke-width="1.1" opacity="0.45">
+          <path d="M 3,67 L 35,73 M 3,253 L 35,247 M 41,143 L 79,137 M 41,333 L 79,341 M 85,43 L 113,49 M 85,217 L 113,211 M 119,113 L 157,119 M 119,299 L 157,293 M 163,63 L 203,57 M 163,235 L 203,243 M 163,391 L 203,385 M 209,153 L 237,159 M 209,323 L 237,317 M 243,93 L 283,87 M 243,273 L 283,281 M 289,33 L 319,39 M 289,203 L 319,197 M 325,123 L 357,129 M 325,353 L 357,347"/>
+        </g>
+      </g>
+    </pattern>
+
+    <!-- joints between column drums, in currentColor (tinted per placement) -->
+    <g id="jointA" fill="none" stroke-linecap="round">
+      <path d="M -14,0 L 14,2" stroke="#160e1e" stroke-width="2.2" opacity="0.6"/>
+      <path d="M -13,2.6 L 13,4.6" stroke="currentColor" stroke-width="1.4"/>
+    </g>
+    <g id="jointC" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-14 L 1,-2 L -2,10" stroke="#160e1e" stroke-width="2" opacity="0.55"/>
+      <path d="M 2.4,-13 L 3.2,-2 L 0.6,10" stroke="currentColor" stroke-width="1.1"/>
+    </g>
+    <!-- obsidian: black glass, a violet sheen on its upper-left edge and one glint -->
+    <g id="shardA" stroke-linejoin="round">
+      <path d="M -8,6 L -10,-3 L -2,-12 L 7,-8 L 9,3 L 2,9 Z" fill="#120c18" stroke="#0a060e" stroke-width="1.2"/>
+      <path d="M -10,-3 L -2,-12 L 7,-8 L -1,-4 Z" fill="#6e5a90" opacity="0.7"/>
+      <path d="M -7.4,-3 L -2.2,-8.6" stroke="#e8dcff" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <g id="shardB" stroke-linejoin="round">
+      <path d="M -4,10 L -7,-4 L 0,-16 L 6,-5 L 4,9 Z" fill="#140d1a" stroke="#0a060e" stroke-width="1.2"/>
+      <path d="M -7,-4 L 0,-16 L 1,-3 Z" fill="#7a66a0" opacity="0.65"/>
+      <path d="M -4.4,-4 L -0.6,-11" stroke="#e8dcff" stroke-width="1.1" stroke-linecap="round"/>
+    </g>
+    <g id="shardC" stroke-linejoin="round">
+      <path d="M -12,3 L -6,-6 L 8,-7 L 13,1 L 4,7 Z" fill="#110b17" stroke="#0a060e" stroke-width="1.1"/>
+      <path d="M -12,3 L -6,-6 L 8,-7 L -2,-1 Z" fill="#6a5688" opacity="0.6"/>
+    </g>
+    <!-- crimson gems set in the rock -->
+    <g id="gemA" stroke-linejoin="round">
+      <path d="M 0,-9 L 6,-2 L 3,8 L -3,8 L -6,-2 Z" fill="#c42a44" stroke="#1a0812" stroke-width="1.2"/>
+      <path d="M 0,-9 L -6,-2 L -1,0 Z" fill="#ff8a8a"/>
+      <path d="M 0,-9 L 6,-2 L 3,8 L 0,1 Z" fill="#7a1030" opacity="0.6"/>
+    </g>
+    <g id="gemB" stroke-linejoin="round">
+      <path d="M -6,6 L -8,-4 L -2,-10 L 1,2 Z M 1,7 L 2,-12 L 8,-6 L 7,6 Z" fill="#b8243e" stroke="#1a0812" stroke-width="1.1"/>
+      <path d="M -8,-4 L -2,-10 L -2,-2 Z M 2,-12 L 8,-6 L 4,-4 Z" fill="#ff7a80"/>
+    </g>
+    <!-- crystal seams: short faceted streaks of the crest's crimson, set in the rock -->
+    <g id="seam" stroke-linejoin="round">
+      <path d="M -18,1 L -12,-3 L 14,-2 L 19,1 L 13,4 L -12,3.6 Z" fill="#b62440" stroke="#1a0812" stroke-width="1.3"/>
+      <path d="M -18,1 L -12,-3 L 14,-2 L 10,0.4 L -12,0.6 Z" fill="#f05a60"/>
+      <path d="M -9,-1.6 L 8,-1.2" fill="none" stroke="#ffd8cc" stroke-width="1" stroke-linecap="round"/>
+    </g>
+    <!-- a broken column face standing proud of the rock: lit on its west side, in currentColor -->
+    <g id="face" stroke-linejoin="round">
+      <path d="M -13,-44 L -6,-50 L 8,-48 L 13,-42 L 12,44 L 4,50 L -9,48 L -14,42 Z" fill="currentColor" stroke="#160e1e" stroke-width="1.2" stroke-opacity="0.7"/>
+      <path d="M -13,-44 L -6,-50 L 8,-48 L 13,-42 L 0,-40 Z" fill="#7a6890" opacity="0.4"/>
+      <path d="M 12,-40 L 12,44 L 4,50 L 6,-38 Z" fill="#120a18" opacity="0.35"/>
+      <path d="M -10,-38 L -11,38" fill="none" stroke="#7e6c94" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+      <path d="M -13,6 L 12,8" fill="none" stroke="#160e1e" stroke-width="1.4" opacity="0.6"/>
+    </g>
+    <!-- embers: hot cracks deep in the rock -->
+    <g id="emberA" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -18,-6 L -9,-2 L -4,-8 L 4,0 L 10,-3 L 18,4" stroke="#ff5a22" stroke-width="3"/>
+      <path d="M -18,-6 L -9,-2 L -4,-8 L 4,0 L 10,-3 L 18,4" stroke="#ffd27a" stroke-width="1.1"/>
+    </g>
+    <g id="emberB" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -4,-16 L 0,-8 L -3,-1 L 3,6 L 1,16 M 0,-8 L 8,-10" stroke="#ff5a22" stroke-width="2.8"/>
+      <path d="M -4,-16 L 0,-8 L -3,-1 L 3,6 L 1,16" stroke="#ffd27a" stroke-width="1"/>
+    </g>
+    <g id="emberC" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -12,2 L -4,-3 L 5,1 L 12,-2" stroke="#ff6a2a" stroke-width="2.4"/>
+      <path d="M -12,2 L -4,-3 L 5,1 L 12,-2" stroke="#ffe08a" stroke-width="0.9"/>
+    </g>
+
+    <!-- the crest's plates: crimson crystal filling each blade, origin = the blade's tip, the blade
+         running 100 units down +y (scaled to each plate). Clipped to the land, so only the plate
+         shows it; the basalt shows again near the blade's root. -->
+    <g id="plate" stroke-linejoin="round">
+      <path d="M 0,0 L 40,42 L 32,96 L -32,96 L -40,42 Z" fill="#b62440"/>
+      <path d="M 0,0 L -40,42 L -32,96 L -10,96 L -8,40 Z" fill="#f05a60"/>
+      <path d="M 0,0 L -40,42 L -8,40 Z" fill="#ff9a92"/>
+      <path d="M 0,0 L 40,42 L 32,96 L 12,96 L 10,42 Z" fill="#6a0e2c"/>
+      <path d="M -8,40 L 10,42 L 8,70 L -9,68 Z" fill="#d6384c"/>
+      <path d="M 0,0 L -8,40 L -10,96 M -40,42 L -8,40 L 10,42 L 40,42 M 0,0 L 10,42 L 12,96" fill="none" stroke="#2a0816" stroke-width="1.6" opacity="0.65"/>
+      <path d="M -30,44 L -25,80" fill="none" stroke="#ffd8cc" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M -4,8 L -24,30" fill="none" stroke="#fff0e8" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>
+      <!-- where the crystal meets the basalt: a dark seam -->
+      <path d="M -36,80 C -12,86 12,86 36,80" fill="none" stroke="#1a0812" stroke-width="3" opacity="0.55"/>
+    </g>
+
+    <!-- edge growth: origin = attach point, up = -y -->
+    <g id="grassA" stroke="#2a1a1e" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -6,1 C -6,-4 -9,-8 -12,-11 C -6,-9 -3,-6 -2,-2 C -2,-8 0,-12 2,-15 C 2,-10 3,-6 2,-1 C 5,-6 8,-8 12,-10 C 9,-6 6,-2 6,1 Z" fill="#dcae4a"/>
+      <path d="M -2,-2 C -2,-8 0,-12 2,-15 C 1.4,-10 1.4,-6 1,-1.5 Z" fill="#f8de8a" stroke="none"/>
+    </g>
+    <g id="grassB" stroke="#2a1a1e" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -4,1 C -4,-2 -6,-4 -8,-7 C -3,-5 -1.5,-3 -1,-1 C 0,-4 2,-7 5,-8 C 3,-5 3,-2 4,1 Z" fill="#c89a3c"/>
+    </g>
+    <g id="thorn" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M 0,1 L 0,-6 M 0,-4 L -6,-10 M -3,-7 L -8,-6 M 0,-6 L 5,-13 M 3,-10 L 8,-11 M 0,-6 L 1,-12" fill="none" stroke="#2a1a1e" stroke-width="2.6"/>
+      <path d="M 0,1 L 0,-6 M 0,-4 L -6,-10 M -3,-7 L -8,-6 M 0,-6 L 5,-13 M 3,-10 L 8,-11 M 0,-6 L 1,-12" fill="none" stroke="#6a4a3a" stroke-width="1.2"/>
+      <g fill="#e2402e" stroke="#2a1a1e" stroke-width="0.7"><circle cx="-6" cy="-10.5" r="1.6"/><circle cx="5.2" cy="-13.4" r="1.6"/><circle cx="1" cy="-12.6" r="1.3"/></g>
+    </g>
+    <g id="bloom" stroke="#2a1a1e" stroke-linejoin="round">
+      <path d="M 0,1 C 0,-3 0.4,-6 1,-9" fill="none" stroke-width="2.4"/>
+      <path d="M 0,1 C 0,-3 0.4,-6 1,-9" fill="none" stroke="#8a8a3a" stroke-width="1"/>
+      <path d="M 1,-14 L 3.4,-10 L 1,-7.6 L -1.4,-10 Z" fill="#ff8a4a" stroke-width="0.8"/>
+      <circle cx="1" cy="-10.4" r="0.9" fill="#ffe0a0" stroke="none"/>
+    </g>
+    <g id="crystal" stroke="#1a0812" stroke-width="1" stroke-linejoin="round">
+      <path d="M -2,2 L -6,-8 L -3,-14 L 0,-7 Z" fill="#b8243e"/>
+      <path d="M -6,-8 L -3,-14 L -3,-7 Z" fill="#ff7a80" stroke="none"/>
+      <path d="M 0,2 L 1,-12 L 4,-18 L 7,-11 L 5,2 Z" fill="#c42a44"/>
+      <path d="M 1,-12 L 4,-18 L 3.6,-10 Z" fill="#ffa0a0" stroke="none"/>
+      <path d="M 5,2 L 8,-5 L 11,-2 L 9,2 Z" fill="#9a1a36"/>
+    </g>
+    <g id="lichen" stroke="#2a1a1e" stroke-width="0.8" stroke-linejoin="round">
+      <path d="M -7,1 C -8,-3 -5,-6 -2,-5 C -1,-8 3,-8 4,-5 C 7,-5 8,-2 7,1 Z" fill="#c8a23e"/>
+      <path d="M -5,-2 C -4,-4 -2,-4 -1,-3 M 1,-5 C 2,-6 3,-6 4,-5" fill="none" stroke="#f2d27a" stroke-width="0.9"/>
+    </g>
+    <!-- hanging growth under crags: origin = attach point, hangs down (+y), never turned -->
+    <g id="root" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-3 C 2,6 -3,13 0,22 C 2,28 0,33 1,39 M 0,8 C -4,12 -6,15 -7,21" stroke="#2a1a1e" stroke-width="4.2"/>
+      <path d="M 0,-3 C 2,6 -3,13 0,22 C 2,28 0,33 1,39 M 0,8 C -4,12 -6,15 -7,21" stroke="#8a6a4a" stroke-width="2.2"/>
+      <path d="M -0.7,-1 C 0.9,6 -2.3,12 -0.7,19" stroke="#c8a070" stroke-width="0.8"/>
+    </g>
+    <g id="rootShort" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-3 C -2,4 2,9 0,16 C -1,20 1,23 0,26" stroke="#2a1a1e" stroke-width="3.8"/>
+      <path d="M 0,-3 C -2,4 2,9 0,16 C -1,20 1,23 0,26" stroke="#7a5a40" stroke-width="2"/>
+    </g>
+    <!-- a basalt drip: a short hanging column under the rock -->
+    <g id="dripstone" stroke-linejoin="round">
+      <path d="M -7,-4 L -6,14 L -1,26 L 3,15 L 6,-4 Z" fill="#3a2c46" stroke="#160e1e" stroke-width="2.2"/>
+      <path d="M -5,-2 L -4.4,13 L -1.4,21" fill="none" stroke="#7a6890" stroke-width="1.3" stroke-linecap="round"/>
+    </g>
+
+    <!-- set pieces, placed per variant by land.ron: origin = the ground they stand on -->
+    <g id="cairn" stroke="#160e1e" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M -15,1 C -16,-5 -8,-8 0,-8 C 8,-8 16,-5 15,1 Z" fill="#7a6a86"/>
+      <path d="M -11,-7 C -12,-12 -5,-14 1,-14 C 7,-14 12,-12 11,-7 C 6,-6 -6,-6 -11,-7 Z" fill="#8c7c98"/>
+      <path d="M -8,-13 C -9,-18 -3,-20 1,-20 C 6,-20 9,-17 8,-13 Z" fill="#6e5e7c"/>
+      <path d="M -5,-19 C -5,-24 0,-26 2,-25 C 5,-24 6,-21 5,-19 Z" fill="#9a8aa6"/>
+      <g fill="none" stroke="#d8c8e8" stroke-width="1.1" stroke-linecap="round" opacity="0.8">
+        <path d="M -12,-3 C -10,-6 -5,-7 -1,-7 M -9,-10 C -7,-12 -3,-13 0,-13 M -6,-16 C -5,-18 -2,-19 0,-19"/>
+      </g>
+      <path d="M -2,-26 L 1,-33 L 4,-26" fill="#e2402e" stroke-width="1"/>
+    </g>
+    <g id="post" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -2,2 V -62 M -2,-58 H 16 M 12,-58 V -52" fill="none" stroke="#160e1e" stroke-width="6"/>
+      <path d="M -2,2 V -62 M -2,-58 H 16 M 12,-58 V -52" fill="none" stroke="#7a5236" stroke-width="3.4"/>
+      <path d="M -3.2,-2 V -60" stroke="#b88a5a" stroke-width="1"/>
+      <circle cx="12" cy="-42" r="14" fill="#ffc45a" opacity="0.25"/>
+      <path d="M 7,-52 H 17 L 18,-49 H 6 Z" fill="#3a2c46" stroke="#160e1e" stroke-width="1.3"/>
+      <path d="M 7,-49 H 17 L 16,-36 H 8 Z" fill="#ffd36b" stroke="#160e1e" stroke-width="1.3"/>
+      <path d="M 10,-47 H 14 V -38 H 10 Z" fill="#fff6c0"/>
+      <path d="M 7,-36 H 17 L 15,-33 H 9 Z" fill="#3a2c46" stroke="#160e1e" stroke-width="1.3"/>
+    </g>
+    <!-- prayer flags: a pole and a line of flags running down to the ground on the right (flagsE)
+         or the left (flagsW) -->
+    <g id="flagsE" stroke-linejoin="round">
+      <path d="M 0,2 V -58" stroke="#160e1e" stroke-width="5" stroke-linecap="round"/>
+      <path d="M 0,2 V -58" stroke="#8a6040" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M 0,-56 Q 24,-38 44,-2" fill="none" stroke="#3a2a30" stroke-width="1.1"/>
+      <g stroke="#2a1a1e" stroke-width="0.8">
+        <path d="M 5,-52 L 13,-50 L 7,-44 Z" fill="#e2402e"/>
+        <path d="M 12,-46 L 20,-42 L 13,-37 Z" fill="#f2c24a"/>
+        <path d="M 19,-38 L 26,-33 L 19,-29 Z" fill="#4aa6a0"/>
+        <path d="M 25,-30 L 31,-24 L 24,-21 Z" fill="#f6ead2"/>
+        <path d="M 30,-21 L 36,-15 L 29,-12 Z" fill="#8a4a8a"/>
+      </g>
+      <circle cy="-60" r="2.4" fill="#f2c24a" stroke="#160e1e" stroke-width="1"/>
+    </g>
+    <g id="flagsW" stroke-linejoin="round">
+      <path d="M 0,2 V -58" stroke="#160e1e" stroke-width="5" stroke-linecap="round"/>
+      <path d="M 0,2 V -58" stroke="#8a6040" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M 0,-56 Q -24,-38 -44,-2" fill="none" stroke="#3a2a30" stroke-width="1.1"/>
+      <g stroke="#2a1a1e" stroke-width="0.8">
+        <path d="M -5,-52 L -13,-50 L -7,-44 Z" fill="#e2402e"/>
+        <path d="M -12,-46 L -20,-42 L -13,-37 Z" fill="#f2c24a"/>
+        <path d="M -19,-38 L -26,-33 L -19,-29 Z" fill="#4aa6a0"/>
+        <path d="M -25,-30 L -31,-24 L -24,-21 Z" fill="#f6ead2"/>
+        <path d="M -30,-21 L -36,-15 L -29,-12 Z" fill="#8a4a8a"/>
+      </g>
+      <circle cy="-60" r="2.4" fill="#f2c24a" stroke="#160e1e" stroke-width="1"/>
+    </g>
+    <!-- a fumarole: a hot slit in a cliff and the steam it breathes up the face -->
+    <g id="steam">
+      <path d="M -6,0 C -2,-2 2,-2 6,0 C 2,2 -2,2 -6,0 Z" fill="#ffb84a" stroke="#160e1e" stroke-width="1.2"/>
+      <g filter="url(#steamy)" fill="#fff4e8">
+        <path d="M -4,-4 C -10,-24 4,-40 -4,-62 C -10,-80 2,-96 -6,-118 L 10,-118 C 16,-96 4,-80 10,-62 C 18,-40 4,-24 6,-4 Z" opacity="0.4"/>
+        <ellipse cx="-2" cy="-130" rx="16" ry="12" opacity="0.25"/>
+      </g>
+    </g>
+  </defs>
+
+  <!-- behind the rock: dry roots and basalt drips under the crags -->
+  <g>
+{{hangers}}
+  </g>
+
+  <g clip-path="url(#landClip)">
+    <rect width="1800" height="1300" fill="#4c3c58"/>
+    <!-- strata follow the surface: each is the land shifted down. Kept under 140 px, so one mass's
+         shifted copy never lands inside a crag below it -->
+    <g>
+      <use href="#land" transform="translate(0,16)" fill="#453650"/>
+      <use href="#land" transform="translate(0,38)" fill="#3e3049"/>
+      <use href="#land" transform="translate(0,66)" fill="#372a42"/>
+      <use href="#land" transform="translate(0,100)" fill="#30253b"/>
+    </g>
+    <rect width="1800" height="1300" fill="url(#columns)"/>
+    <!-- seams between strata: a lit lip on a band's top -->
+    <g fill="none" stroke-linejoin="round">
+      <use href="#land" transform="translate(0,38)" stroke="#7a6890" stroke-width="1.6" opacity="0.4"/>
+      <use href="#land" transform="translate(0,100)" stroke="#6a587e" stroke-width="1.6" opacity="0.35"/>
+    </g>
+    <rect width="1800" height="1300" fill="#160e20" mask="url(#deepMask)" opacity="0.5"/>
+    <rect width="1800" height="1300" fill="url(#underHeat)"/>
+    <rect width="1800" height="1300" filter="url(#mottle)" opacity="0.5"/>
+    <rect width="1800" height="1300" fill="#e0a088" mask="url(#bounceMask)" opacity="0.4"/>
+    <rect width="1800" height="1300" fill="#ffc890" mask="url(#sunSideMask)" opacity="0.16"/>
+
+    <g>
+{{joints}}
+    </g>
+    <g>
+{{shards}}
+    </g>
+    <g>
+{{faces}}
+    </g>
+    <g>
+{{seams}}
+    </g>
+    <g>
+{{crystals}}
+    </g>
+    <g filter="url(#glow)">
+{{embers}}
+{{embers2}}
+    </g>
+
+    <!-- form light, inner-edge occlusion, then the grass cap: shade band, fringe, base, lit lip -->
+    <rect width="1800" height="1300" fill="#ffd49c" opacity="0.2" mask="url(#topLightMask)"/>
+    <use href="#land" fill="none" stroke="#120a18" stroke-width="16" opacity="0.25"/>
+    <rect width="1800" height="1300" fill="#1a1016" mask="url(#capShadeMask)" opacity="0.38"/>
+    <rect width="1800" height="1300" fill="#9a6a26" mask="url(#fringeMask)"/>
+    <rect width="1800" height="1300" fill="#d4a03a" mask="url(#capMask)"/>
+    <rect width="1800" height="1300" fill="#f6d67a" mask="url(#capLitMask)"/>
+
+    <!-- the crest's plates, over the cap: crimson crystal -->
+    <g>
+{{plates}}
+    </g>
+  </g>
+
+  <!-- silhouette outline -->
+  <use href="#land" fill="none" stroke="#160e1e" stroke-width="4.6" stroke-linejoin="round"/>
+
+  <!-- edge growth: crystals and lichen on the cliffs, grass, thorns and blooms along the tops -->
+  <g>
+{{walls}}
+  </g>
+  <g>
+{{tufts}}
+  </g>
+  <!-- set pieces on the ledges, then the fumaroles' steam over everything -->
+  <g>
+{{set}}
+  </g>
+  <g>
+{{steam}}
+  </g>
+</svg>

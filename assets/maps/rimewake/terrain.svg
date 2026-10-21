@@ -1,0 +1,455 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="840" viewBox="0 0 2200 840">
+  <!-- Rimewake terrain, shared by every variant: sea ice under a snow cap, light from the upper
+       left, half sunk in a polar sea whose surface is y = 712. A template: `cargo xtask art` fills
+       the land slot with the path built from the variant's land.ron (the same path the collision
+       mask is drawn from) and every other slot with the <use>s its dress rules in land.ron place.
+       Everything else here is drawn by hand. Opaque = ground. Below the waterline the ice, and
+       whatever hangs under it, is tinted and its outline softened, so the floes read as afloat. -->
+  <defs>
+    <path id="land" d="{{land}}"/>
+    <clipPath id="landClip"><use href="#land"/></clipPath>
+    <clipPath id="above"><rect width="2200" height="712"/></clipPath>
+    <clipPath id="below"><rect y="712" width="2200" height="128"/></clipPath>
+
+    <!-- seen through the sea: cooler, darker, a little transparent -->
+    <filter id="underwater" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.34 0.08 0.08 0 0.03  0.12 0.42 0.16 0 0.14  0.08 0.18 0.46 0 0.26  0 0 0 0.8 0"/>
+    </filter>
+    <!-- soft cloudy patches, as in old ice; low frequency so it costs the PNG little -->
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.016" numOctaves="3" seed="8" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.6 -1.25"/>
+    </filter>
+    <!-- the snow's lower edge: vertical-only displacement, then blur and threshold into scallops -->
+    <filter id="drip" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06 0.012" numOctaves="2" seed="3" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.5  0 1.8 0 0 -0.4  0 0 0 0 0  0 0 0 0 1" result="ny"/>
+      <feDisplacementMap in="SourceGraphic" in2="ny" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1.4" result="b"/>
+      <feComponentTransfer in="b"><feFuncA type="linear" slope="8" intercept="-3.5"/></feComponentTransfer>
+    </filter>
+    <filter id="feather" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="featherWide" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="20"/></filter>
+    <filter id="soften" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="1.5"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+
+    <!-- snow cap = land minus land shifted down -->
+    <mask id="capMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,12)" fill="#000"/>
+    </mask>
+    <mask id="fringeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,15)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <mask id="capLitMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,5)" fill="#000"/>
+    </mask>
+    <mask id="capShadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,23)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <!-- form light: the top ~30 px of every floe catches the sky -->
+    <mask id="topLightMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,30)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <!-- depth: below ~80 px the ice deepens to blue, following the surface -->
+    <mask id="deepMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <use href="#land" transform="translate(0,84)" fill="#fff" filter="url(#featherWide)"/>
+    </mask>
+    <!-- bounce light: undersides catch the glow off the water -->
+    <mask id="bounceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(0,-7)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <!-- face light: land minus land shifted east is a band on every west-facing side, and the
+         other way round for the east-facing ones -->
+    <mask id="westMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(10,4)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <mask id="eastMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2200" height="840">
+      <rect width="2200" height="840" fill="#fff"/>
+      <use href="#land" transform="translate(-14,2)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <linearGradient id="sea" gradientUnits="userSpaceOnUse" x1="0" y1="712" x2="0" y2="840">
+      <stop offset="0" stop-color="#2b7aa0" stop-opacity="0.38"/>
+      <stop offset="0.35" stop-color="#1f5e8a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#14365e" stop-opacity="0.78"/>
+    </linearGradient>
+
+    <!-- ice shards: face in currentColor (tinted per placement), lit edge upper left, shade lower
+         right; never mirrored, so the light stays put -->
+    <g id="shardA" stroke-linejoin="round">
+      <path d="M -10,4 L -12,-3 L -4,-10 L 7,-8.5 L 12,-1 L 8,7 L -2,9 Z" fill="currentColor" stroke="#3d6fa8" stroke-width="1.1"/>
+      <path d="M -12,-3 L -4,-10 L 7,-8.5 L 0,-3 Z" fill="#ffffff" opacity="0.5"/>
+      <path d="M 12,-1 L 8,7 L -2,9 L 2,1 Z" fill="#2c5f99" opacity="0.2"/>
+      <path d="M -10.6,-3 L -4,-8.6 L 6,-7.2" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
+    </g>
+    <g id="shardB" stroke-linejoin="round">
+      <path d="M -16,3 L -11,-4 L 6,-6 L 16,-1 L 10,5 L -6,6 Z" fill="currentColor" stroke="#3d6fa8" stroke-width="1.1"/>
+      <path d="M -16,3 L -11,-4 L 6,-6 L -2,0 Z" fill="#ffffff" opacity="0.48"/>
+      <path d="M 16,-1 L 10,5 L -6,6 L 2,1 Z" fill="#2c5f99" opacity="0.2"/>
+      <path d="M -14.6,1.8 L -10.4,-3 L 5,-4.8" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <g id="shardC" stroke-linejoin="round">
+      <path d="M -6,-7 L 3,-8 L 8,-1 L 5,7 L -4,8 L -8,1 Z" fill="currentColor" stroke="#3d6fa8" stroke-width="1"/>
+      <path d="M -6,-7 L 3,-8 L 0,0 L -8,1 Z" fill="#ffffff" opacity="0.5"/>
+      <path d="M 8,-1 L 5,7 L -4,8 L 0,0 Z" fill="#2c5f99" opacity="0.18"/>
+      <path d="M 0,0 L 3,-8 M 0,0 L 8,-1 M 0,0 L -4,8" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.7"/>
+    </g>
+    <!-- fracture planes: big, faint, so no stretch of ice is one flat color -->
+    <g id="planeA">
+      <path d="M -40,-26 L 34,-34 L 44,10 L -18,30 Z" fill="#ffffff" opacity="0.16"/>
+      <path d="M -40,-26 L 34,-34" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity="0.55"/>
+    </g>
+    <g id="planeB">
+      <path d="M -34,-20 L 20,-38 L 40,4 L 4,34 L -30,18 Z" fill="#2c5f99" opacity="0.1"/>
+      <path d="M 20,-38 L 40,4" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    </g>
+    <!-- grit the floe scraped off a shore once: small dark stones, the ice's one hard accent -->
+    <g id="grit">
+      <path d="M -4.6,1 C -5,-2 -2.4,-3.6 0.4,-3.4 C 3.4,-3.2 5,-1.2 4.4,1.4 C 3.8,3.4 -3.6,3.6 -4.6,1 Z" fill="currentColor" stroke="#1b2a4e" stroke-width="0.9"/>
+      <path d="M -3,-1 C -2,-2.4 -0.4,-2.8 1,-2.6" fill="none" stroke="#c9dcef" stroke-width="0.9" stroke-linecap="round"/>
+    </g>
+    <g id="gritPair">
+      <use href="#grit"/>
+      <use href="#grit" transform="translate(8,3) scale(0.6)"/>
+    </g>
+    <g id="bubble">
+      <circle r="3.2" fill="#f2fbff" fill-opacity="0.35" stroke="#ffffff" stroke-width="1" stroke-opacity="0.9"/>
+      <circle cx="-1.1" cy="-1.1" r="0.9" fill="#ffffff"/>
+    </g>
+    <g id="bubbles">
+      <use href="#bubble"/>
+      <use href="#bubble" transform="translate(6,-5) scale(0.6)"/>
+      <use href="#bubble" transform="translate(3,-10) scale(0.4)"/>
+    </g>
+    <g id="glint" fill="#ffffff">
+      <path d="M 0,-6 L 1.1,-1.1 L 6,0 L 1.1,1.1 L 0,6 L -1.1,1.1 L -6,0 L -1.1,-1.1 Z"/>
+    </g>
+
+    <!-- frozen in: small fish, a shell, a starfish, sparse -->
+    <g id="fish" stroke="#1f4677" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -11,0 C -7,-6 4,-6 8,0 C 4,6 -7,6 -11,0 Z" fill="#4f8cc4"/>
+      <path d="M 8,0 L 14,-5 L 12.6,0 L 14,5 Z" fill="#3f7cb6"/>
+      <path d="M -2,-4.6 L 1,-8 L 4,-4" fill="#3f7cb6"/>
+      <path d="M -8,-1 C -4,-4.4 2,-4.6 5,-2.4" fill="none" stroke="#a9d6f4" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="-6.6" cy="-0.8" r="1.3" fill="#ffffff" stroke="none"/>
+      <circle cx="-6.8" cy="-0.8" r="0.6" fill="#16304f" stroke="none"/>
+    </g>
+    <g id="fishSmall" stroke="#2a4f80" stroke-width="0.8" stroke-linejoin="round">
+      <path d="M -7,0 C -4,-3.6 3,-3.6 5,0 C 3,3.6 -4,3.6 -7,0 Z" fill="#6aa7d6"/>
+      <path d="M 5,0 L 9,-3 L 8,0 L 9,3 Z" fill="#5a98ca"/>
+      <circle cx="-4.4" cy="-0.5" r="0.8" fill="#ffffff" stroke="none"/>
+    </g>
+    <g id="shell" stroke="#6e4a6a" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -7,4 C -9,-2 -4,-8 2,-7 C 7,-6 9,-1 6,3 C 4,6 -4,7 -7,4 Z" fill="#f3d2c8"/>
+      <path d="M 0,-1.4 C 2.6,-1.4 3.4,1.6 1.2,2.4 C -1.4,3.2 -3.4,0.4 -2,-2 C -0.2,-5 4.6,-4.4 5.4,-0.6" fill="none" stroke="#c08a92" stroke-width="1"/>
+      <path d="M -5.6,-1 C -4.6,-4.6 -1,-6.6 2,-6" fill="none" stroke="#fff4ee" stroke-width="1.1" stroke-linecap="round"/>
+    </g>
+    <g id="star" stroke="#5a2848" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M 0,-8 L 2.2,-2.6 L 7.6,-2.4 L 3.4,1.2 L 4.8,6.8 L 0,3.6 L -4.8,6.8 L -3.4,1.2 L -7.6,-2.4 L -2.2,-2.6 Z" fill="#f2856f"/>
+      <g fill="#ffd2c0" stroke="none"><circle cy="-4.2" r="0.7"/><circle cx="3.8" cy="-1.4" r="0.6"/><circle cx="-3.8" cy="-1.4" r="0.6"/><circle r="0.8"/></g>
+    </g>
+
+    <!-- on the tops: snowdrifts and ice crystals; origin = attach point, up = -y -->
+    <g id="drift" stroke-linejoin="round">
+      <path d="M -14,2 C -12,-4 -6,-7.5 0,-7.2 C 6,-7 11,-4.4 14,2 Z" fill="#fbfdff" stroke="#1b2a4e" stroke-width="0.9"/>
+      <path d="M 3,1.6 C 7,0 9.6,-1.6 11.6,-0.4 C 12.6,0.4 13.2,1 13.4,1.6 Z" fill="#b9d4ec"/>
+      <path d="M -10.4,-2.6 C -8,-5.6 -3.6,-6.6 0.6,-6" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+    <g id="driftS" stroke-linejoin="round">
+      <path d="M -8,2 C -7,-2.4 -3,-4.6 0,-4.4 C 3.6,-4.2 6.6,-2.4 8,2 Z" fill="#fbfdff" stroke="#1b2a4e" stroke-width="0.8"/>
+      <path d="M 2,1.6 C 4,0.4 6,-0.4 7.4,1.6 Z" fill="#b9d4ec"/>
+    </g>
+    <g id="lump" stroke-linejoin="round">
+      <path d="M -9,2 C -10,-4 -6,-10 0,-10 C 6,-10 10,-4 9,2 Z" fill="#fbfdff" stroke="#1b2a4e" stroke-width="0.9"/>
+      <path d="M 2,1.6 C 5,0 7,-2.6 7.4,-5 C 8.8,-2.6 9,0 8.6,1.6 Z" fill="#b9d4ec"/>
+      <path d="M -6,-4 C -5,-7.4 -2,-8.8 1,-8.6" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+    <!-- a clear chip of ice lying on the snow: squat and faceted, never a blade -->
+    <g id="chip" stroke="#1b2a4e" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -7,2 L -6,-4 L -1,-7 L 5,-5 L 7,1 Z" fill="#c9eefb"/>
+      <path d="M -6,-4 L -1,-7 L 5,-5 L 0,-2 Z" fill="#ffffff" stroke="none" opacity="0.8"/>
+      <path d="M 0,-2 L 7,1 M 0,-2 L -7,2" fill="none" stroke="#8cc4e6" stroke-width="0.8"/>
+    </g>
+    <g id="chipS" stroke="#1b2a4e" stroke-width="0.8" stroke-linejoin="round">
+      <path d="M -4.6,2 L -3.6,-2.6 L 1,-4.4 L 4.6,1.6 Z" fill="#a9def5"/>
+      <path d="M -3.6,-2.6 L 1,-4.4 L 0,-0.6 Z" fill="#ffffff" stroke="none" opacity="0.8"/>
+    </g>
+    <!-- rime on the cliffs: frost feathers grown out from the ice -->
+    <g id="rime" stroke="#1b2a4e" stroke-width="0.8" stroke-linejoin="round">
+      <path d="M -5,2 L -7,-6 L -3,0 L -1,-11 L 1,-1 L 5,-8 L 4,2 Z" fill="#e8f7fd"/>
+      <path d="M -1,-1 L -1,-9" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round"/>
+    </g>
+    <g id="rimeS" stroke="#1b2a4e" stroke-width="0.7" stroke-linejoin="round">
+      <path d="M -3,2 L -4,-4 L -1,0 L 0,-7 L 2,0 L 4,-4 L 3,2 Z" fill="#e8f7fd"/>
+    </g>
+    <!-- hanging: icicles; origin = attach point, hanging down (+y), never turned -->
+    <g id="icicle" stroke-linejoin="round">
+      <path d="M -4,-3 C -3.4,6 -1.6,15 0,26 C 1.6,15 3.4,6 4,-3 Z" fill="#d6f2fc" stroke="#1b2a4e" stroke-width="1.1"/>
+      <path d="M -2.2,0 C -1.8,6 -1,12 -0.2,19" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round"/>
+      <path d="M 1.2,2 C 1.4,7 1,12 0.4,17" fill="none" stroke="#8cc4e6" stroke-width="1" stroke-linecap="round"/>
+    </g>
+    <g id="icicleShort" stroke-linejoin="round">
+      <path d="M -3,-3 C -2.4,3 -1.2,8 0,14 C 1.2,8 2.4,3 3,-3 Z" fill="#d6f2fc" stroke="#1b2a4e" stroke-width="1"/>
+      <path d="M -1.6,-0.4 C -1.2,3 -0.8,6 -0.2,9" fill="none" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round"/>
+    </g>
+    <g id="icicleTwin" stroke-linejoin="round">
+      <path d="M -6,-3 C -5.6,3 -4.6,9 -3.6,16 C -2.4,9 -1.4,3 -1,-3 Z" fill="#d6f2fc" stroke="#1b2a4e" stroke-width="1"/>
+      <path d="M -1.6,-3 C -1,5 0.4,12 2,21 C 3.4,12 4.4,5 5,-3 Z" fill="#c9ecfa" stroke="#1b2a4e" stroke-width="1"/>
+      <path d="M 0.2,0 C 0.6,5 1.2,10 1.8,15" fill="none" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round"/>
+    </g>
+
+    <!-- set pieces, placed per variant by land.ron. Hung things sit on the waterline (origin) and
+         are split at it like the icicles; frozen-in things are centered on their origin. -->
+    <g id="buoy" stroke="#1b2a4e" stroke-linejoin="round" stroke-linecap="round">
+      <ellipse cy="2" rx="16" ry="5" fill="#2a6f99" stroke="none" opacity="0.5"/>
+      <path d="M -11,10 C -12,-2 -9,-14 0,-16 C 9,-14 12,-2 11,10 C 6,14 -6,14 -11,10 Z" fill="#f2f0ea" stroke-width="2"/>
+      <path d="M -11.6,0 C -6,-3 6,-3 11.6,0 L 11.2,6 C 6,3 -6,3 -11.2,6 Z" fill="#e2463e" stroke="none"/>
+      <path d="M -9.4,-10 C -4,-13 4,-13 9.4,-10 L 7.6,-14 C 3,-16 -3,-16 -7.6,-14 Z" fill="#e2463e" stroke="none"/>
+      <path d="M -11,10 C -12,-2 -9,-14 0,-16 C 9,-14 12,-2 11,10 C 6,14 -6,14 -11,10 Z" fill="none" stroke-width="2"/>
+      <path d="M -6,-16 L -4,-34 M 6,-16 L 4,-34 M 0,-16 V -36 M -4.6,-28 H 4.6" fill="none" stroke-width="3.4"/>
+      <path d="M -6,-16 L -4,-34 M 6,-16 L 4,-34 M 0,-16 V -36 M -4.6,-28 H 4.6" fill="none" stroke="#8a97b0" stroke-width="1.4"/>
+      <circle cy="-40" r="9" fill="#ffd27a" stroke="none" opacity="0.35" filter="url(#glow)"/>
+      <path d="M -4,-35 C -4,-41 4,-41 4,-35 Z" fill="#ffd27a" stroke-width="1.4"/>
+      <path d="M -7.6,-6 C -7.4,-10 -5,-12.6 -2,-13.6" fill="none" stroke="#ffffff" stroke-width="1.6"/>
+    </g>
+    <g id="anchor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-30 V 24 M -16,-20 H 16 M -24,8 C -22,22 -12,28 0,28 C 12,28 22,22 24,8" fill="none" stroke="#1b2a4e" stroke-width="8"/>
+      <path d="M 0,-30 V 24 M -16,-20 H 16 M -24,8 C -22,22 -12,28 0,28 C 12,28 22,22 24,8" fill="none" stroke="#5b6f92" stroke-width="4.6"/>
+      <path d="M -24,8 L -30,3 M -24,8 L -17,6 M 24,8 L 30,3 M 24,8 L 17,6" fill="none" stroke="#1b2a4e" stroke-width="6.4"/>
+      <path d="M -24,8 L -30,3 M -24,8 L -17,6 M 24,8 L 30,3 M 24,8 L 17,6" fill="none" stroke="#5b6f92" stroke-width="3.2"/>
+      <circle cy="-35" r="6" fill="none" stroke="#1b2a4e" stroke-width="6.4"/>
+      <circle cy="-35" r="6" fill="none" stroke="#5b6f92" stroke-width="3"/>
+      <path d="M -1.6,-26 V 20 M -14,-21.4 H -3" stroke="#b4c6e2" stroke-width="1.2"/>
+      <path d="M 6,-8 C 10,-6 12,-2 12,2" fill="none" stroke="#e2f4fc" stroke-width="2.4" opacity="0.8"/>
+    </g>
+    <g id="lanternIce" stroke="#1b2a4e" stroke-linejoin="round">
+      <circle r="24" fill="#ffc45a" opacity="0.28" stroke="none" filter="url(#glow)"/>
+      <path d="M -8,-14 H 8 L 10,-10 H -10 Z" fill="#2bb3a3" stroke-width="1.6"/>
+      <path d="M -8.5,-10 H 8.5 L 7.5,10 H -7.5 Z" fill="#ffd36b" stroke-width="1.6"/>
+      <path d="M -4,-7 H 4 V 7 H -4 Z" fill="#fff6c0" stroke="none"/>
+      <path d="M -8.5,0 H 8.5" stroke-width="1.2"/>
+      <path d="M -9,10 H 9 L 6,15 H -6 Z" fill="#2bb3a3" stroke-width="1.6"/>
+      <path d="M -4,-14 C -4,-22 4,-22 4,-14" fill="none" stroke-width="1.8"/>
+      <path d="M -6.4,-8 L -6,6" stroke="#fff8d8" stroke-width="1"/>
+    </g>
+    <g id="chest" stroke="#1b2a4e" stroke-linejoin="round">
+      <path d="M -20,-6 H 20 V 14 H -20 Z" fill="#8a5a3e" stroke-width="2"/>
+      <path d="M -20,-6 C -20,-18 20,-18 20,-6 Z" fill="#9c6a48" stroke-width="2"/>
+      <path d="M -20,2 H 20 M -10,-15 V 14 M 10,-15 V 14" fill="none" stroke="#5a3626" stroke-width="1.4"/>
+      <path d="M -20,-6 H 20" stroke-width="2"/>
+      <path d="M -4,-9 H 4 V 1 H -4 Z" fill="#e9b949" stroke-width="1.4"/>
+      <circle cy="-4" r="1.2" fill="#1b2a4e" stroke="none"/>
+      <g fill="#e9b949" stroke-width="1"><path d="M -20,14 V 8 H -14 V 14 Z"/><path d="M 20,14 V 8 H 14 V 14 Z"/></g>
+      <path d="M -17,-10 C -12,-15 0,-16 8,-15" fill="none" stroke="#d6eefa" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+    </g>
+    <g id="wheel" stroke-linecap="round">
+      <g stroke="#1b2a4e" stroke-width="6"><path d="M 0,-30 V 30 M -30,0 H 30 M -21,-21 L 21,21 M 21,-21 L -21,21"/></g>
+      <g stroke="#9c6a48" stroke-width="3"><path d="M 0,-30 V 30 M -30,0 H 30 M -21,-21 L 21,21 M 21,-21 L -21,21"/></g>
+      <circle r="19" fill="none" stroke="#1b2a4e" stroke-width="7.4"/>
+      <circle r="19" fill="none" stroke="#b07a52" stroke-width="4.2"/>
+      <circle r="6" fill="#e9b949" stroke="#1b2a4e" stroke-width="1.8"/>
+      <path d="M -14,-10 A 17 17 0 0 1 -4,-17" fill="none" stroke="#e2c49a" stroke-width="1.4"/>
+    </g>
+    <g id="crate" stroke="#1b2a4e" stroke-linejoin="round">
+      <path d="M -16,-16 H 16 V 16 H -16 Z" fill="#a8774e" stroke-width="2"/>
+      <path d="M -16,-16 L 16,16 M -16,-5 H 16 M -16,5 H 16" fill="none" stroke="#6f4632" stroke-width="1.4"/>
+      <path d="M -16,-16 H 16 V 16 H -16 Z" fill="none" stroke-width="2"/>
+      <path d="M -13,-13 H 12" stroke="#e8c79a" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="barrel" stroke="#1b2a4e" stroke-linejoin="round">
+      <path d="M -11,-18 C -16,-8 -16,8 -11,18 H 11 C 16,8 16,-8 11,-18 Z" fill="#9c6a48" stroke-width="2"/>
+      <path d="M -13.6,-9 H 13.6 M -13.6,9 H 13.6" stroke="#4a5a7a" stroke-width="3"/>
+      <path d="M -4,-18 C -6,-8 -6,8 -4,18 M 4,-18 C 6,-8 6,8 4,18" fill="none" stroke="#6f4632" stroke-width="1.2"/>
+      <path d="M -8,-15 C -11,-6 -11,4 -9,12" fill="none" stroke="#e8c79a" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <!-- standing on a top: origin = the ground under its middle -->
+    <g id="crateTop" stroke="#1b2a4e" stroke-linejoin="round">
+      <path d="M -13,2 V -22 H 13 V 2 Z" fill="#a8774e" stroke-width="2"/>
+      <path d="M -13,-10 H 13 M -13,-22 L 13,2" fill="none" stroke="#6f4632" stroke-width="1.3"/>
+      <path d="M -13,2 V -22 H 13 V 2 Z" fill="none" stroke-width="2"/>
+      <path d="M -15,-21 C -12,-27 -2,-28 4,-26 C 9,-25 13,-25 15,-21 C 8,-19 -8,-19 -15,-21 Z" fill="#fbfdff" stroke-width="1"/>
+    </g>
+    <g id="lampPost" stroke="#1b2a4e" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M 0,2 V -52" stroke-width="5.6"/>
+      <path d="M 0,2 V -52" stroke="#5b6f92" stroke-width="2.6"/>
+      <path d="M -10,2 L 0,-10 L 10,2" fill="none" stroke-width="4"/>
+      <path d="M -10,2 L 0,-10 L 10,2" fill="none" stroke="#5b6f92" stroke-width="1.8"/>
+      <circle cy="-62" r="18" fill="#ffc45a" opacity="0.35" stroke="none" filter="url(#glow)"/>
+      <path d="M -7,-55 H 7 L 6,-70 H -6 Z" fill="#ffd36b" stroke-width="1.6"/>
+      <path d="M -3,-58 H 3 V -67 H -3 Z" fill="#fff6c0" stroke="none"/>
+      <path d="M -9,-70 H 9 L 0,-78 Z" fill="#2bb3a3" stroke-width="1.6"/>
+      <path d="M -11,-71 C -6,-77 6,-77 11,-71 Z" fill="#fbfdff" stroke-width="1"/>
+    </g>
+    <g id="flag" stroke="#1b2a4e" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M 0,2 V -46" stroke-width="4.6"/>
+      <path d="M 0,2 V -46" stroke="#c9a46a" stroke-width="2"/>
+      <path d="M 1,-45 C 10,-47 18,-41 30,-43 C 24,-38 26,-34 30,-29 C 20,-27 10,-32 1,-30 Z" fill="#ff7a4c" stroke-width="1.6"/>
+      <path d="M 3,-42 C 10,-43 16,-39 23,-40" fill="none" stroke="#ffc29a" stroke-width="1.2"/>
+      <circle cy="-48" r="2.6" fill="#e9b949" stroke-width="1.2"/>
+    </g>
+    <!-- the wreck (B), drawn about the middle of its deck at (1100, 612) -->
+    <g id="rigging" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- the broken yard, hung askew, and what is left of its sail -->
+      <path d="M -66,-218 L 58,-238" stroke="#1b2a4e" stroke-width="7"/>
+      <path d="M -66,-218 L 58,-238" stroke="#9c6a48" stroke-width="3.6"/>
+      <path d="M -60,-216 C -58,-190 -64,-168 -56,-142 L -40,-150 L -34,-128 L -18,-146 L -6,-120 L 6,-150 L 20,-136 L 30,-162 L 44,-150 C 44,-180 50,-206 52,-232 Z" fill="#e8e0cc" stroke="#1b2a4e" stroke-width="2"/>
+      <path d="M -50,-206 C -48,-186 -52,-170 -46,-152 M 36,-222 C 34,-200 38,-182 38,-162" stroke="#c4b89c" stroke-width="2"/>
+      <path d="M -60,-216 C -58,-206 -58,-196 -59,-186" stroke="#ffffff" stroke-width="1.6"/>
+      <!-- two stays from the masthead to the stem heads, high over the deck's spawns -->
+      <path d="M -4,-244 L -186,-66 M 4,-244 L 186,-66" stroke="#1b2a4e" stroke-width="2.6"/>
+      <path d="M -4,-244 L -186,-66 M 4,-244 L 186,-66" stroke="#b8a07a" stroke-width="1"/>
+      <!-- a lantern on a bracket off the west stem -->
+      <path d="M -194,-60 L -222,-72" stroke="#1b2a4e" stroke-width="5"/>
+      <path d="M -194,-60 L -222,-72" stroke="#9c6a48" stroke-width="2.4"/>
+      <circle cx="-222" cy="-52" r="16" fill="#ffc45a" opacity="0.32" stroke="none" filter="url(#glow)"/>
+      <path d="M -222,-72 V -64" stroke="#1b2a4e" stroke-width="1.6"/>
+      <path d="M -228,-64 H -216 L -217,-48 H -227 Z" fill="#ffd36b" stroke="#1b2a4e" stroke-width="1.6"/>
+      <path d="M -224,-61 H -220 V -51 H -224 Z" fill="#fff6c0" stroke="none"/>
+    </g>
+    <g id="hull" stroke-linejoin="round" stroke-linecap="round">
+      <!-- planking over the hull's land above the ice it is locked in; the snow on deck and on the
+           stems is the cap, drawn over all of this -->
+      <path d="M -212,70 V -90 H 212 V 70 Z" fill="#8a5a3e"/>
+      <g fill="none" stroke="#5e3a2a" stroke-width="1.6">
+        <path d="M -200,-12 C -140,22 140,22 200,-12 M -203,10 C -140,42 140,42 203,10 M -203,32 C -140,62 140,62 203,32 M -200,54 C -140,80 140,80 200,54"/>
+      </g>
+      <g fill="none" stroke="#b07a52" stroke-width="1.2" opacity="0.8">
+        <path d="M -200,-9 C -140,25 140,25 200,-9 M -203,13 C -140,45 140,45 203,13 M -203,35 C -140,65 140,65 203,35"/>
+      </g>
+      <!-- ribs -->
+      <g stroke="#4e2f22" stroke-width="5"><path d="M -136,6 V 80 M -66,14 V 80 M 66,14 V 80 M 136,6 V 80"/></g>
+      <g stroke="#9c6a48" stroke-width="2.4"><path d="M -136,6 V 80 M -66,14 V 80 M 66,14 V 80 M 136,6 V 80"/></g>
+      <!-- the wale just under the deck, sweeping up into both stems -->
+      <path d="M -190,-30 C -170,0 -140,8 -100,8 H 100 C 140,8 170,0 190,-30" fill="none" stroke="#1b2a4e" stroke-width="6.4"/>
+      <path d="M -190,-30 C -170,0 -140,8 -100,8 H 100 C 140,8 170,0 190,-30" fill="none" stroke="#c48a5a" stroke-width="3.2"/>
+      <!-- the stems: darker posts with a gilt band and a carved curl at the head -->
+      <path d="M -212,-90 H -176 L -164,-40 L -150,-12 L -186,24 L -212,24 Z M 212,-90 H 176 L 164,-40 L 150,-12 L 186,24 L 212,24 Z" fill="#74482f"/>
+      <path d="M -198,-40 C -190,-36 -178,-34 -168,-38 M 198,-40 C 190,-36 178,-34 168,-38" fill="none" stroke="#e9b949" stroke-width="2.2"/>
+      <path d="M -190,-62 C -194,-56 -188,-50 -183,-54 C -179,-58 -184,-63 -188,-60 M 190,-62 C 194,-56 188,-50 183,-54 C 179,-58 184,-63 188,-60" fill="none" stroke="#e9b949" stroke-width="1.6"/>
+      <!-- portholes, one each side of the mast -->
+      <g transform="translate(-96,32)">
+        <circle r="10" fill="#e9b949" stroke="#1b2a4e" stroke-width="2"/>
+        <circle r="6.6" fill="#1f3c5e" stroke="#1b2a4e" stroke-width="1.4"/>
+        <path d="M -4,-1.6 A 5 5 0 0 1 1,-5" fill="none" stroke="#a6dcf2" stroke-width="1.6"/>
+      </g>
+      <g transform="translate(96,32)">
+        <circle r="10" fill="#e9b949" stroke="#1b2a4e" stroke-width="2"/>
+        <circle r="6.6" fill="#1f3c5e" stroke="#1b2a4e" stroke-width="1.4"/>
+        <path d="M -4,-1.6 A 5 5 0 0 1 1,-5" fill="none" stroke="#a6dcf2" stroke-width="1.6"/>
+      </g>
+      <!-- the mast's wood, with iron bands, over its land -->
+      <path d="M -10,0 V -262 H 10 V 0 Z" fill="#9c6a48"/>
+      <path d="M -4,-6 V -250" stroke="#c48a5a" stroke-width="2.4"/>
+      <path d="M 5,-6 V -250" stroke="#6f4632" stroke-width="2"/>
+      <g stroke="#4a5a7a" stroke-width="4"><path d="M -10,-70 H 10 M -10,-150 H 10 M -10,-210 H 10"/></g>
+      <!-- frost on the planks -->
+      <g fill="#e6f6fd" opacity="0.4">
+        <path d="M -170,-4 C -150,4 -130,-2 -112,6 C -104,10 -106,16 -118,16 C -136,16 -160,12 -176,8 Z"/>
+        <path d="M 60,22 C 80,18 110,22 130,16 C 140,14 148,18 140,24 C 110,30 80,30 60,28 Z"/>
+        <path d="M -40,44 C -20,40 0,44 16,40 C 22,40 22,46 14,48 C -6,52 -26,52 -40,50 Z"/>
+      </g>
+      <!-- below the ice line, the hull's belly seen through the floe -->
+      <path d="M -204,72 C -200,108 -150,140 0,146 C 150,140 200,108 204,72 Z" fill="#6e4a3a" opacity="0.32"/>
+      <path d="M -204,72 C -200,108 -150,140 0,146 C 150,140 200,108 204,72" fill="none" stroke="#1b2a4e" stroke-width="2" opacity="0.3"/>
+      <path d="M -170,96 C -100,120 100,120 170,96 M -120,124 C -60,134 60,134 120,124" fill="none" stroke="#4e2f22" stroke-width="1.4" opacity="0.3"/>
+      <!-- the ice it is locked in: lumps piled against the planks, snow on their tops -->
+      <path d="M -240,108 V 72 C -228,64 -220,70 -214,70 C -204,60 -190,66 -176,62 C -160,56 -146,66 -126,62 C -106,56 -88,66 -66,63 C -44,58 -26,66 -6,62 C 14,58 32,66 54,62 C 76,57 92,66 112,63 C 132,58 148,66 166,62 C 184,58 196,64 214,68 C 222,70 230,66 240,72 V 108 Z" fill="#cdeef9"/>
+      <path d="M -240,72 C -228,64 -220,70 -214,70 C -204,60 -190,66 -176,62 C -160,56 -146,66 -126,62 C -106,56 -88,66 -66,63 C -44,58 -26,66 -6,62 C 14,58 32,66 54,62 C 76,57 92,66 112,63 C 132,58 148,66 166,62 C 184,58 196,64 214,68 C 222,70 230,66 240,72" fill="none" stroke="#1b2a4e" stroke-width="2.4"/>
+      <path d="M -212,72 C -202,63 -190,68 -176,65 C -160,59 -146,69 -126,65 C -106,59 -88,69 -66,66 M -6,65 C 14,61 32,69 54,65 C 76,60 92,69 112,66 C 132,61 148,69 166,65 C 184,61 196,67 212,70" fill="none" stroke="#ffffff" stroke-width="3"/>
+      <g fill="none" stroke="#8fcdec" stroke-width="1.4"><path d="M -150,74 L -140,86 M -60,72 L -52,88 M 30,74 L 22,88 M 120,72 L 130,86"/></g>
+    </g>
+
+    <!-- what hangs behind the ice, drawn twice below: once above the waterline, once through it -->
+    <g id="hangersAll">
+{{hangers}}
+    </g>
+    <g id="hungAll">
+{{hung}}
+    </g>
+  </defs>
+
+  <!-- behind the ice: icicles and whatever is moored, crisp above the water, sunk below it -->
+  <use href="#hangersAll" clip-path="url(#above)"/>
+  <use href="#hangersAll" clip-path="url(#below)" filter="url(#underwater)" opacity="0.55"/>
+  <use href="#hungAll" clip-path="url(#above)"/>
+  <use href="#hungAll" clip-path="url(#below)" filter="url(#underwater)"/>
+
+  <g clip-path="url(#landClip)">
+    <rect width="2200" height="840" fill="#e8f8fd"/>
+    <!-- strata follow the surface: each is the land shifted down, paler at the top -->
+    <g>
+      <use href="#land" transform="translate(0,14)" fill="#cdeef9"/>
+      <use href="#land" transform="translate(0,32)" fill="#afe0f4"/>
+      <use href="#land" transform="translate(0,54)" fill="#8fcdec"/>
+      <use href="#land" transform="translate(0,82)" fill="#71b6e1"/>
+    </g>
+    <!-- seams between strata: a lit lip on each band's top -->
+    <g fill="none" stroke-linejoin="round">
+      <use href="#land" transform="translate(0,32)" stroke="#f4fcff" stroke-width="1.6" opacity="0.7"/>
+      <use href="#land" transform="translate(0,82)" stroke="#d6f0fb" stroke-width="1.6" opacity="0.6"/>
+    </g>
+    <rect width="2200" height="840" fill="#3f78b6" mask="url(#deepMask)" opacity="0.55"/>
+    <rect width="2200" height="840" filter="url(#mottle)" opacity="0.35"/>
+    <g>
+{{planes}}
+    </g>
+    <rect width="2200" height="840" fill="#bfe8f6" mask="url(#bounceMask)" opacity="0.55"/>
+
+    <g>
+{{bubbles}}
+    </g>
+    <g>
+{{shards}}
+    </g>
+    <g>
+{{fossils}}
+    </g>
+    <g>
+{{grit}}
+    </g>
+    <g>
+{{glints}}
+    </g>
+    <!-- frozen in: anchors, chests, a hull -->
+    <g>
+{{set}}
+    </g>
+
+    <!-- form light, a pale translucent rim, then the snow cap: shade band, fringe, base, lit lip -->
+    <rect width="2200" height="840" fill="#ffffff" opacity="0.3" mask="url(#topLightMask)"/>
+    <rect width="2200" height="840" fill="#ffffff" opacity="0.4" mask="url(#westMask)"/>
+    <rect width="2200" height="840" fill="#24508c" opacity="0.28" mask="url(#eastMask)"/>
+    <use href="#land" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.28"/>
+    <use href="#land" fill="none" stroke="#1b2a4e" stroke-width="16" opacity="0.1"/>
+    <rect width="2200" height="840" fill="#3d6ea8" mask="url(#capShadeMask)" opacity="0.4"/>
+    <rect width="2200" height="840" fill="#c4dcf0" mask="url(#fringeMask)"/>
+    <rect width="2200" height="840" fill="#f1f7fc" mask="url(#capMask)"/>
+    <rect width="2200" height="840" fill="#ffffff" mask="url(#capLitMask)"/>
+
+    <!-- the sea: a tint over everything below the surface, and the surface's bright line -->
+    <rect y="712" width="2200" height="128" fill="url(#sea)"/>
+    <rect y="709" width="2200" height="4" fill="#e9fbff" opacity="0.75"/>
+    <rect y="713" width="2200" height="2" fill="#1f5e8a" opacity="0.45"/>
+  </g>
+
+  <!-- silhouette outline: hard above the water, softer through it -->
+  <use href="#land" fill="none" stroke="#1b2a4e" stroke-width="4.6" stroke-linejoin="round" clip-path="url(#above)"/>
+  <use href="#land" fill="none" stroke="#24507c" stroke-width="3.6" stroke-linejoin="round" opacity="0.75" clip-path="url(#below)"/>
+
+  <!-- edge growth: rime on the cliffs, drifts and crystals along the tops, then what stands on them -->
+  <g clip-path="url(#above)">
+{{walls}}
+  </g>
+  <g>
+{{tufts}}
+  </g>
+  <g>
+{{tops}}
+  </g>
+</svg>

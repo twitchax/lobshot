@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1100" viewBox="0 0 2000 1100">
+  <!-- Glintvein background: the far wall of the mine, lamp-lit, seen past the slate in front. The
+       whole map (2000 x 1100), shared by every variant. Warm umber and amber against the slate's
+       cool indigo, soft and low in contrast so the terrain reads in front, and no per-pixel grain,
+       which would bloat the PNG. The strongest light is a crack of daylight high in the middle
+       and the lamps along the wall, upper left of most of the terrain, as the sprites expect. -->
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#36282a"/>
+      <stop offset="0.22" stop-color="#4f3a32"/>
+      <stop offset="0.5" stop-color="#76563d"/>
+      <stop offset="0.72" stop-color="#6a4c38"/>
+      <stop offset="1" stop-color="#33262a"/>
+    </linearGradient>
+    <radialGradient id="lampWash" r="0.5">
+      <stop offset="0" stop-color="#f2b46c" stop-opacity="0.5"/>
+      <stop offset="0.4" stop-color="#d99558" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#d99558" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lampGlow" r="0.5">
+      <stop offset="0" stop-color="#fff0c4" stop-opacity="0.95"/>
+      <stop offset="0.3" stop-color="#ffcf80" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffbe6a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="crystalGlow" r="0.5">
+      <stop offset="0" stop-color="#a8f0e4" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#a8f0e4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe9bc" stop-opacity="0.42"/>
+      <stop offset="0.6" stop-color="#ffd9a0" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="haze" x1="0" y1="420" x2="0" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d8a06c" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#d8a06c" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#d8a06c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="abyss" x1="0" y1="860" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#241b1f" stop-opacity="0"/>
+      <stop offset="1" stop-color="#241b1f" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="ceilingShade" x1="0" y1="0" x2="0" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#20181c" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#20181c" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="softer" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.6"/></filter>
+    <filter id="far" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.6"/></filter>
+    <!-- a far mine frame: two posts and a lintel (origin = the middle of the floor line) -->
+    <g id="frame">
+      <path d="M -46,0 L -42,-150 L -34,-150 L -36,0 Z M 36,0 L 34,-150 L 42,-150 L 46,0 Z"/>
+      <path d="M -60,-150 L 60,-150 L 58,-164 L -58,-164 Z"/>
+      <path d="M -38,-130 L -14,-150 L -6,-150 L -38,-120 Z M 38,-130 L 14,-150 L 6,-150 L 38,-120 Z"/>
+    </g>
+    <!-- a far hanging lamp (origin = the hook) -->
+    <g id="farLamp">
+      <path d="M -0.8,0 V 16 H 0.8 V 0 Z"/>
+      <path d="M -5,16 H 5 L 6,20 L 4.5,30 H -4.5 L -6,20 Z"/>
+    </g>
+    <!-- a far crystal cluster (origin = its root) -->
+    <g id="farCrystal">
+      <path d="M -10,0 L -14,-22 L -8,-30 L -4,-6 Z"/>
+      <path d="M -5,0 L -3,-40 L 3,-48 L 7,-10 L 4,0 Z"/>
+      <path d="M 4,0 L 12,-26 L 18,-24 L 12,0 Z"/>
+    </g>
+  </defs>
+
+  <g id="layer-wall">
+    <rect width="2000" height="1100" fill="url(#wall)"/>
+    <!-- strata of the far wall, sagging and rising like the slate in front -->
+    <g fill="none" stroke-linecap="round" filter="url(#far)">
+      <path d="M -20,330 C 200,300 420,360 640,340 C 860,320 1080,280 1300,310 C 1520,340 1760,300 2020,320" stroke="#86624a" stroke-width="10" opacity="0.28"/>
+      <path d="M -20,470 C 240,450 480,500 720,480 C 960,460 1180,430 1420,450 C 1660,470 1840,440 2020,460" stroke="#8e6a4d" stroke-width="8" opacity="0.26"/>
+      <path d="M -20,610 C 200,600 440,640 680,620 C 920,600 1160,590 1400,612 C 1640,634 1820,600 2020,612" stroke="#4e3a32" stroke-width="12" opacity="0.3"/>
+      <path d="M -20,760 C 260,740 520,780 780,770 C 1040,760 1300,740 1560,760 C 1760,776 1900,752 2020,760" stroke="#4a3630" stroke-width="10" opacity="0.32"/>
+    </g>
+  </g>
+
+  <g id="layer-light">
+    <!-- daylight through a crack in the far ceiling, high in the middle -->
+    <path d="M 968,-20 L 1036,-20 L 1190,980 L 820,980 Z" fill="url(#beam)" filter="url(#softer)" opacity="0.9"/>
+    <path d="M 990,-20 L 1012,-20 L 1070,820 L 950,820 Z" fill="url(#beam)" filter="url(#soft)" opacity="0.7"/>
+    <!-- lamp washes along the wall -->
+    <ellipse cx="300" cy="560" rx="360" ry="260" fill="url(#lampWash)"/>
+    <ellipse cx="1000" cy="660" rx="300" ry="220" fill="url(#lampWash)" opacity="0.7"/>
+    <ellipse cx="1700" cy="540" rx="360" ry="260" fill="url(#lampWash)"/>
+    <ellipse cx="640" cy="860" rx="260" ry="160" fill="url(#lampWash)" opacity="0.6"/>
+    <ellipse cx="1380" cy="880" rx="260" ry="160" fill="url(#lampWash)" opacity="0.6"/>
+  </g>
+
+  <g id="layer-ceiling">
+    <!-- the far ceiling: a dark brow with soft stalactites, out of focus -->
+    <rect width="2000" height="260" fill="url(#ceilingShade)"/>
+    <path filter="url(#far)" fill="#3a2b29" opacity="0.85" d="M -20,-20 L 2020,-20 L 2020,70 C 1980,80 1960,120 1946,96 C 1930,72 1900,92 1880,84 C 1850,74 1832,140 1814,92 C 1800,62 1760,78 1730,74 C 1700,70 1690,128 1668,84 C 1650,54 1610,70 1580,66 C 1540,62 1530,104 1508,78 C 1488,56 1450,60 1420,58 C 1390,56 1380,118 1356,70 C 1340,40 1300,52 1270,50 C 1240,48 1226,86 1204,58 C 1184,34 1140,40 1110,32 L 890,32 C 860,40 816,34 796,58 C 774,86 760,48 730,50 C 700,52 660,40 644,70 C 620,118 610,56 580,58 C 550,60 512,56 492,78 C 470,104 460,62 420,66 C 390,70 350,54 332,84 C 310,128 300,70 270,74 C 240,78 200,62 186,92 C 168,140 150,74 120,84 C 100,92 70,72 54,96 C 40,120 20,80 -20,70 Z"/>
+    <!-- the crack the daylight comes through -->
+    <path d="M 976,-20 L 1026,-20 L 1016,30 L 1004,44 L 990,30 Z" fill="#f6dfb0" opacity="0.55" filter="url(#hazy)"/>
+  </g>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- far crystals on the wall, cool echoes of the ones in the slate -->
+    <g>
+      <ellipse cx="150" cy="420" rx="40" ry="36" fill="url(#crystalGlow)"/>
+      <ellipse cx="1880" cy="700" rx="40" ry="36" fill="url(#crystalGlow)"/>
+      <ellipse cx="560" cy="720" rx="34" ry="30" fill="url(#crystalGlow)"/>
+    </g>
+    <g fill="#8a9ea4" opacity="0.34">
+      <use href="#farCrystal" transform="translate(150,440) scale(1.1)"/>
+      <use href="#farCrystal" transform="translate(1880,720) scale(1.0)"/>
+      <use href="#farCrystal" transform="translate(560,740) scale(0.9)"/>
+    </g>
+    <g fill="#b9e2d8" opacity="0.35">
+      <path d="M 148,436 L 151,396 L 154,392 L 152,430 Z"/>
+      <path d="M 1878,716 L 1881,676 L 1884,672 L 1882,710 Z"/>
+    </g>
+  </g>
+
+  <g id="layer-timber" filter="url(#hazy)">
+    <!-- frames propping the far galleries, smaller as they recede -->
+    <g fill="#4a352b" opacity="0.62">
+      <use href="#frame" transform="translate(200,720)"/>
+      <use href="#frame" transform="translate(470,700) scale(0.8)"/>
+      <use href="#frame" transform="translate(1530,700) scale(0.8)"/>
+      <use href="#frame" transform="translate(1800,720)"/>
+      <use href="#frame" transform="translate(720,600) scale(0.55)"/>
+      <use href="#frame" transform="translate(1280,600) scale(0.55)"/>
+    </g>
+    <!-- a far trestle across the deep, with an ore cart halfway -->
+    <g fill="none" stroke="#4a352b" stroke-linecap="round" opacity="0.5">
+      <path d="M 640,846 L 1360,846" stroke-width="7"/>
+      <path d="M 660,846 V 1100 M 780,846 V 1100 M 900,846 V 1100 M 1100,846 V 1100 M 1220,846 V 1100 M 1340,846 V 1100" stroke-width="6"/>
+      <path d="M 660,860 L 780,980 M 780,860 L 660,980 M 780,860 L 900,980 M 900,860 L 780,980 M 1100,860 L 1220,980 M 1220,860 L 1100,980 M 1220,860 L 1340,980 M 1340,860 L 1220,980" stroke-width="3.4"/>
+      <path d="M 900,860 L 1000,960 L 1100,860" stroke-width="3.4"/>
+    </g>
+    <g fill="#4a352b" opacity="0.55">
+      <path d="M 1146,846 L 1150,820 L 1196,820 L 1200,846 Z"/>
+      <circle cx="1158" cy="848" r="5"/><circle cx="1188" cy="848" r="5"/>
+      <path d="M 1152,820 C 1158,808 1170,804 1180,810 C 1188,802 1196,810 1194,820 Z" fill="#5b4334"/>
+    </g>
+    <!-- a ladder down the west wall -->
+    <g fill="none" stroke="#4a352b" stroke-width="4" opacity="0.5" stroke-linecap="round">
+      <path d="M 330,440 L 342,700 M 356,440 L 368,700"/>
+      <path d="M 332,470 H 358 M 333,500 H 359 M 334,530 H 360 M 336,560 H 362 M 337,590 H 363 M 338,620 H 364 M 340,650 H 366 M 341,680 H 367" stroke-width="3"/>
+    </g>
+  </g>
+
+  <g id="layer-lamps">
+    <!-- the far lamps on their frames, and the soft pools they throw -->
+    <g fill="#3e2c26" opacity="0.7">
+      <use href="#farLamp" transform="translate(200,556)"/>
+      <use href="#farLamp" transform="translate(1800,556)"/>
+      <use href="#farLamp" transform="translate(470,580) scale(0.8)"/>
+      <use href="#farLamp" transform="translate(1530,580) scale(0.8)"/>
+      <use href="#farLamp" transform="translate(1000,846) scale(0.8)"/>
+    </g>
+    <g>
+      <circle cx="200" cy="580" r="34" fill="url(#lampGlow)"/>
+      <circle cx="1800" cy="580" r="34" fill="url(#lampGlow)"/>
+      <circle cx="470" cy="600" r="26" fill="url(#lampGlow)"/>
+      <circle cx="1530" cy="600" r="26" fill="url(#lampGlow)"/>
+      <circle cx="1000" cy="866" r="24" fill="url(#lampGlow)"/>
+      <circle cx="720" cy="530" r="16" fill="url(#lampGlow)" opacity="0.8"/>
+      <circle cx="1280" cy="530" r="16" fill="url(#lampGlow)" opacity="0.8"/>
+    </g>
+  </g>
+
+  <rect width="2000" height="1100" fill="url(#haze)"/>
+
+  <g id="layer-floor" filter="url(#far)">
+    <!-- far rubble and stalagmites, sinking into the deep -->
+    <path fill="#3b2c2a" opacity="0.8" d="M -20,1120 L -20,960 C 30,950 60,900 84,940 C 104,972 140,930 170,946 C 200,962 214,880 236,936 C 252,976 300,950 340,962 C 380,974 400,932 430,958 C 460,984 500,960 540,976 C 580,990 610,970 640,990 L 1360,990 C 1390,970 1420,990 1460,976 C 1500,960 1540,984 1570,958 C 1600,932 1620,974 1660,962 C 1700,950 1748,976 1764,936 C 1786,880 1800,962 1830,946 C 1860,930 1896,972 1916,940 C 1940,900 1970,950 2020,960 L 2020,1120 Z"/>
+  </g>
+  <rect y="860" width="2000" height="240" fill="url(#abyss)"/>
+
+  <!-- dust turning in the daylight -->
+  <g fill="#ffe8bc" opacity="0.5">
+    <circle cx="992" cy="180" r="1.6"/><circle cx="1018" cy="260" r="1.2"/><circle cx="976" cy="340" r="1.4"/>
+    <circle cx="1040" cy="420" r="1.1"/><circle cx="1004" cy="500" r="1.5"/><circle cx="958" cy="580" r="1.1"/>
+    <circle cx="1060" cy="640" r="1.3"/><circle cx="1022" cy="120" r="1"/>
+  </g>
+</svg>

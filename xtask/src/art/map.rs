@@ -1,7 +1,7 @@
 //! Maps: the shared background, and per variant the terrain art, the collision mask and the
 //! generated manifest with each variant's size and mask hash.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail, ensure};
 use lobshot_assets::{MapInfo, background_path, map_path, mask_path, terrain_path, to_ron};
@@ -50,8 +50,9 @@ pub fn build_maps(sources: &Path, out: &mut Out) -> Res<Vec<BuiltMap>> {
     names.iter().map(|name| build_map(&dir.join(name), out).with_context(|| format!("building map {name}"))).collect()
 }
 
-/// One map: `map.ron` (hand-written: names, variants, spawns), `background.svg`, and per variant
-/// `<id>/land.ron` (the geometry) and `<id>/terrain.svg` (the art, with slots for placement).
+/// One map: `map.ron` (hand-written: names, variants, spawns), `background.svg`, `terrain.svg` (the
+/// art, with slots for placement, shared by the variants), and per variant `<id>/land.ron` (the
+/// geometry, and where the art's set pieces go). A variant may draw its own `<id>/terrain.svg`.
 pub fn build_map(dir: &Path, out: &mut Out) -> Res<BuiltMap> {
     let mut info = load_info(dir)?;
 
@@ -105,7 +106,7 @@ fn build_variant(dir: &Path, map: &str, variant: &str, out: &mut Out) -> Res<Bui
     let (land, shape) = load_shape(dir, variant)?;
     let mask = shape.mask()?;
 
-    let template_path = dir.join(variant).join("terrain.svg");
+    let template_path = template_path(dir, variant)?;
     let template = std::fs::read_to_string(&template_path).with_context(|| format!("reading {}", template_path.display()))?;
     let art = Svg::parse(&shape.dress(&template, &land.dress)?).with_context(|| format!("parsing {} once dressed", template_path.display()))?;
     let view = art.view();
@@ -116,8 +117,17 @@ fn build_variant(dir: &Path, map: &str, variant: &str, out: &mut Out) -> Res<Bui
     Ok(BuiltVariant { shape, mask, terrain })
 }
 
+/// A variant's terrain art: its own `terrain.svg` if it draws one, else the map's.
+pub fn template_path(dir: &Path, variant: &str) -> Res<PathBuf> {
+    [dir.join(variant).join("terrain.svg"), dir.join("terrain.svg")]
+        .into_iter()
+        .find(|path| path.is_file())
+        .with_context(|| format!("{} has no terrain.svg for variant {variant}", dir.display()))
+}
+
 /// Every spawn column must hold every mobile: ground under the whole hitbox, and air for the
-/// hitbox's height above it, so nothing spawns under an overhang or hanging off an edge.
+/// hitbox's height above it, so nothing spawns under an overhang, hanging off an edge, or on top
+/// of a roof that runs off the top of the map.
 pub fn check_spawns(mask: &Terrain, spawns: &[i32]) -> Void {
     ensure!(!spawns.is_empty(), "no spawns");
     let reach = |pick: fn(&lobshot_sim::tuning::Rect) -> f64| MobileKind::ALL.iter().map(|mobile| pick(&mobile.tuning().hitbox.value)).fold(0.0, f64::max);
@@ -143,6 +153,9 @@ pub fn check_spawns(mask: &Terrain, spawns: &[i32]) -> Void {
             let Some(ground) = ((foot.y - search)..=(foot.y + search)).find(|&y| mask.is_surface(column, y)) else {
                 bail!("spawn {x} hangs over an edge: no ground in column {column} within {search} px of {}", foot.y);
             };
+            // Off the map is air, so the roof test alone would pass a mobile standing on land that
+            // runs off the top: the only surface a spawn dropped from row 0 can find there.
+            ensure!(ground > 0, "spawn {x} stands on land that runs off the top of the map, in column {column}");
             if let Some(roof) = ((ground - height)..ground).find(|&y| mask.is_solid(column, y)) {
                 bail!("spawn {x} is under an overhang: column {column} is solid at {roof}, within {height} px of the ground at {ground}");
             }
@@ -180,6 +193,29 @@ mod unit {
         let pit = Terrain::from_fn(600, 300, |x, y| y >= 200 && !(320..340).contains(&x)).unwrap();
         assert!(check_spawns(&pit, &[300]).is_err(), "a hole under part of the hitbox");
         assert!(check_spawns(&flat_with(|_, _| false), &[100, 140]).is_err(), "two mobiles on one spot");
+    }
+
+    #[test]
+    fn spawns_never_stand_on_a_roof_that_runs_off_the_top() {
+        // A mine's roof: solid from the top row down to 40 over the west half.
+        let roofed = flat_with(|x, y| x < 300 && y < 40);
+        assert!(check_spawns(&roofed, &[450]).is_ok(), "open to the sky");
+        assert!(check_spawns(&roofed, &[320]).is_ok(), "beside the roof, under its edge but far below it");
+        let error = check_spawns(&roofed, &[150]).unwrap_err();
+        assert!(format!("{error:#}").contains("top of the map"), "{error:#}");
+        assert!(check_spawns(&roofed, &[290]).is_err(), "half on the roof");
+    }
+
+    #[test]
+    fn variants_share_the_maps_terrain_art_unless_they_draw_their_own() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join("A")).unwrap();
+        std::fs::create_dir_all(dir.path().join("B")).unwrap();
+        assert!(template_path(dir.path(), "A").is_err(), "none at all");
+        std::fs::write(dir.path().join("terrain.svg"), "").unwrap();
+        std::fs::write(dir.path().join("B/terrain.svg"), "").unwrap();
+        assert_eq!(template_path(dir.path(), "A").unwrap(), dir.path().join("terrain.svg"));
+        assert_eq!(template_path(dir.path(), "B").unwrap(), dir.path().join("B/terrain.svg"));
     }
 
     #[test]

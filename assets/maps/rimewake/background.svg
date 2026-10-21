@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="840" viewBox="0 0 2200 840">
+  <!-- Rimewake background: a polar sea at twilight, seen from among the floes. The whole map
+       (2200 x 840), shared by every variant. Soft and low in contrast so the pale ice reads in
+       front of it, and no per-pixel grain, which would bloat the PNG. The moon and the afterglow
+       sit on the left, so their light agrees with the sprites' (upper left). The sea's surface is
+       y = 712, the same line terrain.svg sinks the floes below. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="712" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e3f63"/>
+      <stop offset="0.3" stop-color="#2c5f80"/>
+      <stop offset="0.58" stop-color="#5f86a8"/>
+      <stop offset="0.8" stop-color="#a7a3c9"/>
+      <stop offset="0.93" stop-color="#d6bcd6"/>
+      <stop offset="1" stop-color="#ecd0dc"/>
+    </linearGradient>
+    <radialGradient id="afterglow" cx="420" cy="712" r="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd9c4" stop-opacity="0.75"/>
+      <stop offset="0.25" stop-color="#f4b9c4" stop-opacity="0.35"/>
+      <stop offset="0.6" stop-color="#c9a0c8" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#c9a0c8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="moonGlow" cx="360" cy="150" r="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2f6ff" stop-opacity="0.55"/>
+      <stop offset="0.3" stop-color="#cfe2f6" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#cfe2f6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="curtain" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ef2cf" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#7ef2cf" stop-opacity="0.55"/>
+      <stop offset="0.85" stop-color="#b6f6dc" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#b6f6dc" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="curtainViolet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b69cf2" stop-opacity="0"/>
+      <stop offset="0.6" stop-color="#b69cf2" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#9ad8e8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="deep" x1="0" y1="712" x2="0" y2="840" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4f88ad"/>
+      <stop offset="0.12" stop-color="#3a7299"/>
+      <stop offset="0.5" stop-color="#255683"/>
+      <stop offset="1" stop-color="#173a63"/>
+    </linearGradient>
+    <linearGradient id="shaft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bfe6f4" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#bfe6f4" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="haze" x1="0" y1="600" x2="0" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f0d4de" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#f0d4de" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#f0d4de" stop-opacity="0.15"/>
+    </linearGradient>
+    <filter id="aurora" x="-20%" y="-30%" width="140%" height="160%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    <!-- a far berg (origin = its waterline middle): a table with a lit west face -->
+    <path id="bergA" d="M -90,0 L -84,-22 L -70,-30 L -52,-58 L -30,-64 L -8,-92 L 14,-84 L 30,-60 L 54,-54 L 70,-30 L 88,-20 L 96,0 Z"/>
+    <path id="bergAlit" d="M -90,0 L -84,-22 L -70,-30 L -52,-58 L -30,-64 L -8,-92 L -4,-40 L -30,-20 L -50,0 Z"/>
+    <path id="bergB" d="M -60,0 L -50,-26 L -30,-34 L -10,-40 L 20,-38 L 44,-30 L 60,-14 L 66,0 Z"/>
+    <path id="bergBlit" d="M -60,0 L -50,-26 L -30,-34 L -10,-40 L -14,-16 L -36,0 Z"/>
+    <path id="bergC" d="M -34,0 L -24,-44 L -8,-70 L 6,-60 L 22,-30 L 34,0 Z"/>
+    <path id="bergClit" d="M -34,0 L -24,-44 L -8,-70 L -6,-30 L -18,0 Z"/>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="2200" height="712" fill="url(#sky)"/>
+    <rect width="2200" height="712" fill="url(#afterglow)"/>
+    <rect width="2200" height="712" fill="url(#moonGlow)"/>
+  </g>
+
+  <g id="layer-stars" fill="#eef6ff">
+    <g opacity="0.75">
+      <circle cx="140" cy="60" r="1.4"/><circle cx="610" cy="44" r="1.2"/><circle cx="760" cy="120" r="1.6"/>
+      <circle cx="980" cy="36" r="1.2"/><circle cx="1180" cy="92" r="1.4"/><circle cx="1420" cy="40" r="1.6"/>
+      <circle cx="1610" cy="110" r="1.2"/><circle cx="1830" cy="56" r="1.5"/><circle cx="2060" cy="128" r="1.3"/>
+      <circle cx="2140" cy="34" r="1.2"/><circle cx="1300" cy="170" r="1"/><circle cx="880" cy="200" r="1"/>
+    </g>
+    <g opacity="0.45">
+      <circle cx="60" cy="180" r="1"/><circle cx="520" cy="250" r="1"/><circle cx="1050" cy="230" r="1"/>
+      <circle cx="1520" cy="210" r="1"/><circle cx="1960" cy="240" r="1"/><circle cx="2100" cy="300" r="0.9"/>
+      <circle cx="1720" cy="300" r="0.9"/><circle cx="690" cy="320" r="0.9"/>
+    </g>
+    <!-- two bright ones with a soft cross -->
+    <g opacity="0.8">
+      <circle cx="1250" cy="58" r="5" filter="url(#soft)"/><circle cx="1250" cy="58" r="1.8"/>
+      <circle cx="1990" cy="190" r="4" filter="url(#soft)"/><circle cx="1990" cy="190" r="1.5"/>
+    </g>
+  </g>
+
+  <g id="layer-aurora" filter="url(#aurora)">
+    <!-- ribbons that taper to nothing at both ends (a blunt end would show the blur's box),
+         brightest at their lower hem -->
+    <path d="M 600,250 C 780,170 1010,128 1250,146 C 1480,164 1700,74 1960,84 C 2060,88 2140,74 2200,60 C 2160,130 2080,176 1960,186 C 1720,190 1500,284 1268,268 C 1040,254 820,262 600,250 Z" fill="url(#curtain)" opacity="0.64"/>
+    <path d="M 860,318 C 1060,278 1280,300 1480,268 C 1640,246 1800,270 1960,244 C 1820,300 1660,316 1490,336 C 1290,360 1070,346 860,318 Z" fill="url(#curtainViolet)" opacity="0.52"/>
+    <path d="M 40,258 C 140,206 300,180 480,196 C 380,236 210,268 40,258 Z" fill="url(#curtain)" opacity="0.32"/>
+  </g>
+  <!-- the curtains' rays: faint vertical streaks hanging from the main ribbon's hem -->
+  <g filter="url(#softer)" opacity="0.28" fill="#a9f5da">
+    <path d="M 900,170 L 910,170 L 920,250 L 906,252 Z"/><path d="M 1040,140 L 1052,140 L 1060,256 L 1046,258 Z"/>
+    <path d="M 1180,140 L 1190,140 L 1196,262 L 1184,262 Z"/><path d="M 1340,150 L 1352,148 L 1360,260 L 1346,262 Z"/>
+    <path d="M 1520,120 L 1532,116 L 1540,232 L 1526,236 Z"/><path d="M 1680,86 L 1692,84 L 1700,200 L 1686,204 Z"/>
+    <path d="M 1840,80 L 1852,80 L 1858,190 L 1846,192 Z"/><path d="M 2000,84 L 2010,84 L 2016,180 L 2004,182 Z"/>
+  </g>
+
+  <g id="layer-high-clouds" filter="url(#softer)" opacity="0.5">
+    <ellipse cx="560" cy="420" rx="320" ry="12" fill="#c9aed0"/>
+    <ellipse cx="1500" cy="470" rx="380" ry="14" fill="#b9a6cc"/>
+    <ellipse cx="2000" cy="400" rx="240" ry="10" fill="#c2b0d2"/>
+    <ellipse cx="1000" cy="540" rx="300" ry="10" fill="#e2c2d4"/>
+  </g>
+
+  <g id="layer-moon">
+    <circle cx="360" cy="150" r="40" fill="#f6f8ff" filter="url(#soft)" opacity="0.6"/>
+    <circle cx="360" cy="150" r="27" fill="#f4f7fc"/>
+    <!-- soft maria, barely there -->
+    <g fill="#dbe4f2"><circle cx="352" cy="142" r="7"/><circle cx="370" cy="158" r="5"/><circle cx="364" cy="136" r="3"/></g>
+  </g>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- the far ice shelf on the horizon, barely darker than the glow -->
+    <path d="M 0,712 L 0,690 C 60,688 120,684 180,686 L 220,676 L 300,678 L 330,690 C 420,694 520,692 600,694 L 1400,698 C 1500,690 1560,682 1640,684 L 1700,672 L 1790,674 L 1820,688 C 1940,690 2080,692 2200,690 L 2200,712 Z" fill="#cfb3cf"/>
+    <g fill="#c3a8cc">
+      <use href="#bergB" transform="translate(760,712) scale(0.7 0.5)"/>
+      <use href="#bergC" transform="translate(1180,712) scale(0.55 0.5)"/>
+      <use href="#bergA" transform="translate(1530,712) scale(0.6 0.45)"/>
+      <use href="#bergB" transform="translate(2020,712) scale(0.55 0.45)"/>
+    </g>
+  </g>
+
+  <g id="layer-mid">
+    <!-- nearer bergs, still soft: a lit west face (the afterglow), a cool east face -->
+    <g fill="#9fa6c8">
+      <use href="#bergA" transform="translate(520,712) scale(1.25 0.95)"/>
+      <use href="#bergC" transform="translate(1340,712) scale(1.1 1.05)"/>
+      <use href="#bergB" transform="translate(1900,712) scale(1.2 1)"/>
+      <use href="#bergC" transform="translate(150,712) scale(0.8 0.7)"/>
+    </g>
+    <g fill="#d6bed6" opacity="0.85">
+      <use href="#bergAlit" transform="translate(520,712) scale(1.25 0.95)"/>
+      <use href="#bergClit" transform="translate(1340,712) scale(1.1 1.05)"/>
+      <use href="#bergBlit" transform="translate(1900,712) scale(1.2 1)"/>
+      <use href="#bergClit" transform="translate(150,712) scale(0.8 0.7)"/>
+    </g>
+    <!-- snow on their tops -->
+    <g fill="none" stroke="#efe2ee" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
+      <path d="M 432,691 L 450,683 L 455,657 L 482,651 L 510,625"/>
+      <path d="M 1304,666 L 1322,639 L 1331,648"/>
+      <path d="M 1840,686 L 1852,678 L 1876,672 L 1900,672"/>
+    </g>
+  </g>
+  <rect y="600" width="2200" height="120" fill="url(#haze)"/>
+
+  <g id="layer-sea">
+    <!-- below the surface: the sea in cross-section, darkening to the bottom -->
+    <rect y="712" width="2200" height="128" fill="url(#deep)"/>
+    <!-- the glow reflected just under the line, then long calm glints -->
+    <rect y="712" width="2200" height="10" fill="#e9c9d8" opacity="0.35"/>
+    <g fill="#f2dce6" opacity="0.6">
+      <rect x="330" y="718" width="160" height="2" rx="1"/><rect x="380" y="725" width="96" height="2" rx="1"/>
+      <rect x="300" y="732" width="70" height="1.6" rx="0.8"/><rect x="420" y="738" width="54" height="1.6" rx="0.8"/>
+      <rect x="980" y="720" width="80" height="1.6" rx="0.8"/><rect x="1660" y="722" width="110" height="1.6" rx="0.8"/>
+      <rect x="1980" y="728" width="60" height="1.6" rx="0.8"/>
+    </g>
+    <!-- light shafts down through the water -->
+    <g filter="url(#soft)" opacity="0.5">
+      <path d="M 260,714 L 330,714 L 300,840 L 200,840 Z" fill="url(#shaft)"/>
+      <path d="M 640,714 L 680,714 L 700,840 L 620,840 Z" fill="url(#shaft)"/>
+      <path d="M 1150,714 L 1210,714 L 1250,840 L 1140,840 Z" fill="url(#shaft)"/>
+      <path d="M 1700,714 L 1740,714 L 1790,840 L 1700,840 Z" fill="url(#shaft)"/>
+    </g>
+    <!-- the far bergs' keels, sunk in the blue -->
+    <g fill="#2f6790" opacity="0.6" filter="url(#hazy)">
+      <path d="M 410,714 C 430,760 480,790 540,792 C 600,790 640,756 650,714 Z"/>
+      <path d="M 1290,714 C 1300,748 1330,768 1350,768 C 1370,766 1386,746 1390,714 Z"/>
+      <path d="M 1820,714 C 1840,756 1880,772 1910,770 C 1950,764 1970,740 1976,714 Z"/>
+    </g>
+    <!-- the surface itself: a bright line, as the floes have -->
+    <rect y="710" width="2200" height="3" fill="#f4eaf2" opacity="0.8"/>
+  </g>
+
+  <g id="layer-birds" fill="none" stroke="#3e5578" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55">
+    <path d="M 860,330 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 900,348 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 1660,280 q 5,-5 9,0 q 4,-5 9,0"/>
+  </g>
+</svg>

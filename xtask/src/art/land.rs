@@ -2,7 +2,10 @@
 //! collision mask. Islands are chains of cubic Béziers; walkable tops are roughened along their
 //! normals so silhouettes read as rock, not vector blobs, and decorations are dropped onto the
 //! result. Everything here is placement: the shapes, colors and layers stay hand-written SVG in
-//! the variant's `terrain.svg`.
+//! the map's `terrain.svg`, which its variants share.
+//!
+//! Land may run past the map's edges: the mask and the art keep only what lies inside, so a mine's
+//! roof can hang from the top and its walls can stand on the sides.
 
 use std::{fmt::Write as _, path::Path};
 
@@ -34,6 +37,10 @@ pub struct Land {
 pub struct Island {
     pub start: Point,
     pub edges: Vec<Edge>,
+    /// How far its tops are roughened: 1 for rock, less for roofs, planks and ice, 0 to keep them
+    /// exactly as authored.
+    #[serde(default = "unit_scale")]
+    pub rough: f64,
 }
 
 /// A cubic Bézier: two control points, then the end.
@@ -93,6 +100,25 @@ pub enum Dress {
         mirror: bool,
         seed: u64,
     },
+    /// Set pieces at fixed points, tied to one variant's land (a lantern under an islet's point),
+    /// so the variants of a map can share one `terrain.svg`.
+    Place { slot: String, props: Vec<Prop> },
+}
+
+/// One hand-placed decoration: a symbol with its origin at `at`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Prop {
+    pub symbol: String,
+    pub at: Point,
+    /// Degrees, clockwise on screen.
+    #[serde(default)]
+    pub turn: f64,
+    #[serde(default = "unit_scale")]
+    pub scale: f64,
+}
+
+const fn unit_scale() -> f64 {
+    1.0
 }
 
 /// A point on the outline, after roughening, with its outward unit normal.
@@ -159,6 +185,7 @@ struct BuiltIsland {
 impl Island {
     fn build(&self) -> Res<BuiltIsland> {
         ensure!(self.edges.len() >= 2, "an island needs at least two edges");
+        ensure!((0.0..=4.0).contains(&self.rough), "roughness {} is outside 0 to 4", self.rough);
         let mut d = format!("M {} ", fmt_point(self.start));
         let mut polygon = vec![self.start];
         let mut outline = Vec::new();
@@ -172,7 +199,7 @@ impl Island {
                         run.push(next);
                         edges.next();
                     }
-                    let points = rough_top(from, &run)?;
+                    let points = rough_top(from, &run, self.rough)?;
                     for point in &points[1..] {
                         let _ = write!(d, "L {} ", fmt_point(point.at));
                         polygon.push(point.at);
@@ -219,9 +246,9 @@ impl Edge {
 }
 
 /// A run of tops, sampled about every `SAMPLE_PX` and pushed out along the normal by a sum of
-/// incommensurate waves (the spike's recipe), faded to zero at the run's ends. The first point is
-/// `from` itself and the last is the run's end, both unmoved.
-fn rough_top(from: Point, run: &[Edge]) -> Res<Vec<OutlinePoint>> {
+/// incommensurate waves (the spike's recipe) scaled by `rough`, faded to zero at the run's ends.
+/// The first point is `from` itself and the last is the run's end, both unmoved.
+fn rough_top(from: Point, run: &[Edge], rough: f64) -> Res<Vec<OutlinePoint>> {
     let mut smooth: Vec<(Point, Point)> = vec![(from, outward(first_tangent(from, run[0])))];
     let mut start = from;
     for &edge in run {
@@ -248,7 +275,7 @@ fn rough_top(from: Point, run: &[Edge]) -> Res<Vec<OutlinePoint>> {
         .zip(&along)
         .map(|(&((x, y), normal), &s)| {
             let fade = (s.min(total - s) / ROUGH_FADE_PX).clamp(0.0, 1.0);
-            let offset = fade * roughness(x);
+            let offset = fade * rough * roughness(x);
             OutlinePoint {
                 at: (x + offset * normal.0, y + offset * normal.1),
                 normal,
@@ -350,6 +377,7 @@ impl Shape {
             let (slot, uses) = match rule {
                 Dress::Edge { slot, .. } => (slot, self.dress_edge(rule)?),
                 Dress::Fill { slot, .. } => (slot, self.dress_fill(rule)?),
+                Dress::Place { slot, props } => (slot, place(props)?),
             };
             svg = fill_slot(&svg, slot, &uses)?;
         }
@@ -457,6 +485,19 @@ impl Shape {
     }
 }
 
+fn place(props: &[Prop]) -> Res<String> {
+    let mut uses = String::new();
+    for Prop { symbol, at, turn, scale } in props {
+        ensure!(*scale > 0.0, "prop {symbol} needs a positive scale; mirroring would flip its light");
+        let _ = writeln!(
+            uses,
+            r##"<use href="#{symbol}" transform="translate({}) rotate({turn:.1}) scale({scale:.2})"/>"##,
+            fmt_point(*at).replace(',', " ")
+        );
+    }
+    Ok(uses)
+}
+
 /// Crossings of the vertical ray from `p` upward with the polygon's edges: how many, and the
 /// lowest one (the outline directly above).
 fn crossings_above(polygon: &[Point], (x, y): Point) -> (usize, Option<f64>) {
@@ -522,6 +563,22 @@ mod unit {
     }
 
     #[test]
+    fn an_islands_roughness_scales_how_far_its_tops_stray() {
+        let offsets = |rough: f64| -> Vec<f64> {
+            let mut land = slab();
+            land.islands[0].rough = rough;
+            land.shape().unwrap().outline.iter().filter(|p| p.top).map(|p| p.at.1 - 60.0).collect()
+        };
+        assert!(offsets(0.0).iter().all(|&dy| dy.abs() < 1e-9), "smooth tops stay as authored");
+        for (once, twice) in offsets(1.0).iter().zip(offsets(2.0)) {
+            assert!((twice - 2.0 * once).abs() < 1e-9, "{once} then {twice}");
+        }
+        let mut land = slab();
+        land.islands[0].rough = -1.0;
+        assert!(land.shape().is_err(), "negative roughness");
+    }
+
+    #[test]
     fn normals_point_out_of_the_land() {
         let shape = slab().shape().unwrap();
         for point in &shape.outline {
@@ -574,6 +631,37 @@ mod unit {
 
         assert!(shape.dress(r"{{land}}{{tufts}}", &land.dress).is_err(), "a rule with no slot");
         assert!(shape.dress(r"{{land}}{{tufts}}{{stones}}{{moss}}", &land.dress).is_err(), "a slot with no rule");
+    }
+
+    #[test]
+    fn props_sit_where_the_land_says() {
+        let mut land = slab();
+        land.dress = ron::from_str(r#"[Place(slot: "props", props: [(symbol: "lamp", at: (100.0, 100.0)), (symbol: "anchor", at: (60.0, 80.0), turn: -24.0, scale: 1.5)])]"#).unwrap();
+        let svg = land.shape().unwrap().dress(r"{{land}}{{props}}", &land.dress).unwrap();
+        assert!(svg.contains(r##"<use href="#lamp" transform="translate(100.00 100.00) rotate(0.0) scale(1.00)"/>"##), "{svg}");
+        assert!(svg.contains(r##"<use href="#anchor" transform="translate(60.00 80.00) rotate(-24.0) scale(1.50)"/>"##), "{svg}");
+
+        land.dress = ron::from_str(r#"[Place(slot: "props", props: [(symbol: "lamp", at: (1.0, 1.0), scale: -1.0)])]"#).unwrap();
+        assert!(land.shape().unwrap().dress(r"{{land}}{{props}}", &land.dress).is_err(), "a mirrored prop");
+    }
+
+    /// A mine's roof hangs from the top and its walls stand on the sides: land past the edges is
+    /// clipped to the map, never refused.
+    #[test]
+    fn land_may_run_past_the_edges_of_the_map() {
+        let land = Land::from_ron(
+            r"Land(size: (200, 120), islands: [(start: (-30.0, -30.0), edges: [
+                Rock((50.0, -30.0), (150.0, -30.0), (230.0, -30.0)),
+                Rock((230.0, 0.0), (230.0, 20.0), (230.0, 40.0)),
+                Rock((150.0, 40.0), (50.0, 40.0), (-30.0, 40.0)),
+                Rock((-30.0, 20.0), (-30.0, 0.0), (-30.0, -30.0)),
+            ])])",
+        )
+        .unwrap();
+        let mask = land.shape().unwrap().mask().unwrap();
+        assert_eq!((mask.width(), mask.height()), (200, 120));
+        assert!([(0, 0), (199, 0), (0, 38), (199, 38)].iter().all(|&(x, y)| mask.is_solid(x, y)), "solid to every edge it reaches");
+        assert!(!mask.is_solid(100, 45));
     }
 
     #[test]
