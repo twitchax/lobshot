@@ -60,7 +60,9 @@ fn sim_clippy_toml_repeats_the_root_doc_idents() {
 
 /// The value of the first `key = value` line in `text`, unquoted.
 fn setting<'a>(text: &'a str, key: &str) -> Option<&'a str> {
-    text.lines().find_map(|line| line.trim().strip_prefix(key)?.trim_start().strip_prefix('=')).map(|value| value.trim().trim_matches('"'))
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix(key)?.trim_start().strip_prefix('='))
+        .map(|value| value.trim().trim_matches('"'))
 }
 
 #[test]
