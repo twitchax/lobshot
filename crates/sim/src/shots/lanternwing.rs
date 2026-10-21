@@ -58,3 +58,68 @@ fn strip(game: &mut Game, at: Vec2, tick: u32, effects: &mut Vec<Effect>) {
         }
     }
 }
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use crate::{
+        ballistics,
+        game::{
+            Effect, MobileKind, Shot,
+            testing::{damage_to, direct_hit_power, duel_of, explosions, shoot},
+        },
+        units::Power,
+    };
+
+    #[test]
+    fn s1_on_target_deals_its_listed_range() {
+        let mut game = duel_of(MobileKind::Lanternwing, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 35);
+        let dealt = damage_to(&shoot(&mut game, 0, Shot::S1, 35, power), 1);
+        // Laser is neutral against Mechanical.
+        assert!((100..=160).contains(&dealt), "{dealt}");
+    }
+
+    #[test]
+    fn s2_winds_two_strands_about_its_path_and_each_strikes() {
+        let mut game = duel_of(MobileKind::Lanternwing, MobileKind::Coilback, 1200);
+        let effects = shoot(&mut game, 0, Shot::S2, 45, Power::nearest(1.6));
+        let Some(Effect::Helix { legs, amplitude, hertz, strands, .. }) = effects.iter().find(|e| matches!(e, Effect::Helix { .. })) else {
+            panic!("no helix: {effects:?}")
+        };
+        assert_eq!((*amplitude, *hertz, strands.len()), (15.0, 1.0, 2));
+        assert_eq!(explosions(&effects), 2, "two strands, two blasts: {effects:?}");
+        // Each strand stays within the amplitude of the path, and they part.
+        let leg = legs[0];
+        let tick = leg.to / 2;
+        let center = leg.flight.at(tick);
+        let [a, b] = [strands[0].phase, strands[1].phase].map(|phase| ballistics::helix_point(&leg.flight, tick, leg.offset, *amplitude, *hertz, phase));
+        assert!(a.distance(center) <= 15.0 + 1e-9 && b.distance(center) <= 15.0 + 1e-9);
+        assert!(a.distance(b) > 1.0, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn s2_on_target_can_land_both_strands() {
+        let mut game = duel_of(MobileKind::Lanternwing, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 35);
+        let dealt = damage_to(&shoot(&mut game, 0, Shot::S2, 35, power), 1);
+        assert!(dealt > 140, "more than one strand's max: {dealt}");
+    }
+
+    #[test]
+    fn ss_strips_shields_before_it_hits() {
+        let mut game = duel_of(MobileKind::Lanternwing, MobileKind::Sparkhorn, 800);
+        let power = direct_hit_power(&game, 35);
+        let effects = shoot(&mut game, 0, Shot::Ss, 35, power);
+        let stripped = effects.iter().position(|e| matches!(e, Effect::ShieldStripped { seat: 1, amount: 300, .. })).expect("stripped");
+        let blast = effects.iter().position(|e| matches!(e, Effect::Exploded { .. })).unwrap();
+        assert!(stripped < blast, "{effects:?}");
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Shielded { seat: 1, .. })), "the blast meets no shield");
+        // Laser is weak against Shield: 350-500 x 0.96.
+        let dealt = damage_to(&effects, 1);
+        assert!((336..=480).contains(&dealt), "{dealt} {effects:?}");
+    }
+}

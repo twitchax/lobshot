@@ -78,3 +78,87 @@ fn storm(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) {
         bolt::zap(game, &strike, &blast, effects);
     }
 }
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use crate::{
+        game::{
+            Contact, Effect, Event, Game, MobileKind, Shot, Team,
+            testing::{damage_to, direct_hit_power, duel_of, game_of, seat, shoot},
+        },
+        items::{Item, Loadout},
+        units::{Facing, Power},
+    };
+
+    fn bolts(effects: &[Effect]) -> Vec<&Effect> {
+        effects.iter().filter(|e| matches!(e, Effect::Bolt { .. })).collect()
+    }
+
+    #[test]
+    fn s1_calls_a_bolt_down_onto_its_target_for_the_splash() {
+        let mut game = duel_of(MobileKind::Sparkhorn, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 30);
+        let effects = shoot(&mut game, 0, Shot::S1, 30, power);
+        assert_eq!(bolts(&effects).len(), 1, "{effects:?}");
+        // The ball's 74-174 x 1.04 (Electric against Mechanical), and the flat 76 splash.
+        let dealt = damage_to(&effects, 1);
+        assert!((152..=256).contains(&dealt), "{dealt} {effects:?}");
+    }
+
+    #[test]
+    fn s2_brings_two_bolts_down_in_a_v() {
+        let mut game = duel_of(MobileKind::Sparkhorn, MobileKind::Coilback, 1200);
+        let effects = shoot(&mut game, 0, Shot::S2, 30, Power::nearest(1.8));
+        let froms: Vec<f64> = effects.iter().filter_map(|e| if let Effect::Bolt { from, to, .. } = e { Some(from.x - to.x) } else { None }).collect();
+        assert_eq!(froms.len(), 2, "{effects:?}");
+        assert!(froms[0] * froms[1] < 0.0, "one from each side: {froms:?}");
+    }
+
+    #[test]
+    fn splash_lands_once_a_turn_even_with_dual() {
+        let mut game = duel_of(MobileKind::Sparkhorn, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 30);
+        game.players[0].items = Loadout::new(&[Item::Dual]).unwrap().positions();
+        game.apply(Event::UseItem { seat: 0, slot: 0 }).unwrap();
+        let effects = shoot(&mut game, 0, Shot::S1, 30, power);
+        assert_eq!(bolts(&effects).len(), 2, "two balls, two bolts: {effects:?}");
+        let splashes = effects.iter().filter(|e| matches!(e, Effect::Damaged { seat: 1, amount: 76 })).count();
+        assert!(splashes <= 1, "{effects:?}");
+    }
+
+    /// Sparkhorn at 300; two enemies close together at 1000 and 1090; a teammate far off at 2000.
+    fn crowd() -> Game {
+        game_of(vec![
+            seat(Team::A, MobileKind::Sparkhorn, 300, Facing::Right),
+            seat(Team::B, MobileKind::Coilback, 1000, Facing::Left),
+            seat(Team::B, MobileKind::Coilback, 1090, Facing::Left),
+            seat(Team::A, MobileKind::Coilback, 2000, Facing::Left),
+        ])
+    }
+
+    #[test]
+    fn ss_strikes_everyone_within_reach_with_a_bolt() {
+        let mut game = crowd();
+        let between = f64::midpoint(game.players()[1].center().x, game.players()[2].center().x);
+        let power = (0..=Power::MAX.twentieths())
+            .filter_map(|twentieths| {
+                let power = Power::from_twentieths(twentieths).ok()?;
+                let impact = game.track(game.launch(0, 30, power.bars())?, 0, 0).impact;
+                (impact.contact != Contact::Gone).then(|| ((impact.at.x - between).abs(), power))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, power)| power)
+            .unwrap();
+        let effects = shoot(&mut game, 0, Shot::Ss, 30, power);
+        assert_eq!(bolts(&effects).len(), 2, "the two enemies, not the far teammate or the shooter: {effects:?}");
+        for seat in [1, 2] {
+            // 150-200 x 1.04, plus whatever the neighbor's bolt adds.
+            assert!(damage_to(&effects, seat) >= 156, "seat {seat}: {effects:?}");
+        }
+        assert_eq!(damage_to(&effects, 3), 0);
+    }
+}

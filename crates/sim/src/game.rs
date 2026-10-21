@@ -1341,6 +1341,28 @@ pub(crate) mod testing {
             .expect("some power hits")
     }
 
+    /// Serves one drawn mask, so tests can play on terrain the synthetic maps can't make.
+    pub struct Drawn(pub Terrain);
+
+    impl MapAssets for Drawn {
+        fn mask(&self, _: &str, _: &str) -> Res<Terrain> {
+            Ok(self.0.clone())
+        }
+    }
+
+    /// A game on `terrain` with these seats, acting in seat order.
+    pub fn game_on(terrain: Terrain, seats: Vec<Seat>) -> Game {
+        let order = (0..seats.len()).map(|s| u8::try_from(s).unwrap()).collect();
+        let map = MapRef::Asset {
+            name: "drawn".to_owned(),
+            variant: "A".to_owned(),
+            mask_hash: terrain.mask_hash(),
+        };
+        let mut game = Game::new(&Setup { map, seats, order, ..duel_setup(800) }, &Drawn(terrain)).expect("a valid setup");
+        answer_rolls(&mut game);
+        game
+    }
+
     /// Plays turns (passing) until it is `seat`'s.
     pub fn pass_until(game: &mut Game, seat: u8) {
         for _ in 0..64 {

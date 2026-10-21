@@ -43,3 +43,77 @@ pub(super) fn fire(game: &mut Game, gun: &mut Gun, shot: Shot, effects: &mut Vec
         }
     }
 }
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use crate::{
+        game::{
+            Contact, Effect, Event, Leg, MobileKind, Shot,
+            testing::{damage_to, direct_hit_power, duel_of, shoot},
+        },
+        units::{Facing, Power, Wind},
+    };
+
+    #[test]
+    fn s1_on_target_deals_its_listed_range() {
+        let mut game = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 50);
+        let dealt = damage_to(&shoot(&mut game, 0, Shot::S1, 50, power), 1);
+        // Physical is weak against Mechanical: 120-160 x 0.96.
+        assert!((115..=153).contains(&dealt), "{dealt}");
+    }
+
+    #[test]
+    fn a_backshot_hooks_round_on_the_wind_and_hits_harder() {
+        // Facing away from the target with a gale blowing toward it: the boomerang heads off the
+        // wrong way, turns, and comes back.
+        let mut game = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 500);
+        game.wind = Wind::new(26, 0).unwrap();
+        game.apply(Event::Walk { seat: 0, facing: Facing::Left, steps: 0 }).unwrap();
+        let target = game.players()[1].center();
+        let (aim, power) = (60..=89)
+            .flat_map(|aim| (20..=80).map(move |twentieths| (aim, Power::from_twentieths(twentieths).unwrap())))
+            .filter_map(|(aim, power)| {
+                let track = game.track(game.launch(0, aim, power.bars())?, 0, 0);
+                (track.impact.contact == Contact::Mobile(1)).then(|| (track.impact.at.distance(target), aim, power))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, aim, power)| (aim, power))
+            .expect("a backshot reaches");
+        let effects = shoot(&mut game, 0, Shot::S1, aim, power);
+        let Some(Effect::Fired { legs, .. }) = effects.iter().find(|e| matches!(e, Effect::Fired { .. })) else {
+            panic!()
+        };
+        assert!(legs.iter().any(Leg::hooked), "{legs:?}");
+        // 120-160, x 0.96 for Physical against Mechanical, x 1.2 for the hook; false angle above 65.
+        let dealt = damage_to(&effects, 1);
+        let least = if aim > 65 { 96 } else { 138 };
+        assert!((least..=184).contains(&dealt), "{dealt} at {aim}");
+    }
+
+    #[test]
+    fn s2_throws_four_boomerangs_in_a_cluster() {
+        let mut game = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&game, 50);
+        let effects = shoot(&mut game, 0, Shot::S2, 50, power);
+        assert_eq!(effects.iter().filter(|e| matches!(e, Effect::Fired { .. })).count(), 4);
+        // At least two of the four land on the target: each is 57-72.
+        assert!(damage_to(&effects, 1) > 110, "{effects:?}");
+    }
+
+    #[test]
+    fn ss_turns_golden_only_after_long_enough_in_the_air() {
+        let mut short = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 400);
+        let power = direct_hit_power(&short, 40);
+        let early = damage_to(&shoot(&mut short, 0, Shot::Ss, 40, power), 1);
+        let mut long = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&long, 80);
+        let late = damage_to(&shoot(&mut long, 0, Shot::Ss, 80, power), 1);
+        // Golden: 350-900 x 0.96, at 70% outside the true angles.
+        assert!(early <= 153 && late >= 235, "{early} then {late}");
+    }
+}

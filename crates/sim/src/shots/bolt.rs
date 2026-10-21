@@ -122,3 +122,73 @@ pub(crate) fn splash(game: &mut Game, splashed: &mut [bool; MAX_SEATS], strike: 
         }
     }
 }
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::{
+        game::{
+            MobileKind, Team,
+            testing::{damage_to, duel, game_on, seat},
+        },
+        movement::Footing,
+        terrain::Terrain,
+        units::Facing,
+    };
+
+    #[test]
+    fn a_bolt_from_the_sky_strikes_the_first_mobile_in_its_column() {
+        let game = duel(800);
+        let x = game.players()[1].center().x;
+        let strike = from_sky(&game, x);
+        assert_eq!(strike.contact, Contact::Mobile(1));
+        assert!(strike.at.y < game.players()[1].center().y, "it strikes from above: {strike:?}");
+        assert_eq!(from_sky(&game, 1500.0).contact, Contact::Terrain, "open ground");
+    }
+
+    #[test]
+    fn land_above_a_mobile_blocks_its_bolt() {
+        // A roof at rows 300..310 over x 1000..1200, and the ground at 500.
+        let terrain = Terrain::from_fn(2400, 600, |x, y| y >= 500 || ((1000..1200).contains(&x) && (300..310).contains(&y))).unwrap();
+        let mut game = game_on(
+            terrain,
+            vec![seat(Team::A, MobileKind::Coilback, 300, Facing::Right), seat(Team::B, MobileKind::Coilback, 1100, Facing::Left)],
+        );
+        // Spawns drop from the top onto the roof; stand it under the roof instead.
+        game.place(1, Footing { x: 1100, y: 500 });
+        let strike = from_sky(&game, game.players()[1].center().x);
+        assert_eq!(strike.contact, Contact::Terrain);
+        assert!((strike.at.y - 300.0).abs() < 1.0, "{strike:?}");
+        let mut splashed = [false; MAX_SEATS];
+        let mut effects = Vec::new();
+        splash(&mut game, &mut splashed, &strike, 76, 25.0, &mut effects);
+        assert_eq!(damage_to(&effects, 1), 0, "the roof is far above it");
+    }
+
+    #[test]
+    fn a_bolt_toward_a_point_comes_down_its_line_from_the_sky() {
+        let game = duel(800);
+        let target = Vec2::new(1000.0, 499.0);
+        let down_right = Vec2::new(core::f64::consts::FRAC_1_SQRT_2, core::f64::consts::FRAC_1_SQRT_2);
+        let strike = toward(&game, target, down_right);
+        assert!((strike.from.y + 100.0).abs() < 1e-6 && strike.from.x < target.x, "from the upper left: {strike:?}");
+        assert_eq!(strike.contact, Contact::Terrain);
+        assert!(strike.at.distance(target) < 2.0, "{strike:?}");
+    }
+
+    #[test]
+    fn splash_lands_once_a_turn_on_each_mobile() {
+        let mut game = duel(800);
+        let strike = from_sky(&game, game.players()[1].center().x);
+        let mut splashed = [false; MAX_SEATS];
+        let mut first = Vec::new();
+        splash(&mut game, &mut splashed, &strike, 76, 25.0, &mut first);
+        let mut second = Vec::new();
+        splash(&mut game, &mut splashed, &strike, 76, 25.0, &mut second);
+        assert_eq!((damage_to(&first, 1), damage_to(&second, 1)), (76, 0));
+    }
+}

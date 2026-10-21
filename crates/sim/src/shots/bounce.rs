@@ -263,3 +263,38 @@ fn unsettle(terrain: &Terrain, ball: &mut Ball, tick: u32) {
         offset: tick,
     };
 }
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    const LIVELY: Bounce = Bounce {
+        restitution: 0.5,
+        friction: 0.8,
+        rest_speed: 40.0,
+        fuse: 6144,
+        max_bounces: 16,
+    };
+
+    fn close(a: Vec2, b: Vec2) -> bool {
+        a.distance(b) < 1e-9
+    }
+
+    #[test]
+    fn a_bounce_reverses_and_damps_the_speed_into_the_ground_and_slows_the_rest() {
+        let up = Vec2::new(0.0, -1.0);
+        assert!(close(reflect(Vec2::new(100.0, 200.0), up, &LIVELY), Vec2::new(80.0, -100.0)));
+        // A normal facing the wrong way bounces it straight back.
+        assert!(close(reflect(Vec2::new(0.0, 200.0), Vec2::new(0.0, 1.0), &LIVELY), Vec2::new(0.0, -100.0)));
+    }
+
+    #[test]
+    fn the_ground_faces_away_from_its_solid_pixels() {
+        let flat = Terrain::from_fn(100, 100, |_, y| y >= 50).unwrap();
+        assert!(close(surface_normal(&flat, Vec2::new(40.5, 50.5)), Vec2::new(0.0, -1.0)));
+        let wall = Terrain::from_fn(100, 100, |x, _| x >= 50).unwrap();
+        assert!(close(surface_normal(&wall, Vec2::new(50.5, 40.5)), Vec2::new(-1.0, 0.0)));
+    }
+}
