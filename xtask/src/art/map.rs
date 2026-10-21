@@ -7,7 +7,7 @@ use anyhow::{Context as _, bail, ensure};
 use lobshot_assets::{MapInfo, background_path, map_path, mask_path, terrain_path, to_ron};
 use lobshot_sim::{
     base::{Res, Void},
-    game::MobileKind,
+    game::{MobileKind, check_spawn_spacing},
     movement::{Footing, Landing, settle},
     terrain::Terrain,
     tuning::TILT_SEARCH_PX,
@@ -130,18 +130,8 @@ pub fn template_path(dir: &Path, variant: &str) -> Res<PathBuf> {
 /// of a roof that runs off the top of the map.
 pub fn check_spawns(mask: &Terrain, spawns: &[i32]) -> Void {
     ensure!(!spawns.is_empty(), "no spawns");
-    let reach = |pick: fn(&lobshot_sim::tuning::Rect) -> f64| MobileKind::ALL.iter().map(|mobile| pick(&mobile.tuning().hitbox.value)).fold(0.0, f64::max);
-    let behind = reach(|hitbox| -hitbox.x);
-    let ahead = reach(|hitbox| hitbox.x + hitbox.w);
-    let height = reach(|hitbox| -hitbox.y);
-    let wide = behind.max(ahead);
-    let (wide, height) = (to_px(wide)?, to_px(height)?);
-
-    let mut sorted = spawns.to_vec();
-    sorted.sort_unstable();
-    for pair in sorted.windows(2) {
-        ensure!(pair[1] - pair[0] >= 2 * wide, "spawns {} and {} are closer than two mobiles", pair[0], pair[1]);
-    }
+    check_spawn_spacing(spawns)?;
+    let (wide, height) = MobileKind::spawn_room();
 
     let search = TILT_SEARCH_PX.value;
     for &x in spawns {
@@ -162,14 +152,6 @@ pub fn check_spawns(mask: &Terrain, spawns: &[i32]) -> Void {
         }
     }
     Ok(())
-}
-
-fn to_px(length: f64) -> Res<i32> {
-    ensure!((0.0..1000.0).contains(&length), "a hitbox reaches {length} px");
-    // In range, checked above.
-    #[allow(clippy::cast_possible_truncation)]
-    let px = length.ceil() as i32;
-    Ok(px)
 }
 
 #[cfg(test)]

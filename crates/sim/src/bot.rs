@@ -110,7 +110,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         best = boosted;
     }
     if let Some(slot) = best.item {
-        events.push(Event::UseItem { seat, slot });
+        events.push(Event::UseItem { seat, slot, time: Centis(0) });
     }
 
     let range = best.shot.tuning(me.tuning()).aim.value;
@@ -252,7 +252,7 @@ impl Candidate {
     /// Fires `shot` (after the item at `item`, if any) in a scratch copy of `game` and values it.
     fn fired(game: &Game, seat: u8, item: Option<u8>, shot: Shot, aim: i16, power: u8, proxy: f64) -> Self {
         let mut scratch = game.clone();
-        let used = item.is_none_or(|slot| scratch.apply(Event::UseItem { seat, slot }).is_ok());
+        let used = item.is_none_or(|slot| scratch.apply(Event::UseItem { seat, slot, time: Centis(0) }).is_ok());
         let effects = Power::from_twentieths(power)
             .ok()
             .filter(|_| used)
@@ -304,7 +304,7 @@ fn heal(game: &Game, seat: u8) -> Option<Event> {
     [Item::BigHeal, Item::Heal]
         .into_iter()
         .find_map(|wanted| slot_of(game, me, seat, wanted))
-        .map(|slot| Event::UseItem { seat, slot })
+        .map(|slot| Event::UseItem { seat, slot, time: Centis(0) })
 }
 
 /// Dual (for S1 or S2) or Power Up on a strong shot, if the bot carries one and it makes the shot
@@ -443,7 +443,7 @@ mod unit {
         game.players[0].hp = 300;
         let events = plan(&game, 0, Level::Hard, 7).unwrap();
         let big_heal = (0_u8..).zip(LOADOUT.positions()).find(|(_, item)| *item == Some(Item::BigHeal)).unwrap().0;
-        assert_eq!(events[0], Event::UseItem { seat: 0, slot: big_heal });
+        assert_eq!(events[0], Event::UseItem { seat: 0, slot: big_heal, time: Centis(0) });
         let effects = play(&mut game, events);
         assert!(effects.iter().any(|e| matches!(e, Effect::Healed { seat: 0, .. })), "{effects:?}");
     }

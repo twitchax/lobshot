@@ -248,7 +248,7 @@ impl Room {
             Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
             Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time },
             Action::Pass => Event::Pass { seat, time },
-            Action::Item { slot } => Event::UseItem { seat, slot },
+            Action::Item { slot } => Event::UseItem { seat, slot, time },
             Action::Spin => Event::Spin { seat },
         };
         self.commit(event, now)?;
@@ -309,6 +309,7 @@ impl Room {
             let event = match event {
                 Event::Shoot { seat, shot, aim, power, .. } => Event::Shoot { seat, shot, aim, power, time },
                 Event::Pass { seat, .. } => Event::Pass { seat, time },
+                Event::UseItem { seat, slot, .. } => Event::UseItem { seat, slot, time },
                 other => other,
             };
             if let Err(error) = self.commit(event, now) {

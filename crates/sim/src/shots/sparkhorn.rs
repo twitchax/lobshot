@@ -91,7 +91,7 @@ mod unit {
             testing::{damage_to, direct_hit_power, duel_of, game_of, seat, shoot},
         },
         items::{Item, Loadout},
-        units::{Facing, Power},
+        units::{Centis, Facing, Power},
     };
 
     fn bolts(effects: &[Effect]) -> Vec<&Effect> {
@@ -123,7 +123,7 @@ mod unit {
         let mut game = duel_of(MobileKind::Sparkhorn, MobileKind::Coilback, 800);
         let power = direct_hit_power(&game, 30);
         game.players[0].items = Loadout::new(&[Item::Dual]).unwrap().positions();
-        game.apply(Event::UseItem { seat: 0, slot: 0 }).unwrap();
+        game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(0) }).unwrap();
         let effects = shoot(&mut game, 0, Shot::S1, 30, power);
         assert_eq!(bolts(&effects).len(), 2, "two balls, two bolts: {effects:?}");
         let splashes = effects.iter().filter(|e| matches!(e, Effect::Damaged { seat: 1, amount: 76 })).count();

@@ -207,7 +207,7 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
             Action::Walk { facing, steps } => Event::Walk { seat, facing, steps },
             Action::Shoot { shot, aim, power } => Event::Shoot { seat, shot, aim, power, time: centis },
             Action::Pass => Event::Pass { seat, time: centis },
-            Action::Item { slot } => Event::UseItem { seat, slot },
+            Action::Item { slot } => Event::UseItem { seat, slot, time: centis },
         };
         decide(&mut game, event, &mut played);
     }
@@ -236,10 +236,11 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
     };
     info!("SearchBot plays {events:?}");
     for event in events {
-        let event = if let Event::Shoot { seat, shot, aim, power, .. } = event {
-            Event::Shoot { seat, shot, aim, power, time: centis }
-        } else {
-            event
+        // Stamped as the server would: the time the bot's turn took.
+        let event = match event {
+            Event::Shoot { seat, shot, aim, power, .. } => Event::Shoot { seat, shot, aim, power, time: centis },
+            Event::UseItem { seat, slot, .. } => Event::UseItem { seat, slot, time: centis },
+            other => other,
         };
         decide(&mut game, event, &mut played);
     }

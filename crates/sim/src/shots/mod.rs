@@ -227,7 +227,7 @@ mod unit {
     fn armed(item: Item, distance: i32) -> crate::game::Game {
         let mut game = duel(distance);
         game.players[0].items = Loadout::new(&[item]).unwrap().positions();
-        game.apply(Event::UseItem { seat: 0, slot: 0 }).unwrap();
+        game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(0) }).unwrap();
         game
     }
 

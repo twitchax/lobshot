@@ -329,7 +329,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             continue;
         }
         if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {
-            apply(&mut game, Event::UseItem { seat, slot });
+            apply(&mut game, Event::UseItem { seat, slot, time: Centis(0) });
             if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
                 continue;
             }

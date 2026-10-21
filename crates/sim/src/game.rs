@@ -61,6 +61,20 @@ impl MobileKind {
     /// Every mobile, in a fixed order.
     pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
 
+    /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
+    /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
+    /// tallest of every mobile, so a map's spawns fit whatever each player picks.
+    #[must_use]
+    pub fn spawn_room() -> (i32, i32) {
+        let most = |pick: fn(&crate::tuning::Rect) -> f64| Self::ALL.iter().map(|mobile| pick(&mobile.tuning().hitbox.value)).fold(0.0, f64::max);
+        let wide = most(|hitbox| (-hitbox.x).max(hitbox.x + hitbox.w));
+        let tall = most(|hitbox| -hitbox.y);
+        // Hitboxes are tens of pixels, far inside i32.
+        #[allow(clippy::cast_possible_truncation)]
+        let room = (wide.ceil() as i32, tall.ceil() as i32);
+        room
+    }
+
     #[must_use]
     pub fn tuning(self) -> &'static MobileTuning {
         match self {
@@ -158,6 +172,22 @@ pub struct SuddenDeath {
     pub turn: u32,
 }
 
+/// Checks spawn columns sit far enough apart for two mobiles of any kind side by side, facing
+/// either way (`MobileKind::spawn_room`).
+///
+/// # Errors
+///
+/// Names the first pair that is too close.
+pub fn check_spawn_spacing(spawns: &[i32]) -> Void {
+    let (wide, _) = MobileKind::spawn_room();
+    let mut sorted = spawns.to_vec();
+    sorted.sort_unstable();
+    for pair in sorted.windows(2) {
+        ensure!(pair[1] - pair[0] >= 2 * wide, "spawns {} and {} are closer than two mobiles", pair[0], pair[1]);
+    }
+    Ok(())
+}
+
 /// Everything a game starts from. The server rolls the random parts (`order`, `wind`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Setup {
@@ -189,8 +219,9 @@ pub enum Event {
     /// The server rolled the forecast it owed (`Roll::Weather`).
     Weather(Forecast),
     /// The active player uses the item at `slot` in their loadout (one item a turn). Its effect
-    /// is immediate (a heal, the wind) or rides on the turn's shot (Dual, Power Up).
-    UseItem { seat: u8, slot: u8 },
+    /// is immediate (a heal, the wind) or rides on the turn's shot (Dual, Power Up). `time` is the
+    /// turn time so far, as the server measured it: an item that ends the turn (Swap) is charged it.
+    UseItem { seat: u8, slot: u8, time: Centis },
     /// A dead player spins their slot machine; the server then owes `Roll::Drop`.
     Spin { seat: u8 },
     /// The server rolled what the slot machine dropped (`Roll::Drop`).
@@ -794,11 +825,10 @@ impl Game {
                 self.ensure_turn(seat)?;
                 self.end_turn(seat, Ending::Pass, time, &mut effects);
             }
-            Event::UseItem { seat, slot } => {
+            Event::UseItem { seat, slot, time } => {
                 self.check_item(seat, slot)?;
                 if items::use_item(self, seat, slot, &mut effects) {
-                    // UseItem carries no turn time, so a turn an item ends is charged none.
-                    self.end_turn(seat, Ending::Item, Centis(0), &mut effects);
+                    self.end_turn(seat, Ending::Item, time, &mut effects);
                 }
             }
             Event::Spin { seat } => {
@@ -1444,6 +1474,15 @@ mod unit {
     }
 
     #[test]
+    fn spawns_leave_room_for_the_widest_mobile_facing_either_way() {
+        let (wide, tall) = MobileKind::spawn_room();
+        // Lanternwing's 66 px body is the widest, reaching 33 px from its feet either way.
+        assert!(wide >= 33 && tall >= 58, "{wide} x {tall}");
+        assert!(check_spawn_spacing(&[100, 100 + 2 * wide, 900]).is_ok());
+        assert!(check_spawn_spacing(&[900, 100, 99 + 2 * wide]).is_err(), "order doesn't matter");
+    }
+
+    #[test]
     fn rejects_bad_setups() {
         let mut setup = duel_setup(800);
         setup.order = vec![0, 0];
@@ -1656,7 +1695,7 @@ mod unit {
         for item in [Item::Dual, Item::DualPlus] {
             let mut game = duel(800);
             game.players[0].items = Loadout::new(&[item]).unwrap().positions();
-            game.apply(Event::UseItem { seat: 0, slot: 0 }).unwrap();
+            game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(0) }).unwrap();
             assert!(!game.can_shoot(0, Shot::Ss), "{item:?}");
             assert_eq!(game.ss_state(0).unwrap(), SsState::Armed(item));
             assert!(game.can_shoot(0, Shot::S2));
@@ -1706,7 +1745,7 @@ mod unit {
         assert!(started < turn, "it begins before the next turn does");
         assert_eq!(game.sudden_death(), Some(SuddenDeathKind::BigBomb));
         assert!(!game.can_use_item(0, 0), "items are off");
-        assert!(game.apply(Event::UseItem { seat: 0, slot: 0 }).is_err());
+        assert!(game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(0) }).is_err());
     }
 
     #[test]

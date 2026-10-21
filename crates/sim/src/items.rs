@@ -330,7 +330,7 @@ mod unit {
     }
 
     fn use_slot(game: &mut Game, slot: u8) -> Vec<Effect> {
-        game.apply(Event::UseItem { seat: 0, slot }).unwrap()
+        game.apply(Event::UseItem { seat: 0, slot, time: Centis(0) }).unwrap()
     }
 
     #[test]
@@ -343,7 +343,7 @@ mod unit {
         assert_eq!(game.players()[0].items[0], None, "spent");
         assert_eq!(game.players()[0].armed, Some(Item::Heal));
         assert!(!game.can_use_item(0, 1), "one a turn");
-        assert!(game.apply(Event::UseItem { seat: 0, slot: 1 }).is_err());
+        assert!(game.apply(Event::UseItem { seat: 0, slot: 1, time: Centis(0) }).is_err());
         pass(&mut game, 0);
         assert_eq!(game.players()[0].armed, None, "the turn's item clears with the turn");
         // A pass with Heal: base 520 + pass 200 + Heal 100 + Armor's surcharge 40.
@@ -407,6 +407,18 @@ mod unit {
 
         let game = carrying(duel(800), &[Item::Swap]);
         assert!(!game.can_use_item(0, 0), "no teammate to swap with");
+    }
+
+    #[test]
+    fn a_swap_pays_for_the_time_its_turn_took() {
+        let mut game = game_of(vec![
+            seat(Team::A, MobileKind::Coilback, 300, Facing::Right),
+            seat(Team::B, MobileKind::Coilback, 1100, Facing::Left),
+            seat(Team::A, MobileKind::Coilback, 700, Facing::Right),
+        ]);
+        game.players[0].items = Loadout::new(&[Item::Swap]).unwrap().positions();
+        game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(1250) }).unwrap();
+        assert_eq!(game.players()[0].clock.delay, 520 + 50 + 40 + 125, "12.5 s at 10 a second");
     }
 
     #[test]

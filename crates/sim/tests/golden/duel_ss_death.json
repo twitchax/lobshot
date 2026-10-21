@@ -88,7 +88,8 @@
     {
       "UseItem": {
         "seat": 0,
-        "slot": 0
+        "slot": 0,
+        "time": 0
       }
     },
     {
@@ -110,7 +111,8 @@
     {
       "UseItem": {
         "seat": 1,
-        "slot": 1
+        "slot": 1,
+        "time": 0
       }
     },
     {
@@ -138,7 +140,8 @@
     {
       "UseItem": {
         "seat": 0,
-        "slot": 1
+        "slot": 1,
+        "time": 0
       }
     },
     {
@@ -160,7 +163,8 @@
     {
       "UseItem": {
         "seat": 1,
-        "slot": 2
+        "slot": 2,
+        "time": 0
       }
     },
     {
@@ -204,7 +208,8 @@
     {
       "UseItem": {
         "seat": 0,
-        "slot": 2
+        "slot": 2,
+        "time": 0
       }
     },
     {
@@ -245,7 +250,8 @@
     {
       "UseItem": {
         "seat": 0,
-        "slot": 3
+        "slot": 3,
+        "time": 0
       }
     },
     {

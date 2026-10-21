@@ -131,7 +131,7 @@ mod unit {
     use tempfile::TempDir;
 
     use lobshot_sim::{
-        game::{Game, MAX_SEATS, MobileKind, Seat, Setup, Team},
+        game::{Game, MAX_SEATS, MobileKind, Seat, Setup, Team, check_spawn_spacing},
         items::Loadout,
         units::{Facing, Wind},
     };
@@ -157,21 +157,11 @@ mod unit {
         let maps = Maps::new(Path::new("no-such-dist"));
         let [arena] = maps.arenas(FLAT).unwrap().try_into().unwrap();
         assert_eq!(arena.spawns.len(), MAX_SEATS);
-        // `cargo xtask art`'s rule for drawn maps' spawns: whichever way two neighbors face, there
-        // is room for both.
-        let reach = MobileKind::ALL
-            .iter()
-            .map(|mobile| {
-                let hitbox = mobile.tuning().hitbox.value;
-                (-hitbox.x).max(hitbox.x + hitbox.w)
-            })
-            .fold(0.0, f64::max);
-        let mut spawns = arena.spawns.clone();
-        spawns.sort_unstable();
-        for pair in spawns.windows(2) {
-            assert!(f64::from(pair[1] - pair[0]) >= 2.0 * reach, "spawns {pair:?} are closer than two mobiles");
-        }
-        assert!(f64::from(spawns[0]) >= reach && f64::from(spawns[7]) + reach <= f64::from(arena.width), "{spawns:?}");
+        // The rule `cargo xtask art` holds drawn maps' spawns to.
+        check_spawn_spacing(&arena.spawns).unwrap();
+        let (reach, _) = MobileKind::spawn_room();
+        let (first, last) = (arena.spawns.iter().min().unwrap(), arena.spawns.iter().max().unwrap());
+        assert!(first - reach >= 0 && last + reach <= i32::try_from(arena.width).unwrap(), "{:?}", arena.spawns);
 
         for mobile in MobileKind::ALL {
             let seats = (0..).zip(&arena.spawns).map(|(i, &spawn_x)| Seat {

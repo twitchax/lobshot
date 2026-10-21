@@ -358,7 +358,7 @@ mod unit {
     #[test]
     fn what_no_one_fired_scores_for_no_one() {
         let game = two_on_two();
-        let sacrifice = scored(&game, Event::UseItem { seat: 0, slot: 0 }, &[Effect::Damaged { seat: 0, amount: 80 }]);
+        let sacrifice = scored(&game, Event::UseItem { seat: 0, slot: 0, time: Centis(0) }, &[Effect::Damaged { seat: 0, amount: 80 }]);
         let walk = scored(&game, Event::Walk { seat: 0, facing: Facing::Left, steps: 5 }, &[Effect::Died { seat: 0, death: Death::Bunged }]);
         assert!(sacrifice.tallies().iter().chain(walk.tallies()).all(|tally| *tally == Tally::default()));
     }
