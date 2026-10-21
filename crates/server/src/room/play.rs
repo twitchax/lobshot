@@ -137,7 +137,11 @@ impl Room {
             );
         }
 
-        let arena = self.maps.arena(&self.options.map)?;
+        // Each game rolls which of the map's variants it plays on; with one, there's nothing to roll.
+        let mut arenas = self.maps.arenas(&self.options.map)?;
+        ensure!(!arenas.is_empty(), "{} has no variants", self.options.map);
+        let pick = if arenas.len() > 1 { self.rng.random_range(0..arenas.len()) } else { 0 };
+        let arena = arenas.swap_remove(pick);
         ensure!(arena.spawns.len() >= seated.len(), "{} has spawns for only {} players", self.options.map, arena.spawns.len());
         let mut spawns = arena.spawns;
         spawns.shuffle(&mut self.rng);
@@ -448,7 +452,7 @@ mod unit {
     use super::*;
     use crate::{
         room::{ConnId, Timing, testing::Harness},
-        tests::{Replica, write_map},
+        tests::{Replica, write_map, write_map_variants},
     };
 
     fn options(team_size: u8) -> RoomOptions {
@@ -636,7 +640,7 @@ mod unit {
     }
 
     #[test]
-    fn drawn_maps_play_variant_a_pinned_by_its_mask_hash() {
+    fn drawn_maps_play_pinned_by_their_mask_hash() {
         let dist = TempDir::new().unwrap();
         let mask = Terrain::from_fn(1000, 600, |_, y| y >= 400).unwrap();
         write_map(dist.path(), "pond", &mask, &[100, 900]).unwrap();
@@ -661,6 +665,29 @@ mod unit {
         let mut spawns: Vec<(i32, Facing)> = setup.seats.iter().map(|seat| (seat.spawn_x, seat.facing)).collect();
         spawns.sort_by_key(|&(x, _)| x);
         assert_eq!(spawns, [(100, Facing::Right), (900, Facing::Left)]);
+    }
+
+    #[test]
+    fn each_game_rolls_which_variant_it_plays() {
+        let dist = TempDir::new().unwrap();
+        let (low, high) = (Terrain::from_fn(1000, 600, |_, y| y >= 400).unwrap(), Terrain::from_fn(1000, 600, |_, y| y >= 300).unwrap());
+        write_map_variants(dist.path(), "pond", &[("A", &low, &[100, 900]), ("B", &high, &[100, 900])]).unwrap();
+        let mut h = Harness::with_dist(dist.path());
+        h.join(1, "A");
+        h.join(2, "B");
+        h.send(1, ClientMsg::Configure(RoomOptions { map: "pond".into(), ..options(1) }));
+        let mut played = HashSet::new();
+        for _ in 0..20 {
+            h.send(1, ClientMsg::Ready(true));
+            h.send(2, ClientMsg::Ready(true));
+            h.send(1, ClientMsg::Start);
+            assert_eq!(h.rejections(1), Vec::<String>::new());
+            let MapRef::Asset { variant, mask_hash, .. } = log(&h).setup.map else { panic!("a drawn map") };
+            assert_eq!(mask_hash, if variant == "A" { low.mask_hash() } else { high.mask_hash() });
+            played.insert(variant);
+            h.room.finish(h.now);
+        }
+        assert_eq!(played, HashSet::from(["A".to_owned(), "B".to_owned()]));
     }
 
     #[test]

@@ -44,18 +44,32 @@ pub fn write_bundle(dist: &Path) -> Void {
 ///
 /// Fails when the files cannot be written.
 pub fn write_map(dist: &Path, name: &str, mask: &Terrain, spawns: &[i32]) -> Void {
+    write_map_variants(dist, name, &[("A", mask, spawns)])
+}
+
+/// Like `write_map`, with each variant's id, mask and spawns.
+///
+/// # Errors
+///
+/// Fails if a file can't be written.
+pub fn write_map_variants(dist: &Path, name: &str, variants: &[(&str, &Terrain, &[i32])]) -> Void {
     let assets = dist.join("assets");
     let info = MapInfo {
         name: name.to_owned(),
         title: name.to_owned(),
-        variants: vec![MapVariant {
-            id: "A".to_owned(),
-            spawns: spawns.to_vec(),
-            size: Some((mask.width(), mask.height())),
-            mask_hash: Some(mask.mask_hash()),
-        }],
+        variants: variants
+            .iter()
+            .map(|&(id, mask, spawns)| MapVariant {
+                id: id.to_owned(),
+                spawns: spawns.to_vec(),
+                size: Some((mask.width(), mask.height())),
+                mask_hash: Some(mask.mask_hash()),
+            })
+            .collect(),
     };
-    for (path, bytes) in [(map_path(name), to_ron(&info)?.into_bytes()), (mask_path(name, "A"), mask.encode_mask())] {
+    let mut files = vec![(map_path(name), to_ron(&info)?.into_bytes())];
+    files.extend(variants.iter().map(|&(id, mask, _)| (mask_path(name, id), mask.encode_mask())));
+    for (path, bytes) in files {
         let path = assets.join(path);
         std::fs::create_dir_all(path.parent().context("an asset path has a parent")?)?;
         std::fs::write(path, bytes)?;

@@ -26,9 +26,6 @@ const FLAT_MAP: MapRef = MapRef::Flat {
 };
 const FLAT_SPAWNS: [i32; 8] = [200, 1400, 500, 1100, 350, 1250, 650, 950];
 
-/// Drawn maps are played on this variant until rooms can pick one.
-const VARIANT: &str = "A";
-
 /// A map ready to seat a game on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Arena {
@@ -56,37 +53,42 @@ impl Maps {
         }
     }
 
-    /// The map a room named, ready to seat a game on.
+    /// The map a room named, one arena per variant (A, B), ready to seat a game on; a game is
+    /// played on one of them, rolled at the start.
     ///
     /// # Errors
     ///
     /// Fails on a name that isn't a map, or a drawn map whose generated manifest is missing.
-    pub fn arena(&self, name: &str) -> Res<Arena> {
+    pub fn arenas(&self, name: &str) -> Res<Vec<Arena>> {
         if name == FLAT {
-            return Ok(Arena {
+            return Ok(vec![Arena {
                 map: FLAT_MAP,
                 width: FLAT_WIDTH,
                 spawns: FLAT_SPAWNS.to_vec(),
-            });
+            }]);
         }
         check_asset_name(name, "map")?;
         let path = self.root.join(map_path(name));
         let text = std::fs::read_to_string(&path).with_context(|| format!("there is no map {name:?}"))?;
         let info = MapInfo::from_ron(&text).with_context(|| format!("reading {}", path.display()))?;
-        let variant = info.variant(VARIANT).with_context(|| format!("map {name} has no variant {VARIANT}"))?;
-        // The hand-written source manifests lack these; only `cargo xtask art`'s output has them.
-        let (Some((width, _)), Some(mask_hash)) = (variant.size, variant.mask_hash) else {
-            anyhow::bail!("map {name}'s manifest is not generated: run `cargo xtask art`");
-        };
-        Ok(Arena {
-            map: MapRef::Asset {
-                name: name.to_owned(),
-                variant: VARIANT.to_owned(),
-                mask_hash,
-            },
-            width,
-            spawns: variant.spawns.clone(),
-        })
+        info.variants
+            .iter()
+            .map(|variant| {
+                // The hand-written source manifests lack these; only `cargo xtask art`'s output has them.
+                let (Some((width, _)), Some(mask_hash)) = (variant.size, variant.mask_hash) else {
+                    anyhow::bail!("map {name}'s manifest is not generated: run `cargo xtask art`");
+                };
+                Ok(Arena {
+                    map: MapRef::Asset {
+                        name: name.to_owned(),
+                        variant: variant.id.clone(),
+                        mask_hash,
+                    },
+                    width,
+                    spawns: variant.spawns.clone(),
+                })
+            })
+            .collect()
     }
 }
 
@@ -135,7 +137,7 @@ mod unit {
     };
 
     use super::*;
-    use crate::tests::write_map;
+    use crate::tests::write_map_variants;
 
     fn pond() -> Terrain {
         Terrain::from_fn(400, 300, |_, y| y >= 200).unwrap()
@@ -144,7 +146,7 @@ mod unit {
     #[test]
     fn flat_is_built_in() {
         let maps = Maps::new(Path::new("no-such-dist"));
-        let arena = maps.arena(FLAT).unwrap();
+        let [arena] = maps.arenas(FLAT).unwrap().try_into().unwrap();
         assert_eq!(arena.map, MapRef::Flat { width: 1600, height: 900, ground: 700 });
         assert_eq!(arena.width, 1600);
         assert_eq!(arena.spawns, [200, 1400, 500, 1100, 350, 1250, 650, 950]);
@@ -153,7 +155,7 @@ mod unit {
     #[test]
     fn flat_fits_eight_of_any_mobile() {
         let maps = Maps::new(Path::new("no-such-dist"));
-        let arena = maps.arena(FLAT).unwrap();
+        let [arena] = maps.arenas(FLAT).unwrap().try_into().unwrap();
         assert_eq!(arena.spawns.len(), MAX_SEATS);
         // `cargo xtask art`'s rule for drawn maps' spawns: whichever way two neighbors face, there
         // is room for both.
@@ -205,12 +207,22 @@ mod unit {
     }
 
     #[test]
-    fn drawn_maps_load_variant_a_and_its_mask() {
+    fn drawn_maps_load_every_variant_and_its_mask() {
         let dist = TempDir::new().unwrap();
-        write_map(dist.path(), "pond", &pond(), &[50, 350]).unwrap();
+        let island = Terrain::from_fn(400, 300, |x, y| y >= 150 && (100..300).contains(&x)).unwrap();
+        write_map_variants(dist.path(), "pond", &[("A", &pond(), &[50, 350]), ("B", &island, &[150, 250])]).unwrap();
         let maps = Maps::new(dist.path());
 
-        let arena = maps.arena("pond").unwrap();
+        let [arena, b] = maps.arenas("pond").unwrap().try_into().unwrap();
+        assert_eq!(
+            b.map,
+            MapRef::Asset {
+                name: "pond".into(),
+                variant: "B".into(),
+                mask_hash: island.mask_hash()
+            }
+        );
+        assert_eq!((b.spawns, b.map.terrain(&maps).unwrap()), (vec![150, 250], island));
         assert_eq!(
             arena,
             Arena {
@@ -234,12 +246,12 @@ mod unit {
     fn missing_or_ungenerated_maps_are_refused() {
         let dist = TempDir::new().unwrap();
         let maps = Maps::new(dist.path());
-        assert!(format!("{:#}", maps.arena("tidewall").unwrap_err()).contains("no map"));
+        assert!(format!("{:#}", maps.arenas("tidewall").unwrap_err()).contains("no map"));
 
         let source = dist.path().join("assets").join(map_path("raw"));
         std::fs::create_dir_all(source.parent().unwrap()).unwrap();
         std::fs::write(&source, r#"MapInfo(name: "raw", title: "Raw", variants: [(id: "A", spawns: [1, 2])])"#).unwrap();
-        assert!(format!("{:#}", maps.arena("raw").unwrap_err()).contains("cargo xtask art"));
+        assert!(format!("{:#}", maps.arenas("raw").unwrap_err()).contains("cargo xtask art"));
         assert!(maps.mask("raw", "A").is_err());
     }
 
@@ -247,7 +259,7 @@ mod unit {
     fn names_never_leave_the_assets_directory() {
         let maps = Maps::new(Path::new("dist"));
         for name in ["", "..", "../secret", "a/b", "a\\b", "x.ron", &"long".repeat(9)] {
-            assert!(maps.arena(name).is_err(), "{name:?}");
+            assert!(maps.arenas(name).is_err(), "{name:?}");
             assert!(maps.mask(name, "A").is_err(), "{name:?}");
         }
         assert!(maps.mask("pond", "../A").is_err());

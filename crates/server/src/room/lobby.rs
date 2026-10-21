@@ -52,7 +52,7 @@ impl Room {
         self.ensure_lobby()?;
         options.validate()?;
         // Refuse a map that can't be played now rather than at `Start`.
-        let spawns = self.maps.arena(&options.map)?.spawns.len();
+        let spawns = self.maps.arenas(&options.map)?.iter().map(|arena| arena.spawns.len()).min().unwrap_or(0);
         let players = 2 * usize::from(options.team_size);
         ensure!(spawns >= players, "{} has spawns for only {spawns} players, not {players}", options.map);
         self.options = options;
