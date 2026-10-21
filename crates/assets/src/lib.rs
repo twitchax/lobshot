@@ -9,7 +9,7 @@
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
 
-use lobshot_sim::{base::Res, game::MobileKind};
+use lobshot_sim::{base::Res, drops::DropKind, game::MobileKind, items::Item};
 
 /// Rendered images have this many pixels per world pixel.
 pub const ART_SCALE: f64 = 2.0;
@@ -64,6 +64,25 @@ pub fn terrain_path(map: &str, variant: &str) -> String {
 #[must_use]
 pub fn mask_path(map: &str, variant: &str) -> String {
     format!("maps/{map}/{variant}/mask.bin")
+}
+
+/// An item's file name, from its player-facing name (`Dual+` is `dual_plus`, `Power Up` is
+/// `power_up`).
+#[must_use]
+pub fn item_slug(item: Item) -> String {
+    item.name().to_lowercase().replace('+', "_plus").replace(' ', "_")
+}
+
+/// An item's icon: square for a one-slot item, twice as wide for a two-slot one.
+#[must_use]
+pub fn item_path(item: Item) -> String {
+    format!("items/{}.png", item_slug(item))
+}
+
+/// A slot-machine drop's sprite, drawn as it falls (`drops/dynamite.png`).
+#[must_use]
+pub fn drop_path(drop: DropKind) -> String {
+    format!("drops/{}.png", format!("{drop:?}").to_lowercase())
 }
 
 /// A sound effect: one CC0 Ogg Vorbis file each, copied unchanged from `assets/sounds/`, whose
@@ -265,6 +284,17 @@ mod unit {
         assert_eq!(mask_path("tidewall", "A"), "maps/tidewall/A/mask.bin");
         assert_eq!(rider_path("pip"), "riders/pip.png");
         assert_eq!(sound_path(Sound::Blast), "sounds/blast.ogg");
+        assert_eq!(item_path(Item::DualPlus), "items/dual_plus.png");
+        assert_eq!(item_path(Item::BigHeal), "items/big_heal.png");
+        assert_eq!(drop_path(DropKind::Dynamite), "drops/dynamite.png");
+    }
+
+    #[test]
+    fn every_item_and_drop_has_its_own_file() {
+        let mut paths: Vec<String> = Item::ALL.iter().map(|&item| item_path(item)).chain(DropKind::ALL.iter().map(|&drop| drop_path(drop))).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), Item::ALL.len() + DropKind::ALL.len());
     }
 
     #[test]
