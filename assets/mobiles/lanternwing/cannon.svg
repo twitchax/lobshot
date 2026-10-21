@@ -1,40 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="42" height="22" viewBox="-9 -11 42 22">
-  <!-- Coilback bell-mortar. Origin = pivot (ball joint center); drawn at aim 0 (pointing +x).
-       Muzzle = (28.8, 0). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="26" viewBox="-8 -14 40 26">
+  <!-- Lanternwing's lantern cannon. Origin = pivot (ball joint center); drawn at aim 0 (pointing
+       +x). Muzzle = (27.6, 0), the lens. -->
   <defs>
-    <!-- Outline: the silhouette's alpha blurred, then thresholded low, grows it by about 1.3 units
-         with round corners (feMorphology's square kernel left square ones at sharp joins), and is
-         filled dark behind the art. -->
     <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
       <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
       <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
       <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
       <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <path id="barrel" d="M 3.5,-5 L 19,-4.2 C 22.5,-4.2 24.5,-7.4 27.6,-8 L 27.6,8 C 24.5,7.4 22.5,4.2 19,4.2 L 3.5,5 Z"/>
-    <clipPath id="barrelClip"><use href="#barrel"/></clipPath>
+    <rect id="glass" x="10" y="-5" width="14" height="10" rx="3"/>
+    <clipPath id="glassClip"><use href="#glass"/></clipPath>
   </defs>
   <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
-    <use href="#barrel" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
-    <g clip-path="url(#barrelClip)">
-      <path d="M 0,1.4 H 19 C 22.5,1.4 24.5,2 28,2.4 V 10 H 0 Z" fill="#b9822c"/>
-      <path d="M 0,3.6 H 19 C 22.5,3.4 24.5,5.6 28,6 V 10 H 0 Z" fill="#8a5a22"/>
-      <path d="M 4.5,-3 L 18.6,-2.4 C 21.6,-2.4 23.4,-4.6 26.4,-5.6" stroke="#fff1a8" stroke-width="1.2" fill="none"/>
+    <!-- carry ring -->
+    <path d="M 13.4,-5.6 C 13.4,-10.4 20.6,-10.4 20.6,-5.6" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M 13.4,-5.6 C 13.4,-10.4 20.6,-10.4 20.6,-5.6" stroke="#d9824a" stroke-width="1.2" fill="none"/>
+    <!-- neck -->
+    <rect x="3" y="-2.4" width="7" height="4.8" fill="#a85a32" stroke="#2a1a2e" stroke-width="0.8"/>
+    <rect x="3" y="-2.4" width="7" height="1.4" fill="#ffc08a"/>
+    <!-- glowing glass and its cage -->
+    <use href="#glass" fill="#ffe98a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#glassClip)">
+      <rect x="8" y="1.6" width="18" height="5" fill="#f7c04a"/>
+      <ellipse cx="17" cy="-0.6" rx="4.6" ry="2.6" fill="#fffbe0"/>
     </g>
-    <!-- bands -->
-    <rect x="8" y="-5.8" width="2.8" height="11.6" rx="0.9" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="0.8"/>
-    <rect x="15.2" y="-5.3" width="2.8" height="10.6" rx="0.9" fill="#2bb3a3" stroke="#2a1a2e" stroke-width="0.8"/>
-    <path d="M 8.4,1.6 H 10.4 V 5.2 H 8.4 Z M 15.6,1.6 H 17.6 V 4.8 H 15.6 Z" fill="#1d7f80"/>
-    <path d="M 8.6,-4.6 V -2 M 15.8,-4.2 V -1.8" stroke="#8be8cf" stroke-width="0.7"/>
-    <!-- bell mouth -->
-    <ellipse cx="27.6" cy="0" rx="2.2" ry="8" fill="#d9a13a" stroke="#2a1a2e" stroke-width="0.9"/>
-    <ellipse cx="28.2" cy="0" rx="1.2" ry="6" fill="#2a1a2e"/>
-    <path d="M 27,-6.6 Q 28.4,-5 28.6,-2.6" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
-    <!-- ball joint with engraved spiral -->
-    <circle r="6.2" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
-    <path d="M 6.2,0 A 6.2 6.2 0 0 1 -6.2,0 A 6.8 4.8 0 0 0 6.2,0 Z" fill="#b9822c"/>
-    <path d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#8a5a22" stroke-width="0.8" fill="none"/>
-    <path d="M -4.4,-2.2 A 5 5 0 0 1 -1.6,-4.8" stroke="#fff8d0" stroke-width="1.1" fill="none"/>
-    <circle cx="22.5" cy="-5.8" r="0.8" fill="#fff8d0"/>
+    <!-- the laser's crystal, glowing inside -->
+    <path d="M 15.4,0 L 17,-3.6 L 18.6,0 L 17,3.4 Z" fill="#f07bb0" stroke="#c9528c" stroke-width="0.5"/>
+    <path d="M 15.9,-0.2 L 17,-2.8 L 17,0.2 Z" fill="#ffd6ea"/>
+    <path d="M 14.6,-5 V 5 M 19.4,-5 V 5" stroke="#2a1a2e" stroke-width="1.8"/>
+    <path d="M 14.6,-5 V 5 M 19.4,-5 V 5" stroke="#a85a32" stroke-width="0.8"/>
+    <!-- back cap and front hood -->
+    <path d="M 10.6,-6.6 H 8 Q 5.6,-6.6 5.6,-3.6 V 3.6 Q 5.6,6.6 8,6.6 H 10.6 Z" fill="#d9824a" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 6.4,2.4 Q 6.4,5.6 8.4,5.6 H 10.6 V 2.4 Z" fill="#a85a32"/>
+    <path d="M 23.4,-6.4 L 26.6,-7.8 V 7.8 L 23.4,6.4 Z" fill="#d9824a" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 23.4,2.6 L 26.6,3.4 V 7.8 L 23.4,6.4 Z" fill="#a85a32"/>
+    <path d="M 24,-5.8 L 26,-6.8" stroke="#ffc08a" stroke-width="0.8"/>
+    <!-- the lens: where the beam leaves -->
+    <ellipse cx="27" cy="0" rx="1.6" ry="6.2" fill="#fffbe0" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="27.4" cy="0" rx="0.7" ry="3.4" fill="#ffe98a"/>
+    <!-- ball joint -->
+    <circle r="5.4" fill="#d9824a" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 5.4,0 A 5.4 5.4 0 0 1 -5.4,0 A 5.9 4.2 0 0 0 5.4,0 Z" fill="#a85a32"/>
+    <circle r="2" fill="#f07bb0" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M -3.8,-2 A 4.4 4.4 0 0 1 -1.4,-4.2" stroke="#ffe0c0" stroke-width="1" fill="none"/>
   </g>
 </svg>

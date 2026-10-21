@@ -136,12 +136,15 @@ mod unit {
     }
 
     /// A wheel is round about its axle, so if the image's center is the pivot, its drawn pixels
-    /// are centered too.
+    /// are centered too. Every mobile's spinning parts, since a wheel off its axle wobbles.
     #[test]
     fn parts_render_pivot_centered() {
-        let rig = load_rig(&sources(), MobileKind::Coilback).unwrap();
-        for part in rig.parts.iter().filter(|part| part.spin) {
-            let path = sources().join("mobiles/coilback").join(&part.file);
+        let spinning = MobileKind::ALL.iter().flat_map(|&mobile| {
+            let rig = load_rig(&sources(), mobile).unwrap();
+            rig.parts.into_iter().filter(|part| part.spin).map(move |part| (mobile, part))
+        });
+        for (mobile, part) in spinning {
+            let path = sources().join("mobiles").join(mobile_slug(mobile)).join(&part.file);
             let pixmap = Svg::load(&path).unwrap().render_centered(ART_SCALE).unwrap();
             let (w, h) = (pixmap.width(), pixmap.height());
             assert!(w % 2 == 0 && h % 2 == 0, "{} is {w}x{h}: an odd side puts the center inside a pixel", part.file);

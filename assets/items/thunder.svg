@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40" viewBox="-40 -20 80 40">
+  <!-- Thunder: a bolt strikes wherever this turn's shot lands. A storm cloud and its bolt. One slot per 40 px of width; origin = the center. -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d">
+        <feFuncA type="linear" slope="14" intercept="-0.25"/>
+      </feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/>
+      <feComposite in2="d" operator="in" result="o"/>
+      <feMerge>
+        <feMergeNode in="o"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="tileClip">
+      <rect x="-38.6" y="-18.6" width="77.2" height="37.2" rx="6"/>
+    </clipPath>
+  </defs>
+  <g filter="url(#ol)">
+    <rect x="-38.6" y="-18.6" width="77.2" height="37.2" rx="6" fill="#4a52b0"/>
+    <g clip-path="url(#tileClip)">
+      <path d="M -38.6,-18.6 H 38.6 V -2 C 20,2 -20,-6 -38.6,0 Z" fill="#7a82e0"/>
+      <rect x="-38.6" y="14.6" width="77.2" height="4" fill="#313889"/>
+      <path d="M -34.6,-16.4 H 34.6" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+    </g>
+  </g>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(4,0)">
+      <path d="M -22,8 L -25,14 M -14,8 L -17,14 M -6,8 L -9,14" stroke="#9ad6ff" stroke-width="1.6"/>
+      <path d="M 7,14.6 L 9,11 L 11,14.2 L 14.6,10.6 L 15.4,14.6 L 19.6,13 L 17,16.4 Z" fill="#fff4b0" stroke="#2a1a2e" stroke-width="0.7"/>
+      <path d="M -24,4 C -28.6,4 -29.6,-2.4 -25,-4 C -26,-10 -19,-13 -15,-9.6 C -12.6,-15.6 -2.6,-15.6 -0.6,-9.6 C 3.6,-12.4 10,-9.6 9,-3.6 C 14,-3 14,4 8,4 Z" fill="#e6e2f6" stroke="#2a1a2e" stroke-width="0.9"/>
+      <path d="M -25,1 C -14,3 -2,3 10,0 C 12,2.6 10.6,4 8,4 H -24 C -26,4 -26.6,2.4 -25,1 Z" fill="#a8a2c8"/>
+      <path d="M -22,-4.6 C -21,-7.6 -18,-8.4 -16,-7" stroke="#ffffff" stroke-width="1.1" fill="none"/>
+      <path d="M 2,-4 L 15,-4 L 10.4,3 L 20,3 L 7.6,16.6 L 10.6,8 L 1,8 Z" fill="#ffe14d" stroke="#2a1a2e" stroke-width="1"/>
+      <path d="M 10.4,3 L 20,3 L 17.6,5.6 L 9.2,5.6 Z M 10.6,8 L 7.6,16.6 L 12,9.4 Z" fill="#e6a419"/>
+      <path d="M 4.4,-2 L 11.6,-2" stroke="#ffffff" stroke-width="1" opacity="0.9"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="-14 -14 28 28">
+  <!-- Bolt: a bolt straight down, which the wind can't move. A token: a navy coin with a gold bolt. Origin = the center. -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d">
+        <feFuncA type="linear" slope="14" intercept="-0.25"/>
+      </feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/>
+      <feComposite in2="d" operator="in" result="o"/>
+      <feMerge>
+        <feMergeNode in="o"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <circle r="12" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
+    <circle r="9.6" fill="#3a4a86" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 9.6,0 A 9.6 9.6 0 0 1 -6,7.5 A 9.6 9.6 0 0 0 9.6,0 Z" fill="#283563"/>
+    <path d="M 6.8,6.8 A 9.6 9.6 0 0 1 -6.8,6.8" stroke="#283563" stroke-width="1.6" fill="none"/>
+    <path d="M -8.4,-3 A 9 9 0 0 1 -3,-8.4" stroke="#a8c4ff" stroke-width="1.4" fill="none"/>
+    <path d="M 1.6,-8 L -5,1 L -0.6,1 L -2.6,8 L 5,-1.4 L 0.6,-1.4 Z" fill="#ffe14d" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -0.6,1 L -2.6,8 L 2,2.4 Z" fill="#e6a419"/>
+  </g>
+</svg>

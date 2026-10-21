@@ -20,10 +20,16 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.25 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.9, "Boomer is very wind-sensitive (WP06); DBR's wind coefficient is 1.395 against Armor's 0.74 (clone, unverified)."),
     move_budget: cited(90, &["OB"]),
-    hitbox: picked(Rect { x: -30.0, y: -58.0, w: 64.0, h: 58.0 }, "Placeholder: Coilback's, until Hookclaw's drawing lands."),
-    ground_probes: picked([-18.0, 18.0], "Placeholder: Coilback's, until Hookclaw's drawing lands."),
-    cannon_pivot: picked((7.0, -64.0), "Placeholder: above Coilback's, so its whole aim range clears the body, until Hookclaw's drawing lands."),
-    barrel_length: picked(28.8, "Placeholder: Coilback's, until Hookclaw's drawing lands."),
+    hitbox: picked(
+        Rect { x: -33.0, y: -54.0, w: 63.0, h: 54.0 },
+        "Hookclaw's drawn jar and crab. The rider, eyestalks and leg tips are cosmetic.",
+    ),
+    ground_probes: picked([-14.0, 24.0], "Hookclaw's drawn hind and front leg tips."),
+    cannon_pivot: picked(
+        (15.0, -40.0),
+        "Hookclaw's drawn claw shoulder, in the jar's mouth: high enough that the claw clears the face at 0 degrees and forward enough that it clears the jar at 90.",
+    ),
+    barrel_length: picked(31.0, "Hookclaw's drawn claw, shoulder to boomerang."),
     s1: ShotTuning {
         delay: cited(250, &["CR-mob", "SW-mds"]),
         aim: cited(
