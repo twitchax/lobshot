@@ -46,6 +46,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         33,
         0x3229_6916_11f1_63ed,
     ),
+    (
+        "roster_thistleback",
+        include_str!("golden/roster_thistleback.json"),
+        include_bytes!("golden/roster_thistleback.bin"),
+        63,
+        0x04c8_d350_1189_422b,
+    ),
 ];
 
 #[test]
@@ -156,6 +163,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("brawl_4v4", play(brawl_4v4(), &winds)),
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
+        ("roster_thistleback", play(roster_thistleback(), &winds)),
     ]
 }
 
@@ -270,6 +278,23 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Thistleback against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_thistleback() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
     }
 }
 

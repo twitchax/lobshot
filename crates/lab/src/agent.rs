@@ -284,7 +284,7 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
     for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
         match effect {
-            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } => {
+            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Orbit { legs, .. } => {
                 if let Some(leg) = legs.last() {
                     ends.push(point(leg.flight.at(leg.to)));
                 }
@@ -744,7 +744,9 @@ fn shot_line(names: &Names<'_>, h: &Happened) -> String {
     let mut line = String::new();
     // Which way it went: the first projectile's start.
     let way = h.effects.iter().find_map(|e| match e {
-        Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } => legs.first().map(|leg| if leg.flight.velocity.x < 0.0 { "left" } else { "right" }),
+        Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Orbit { legs, .. } => {
+            legs.first().map(|leg| if leg.flight.velocity.x < 0.0 { "left" } else { "right" })
+        }
         _ => None,
     });
     let _ = write!(
@@ -941,6 +943,9 @@ fn about(mobile: MobileKind) -> String {
         ),
         MobileKind::Marblemole => {
             "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
+        }
+        MobileKind::Thistleback => {
+            "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
     }
 }

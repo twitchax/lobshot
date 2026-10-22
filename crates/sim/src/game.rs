@@ -14,7 +14,7 @@ use anyhow::{bail, ensure};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ballistics::{self, Flight},
+    ballistics::{self, Flight, Spin},
     base::{Res, Void},
     body::{HitFrame, Pose},
     damage::{self, Blast, Target},
@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, thistleback,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -55,11 +55,12 @@ pub enum MobileKind {
     Hookclaw,
     Sparkhorn,
     Marblemole,
+    Thistleback,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
+    pub const ALL: [Self; 6] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Thistleback];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -83,6 +84,7 @@ impl MobileKind {
             Self::Hookclaw => &hookclaw::MOBILE,
             Self::Sparkhorn => &sparkhorn::MOBILE,
             Self::Marblemole => &marblemole::MOBILE,
+            Self::Thistleback => &thistleback::MOBILE,
         }
     }
 }
@@ -282,6 +284,17 @@ pub struct Strand {
     pub to: u32,
 }
 
+/// One projectile of an orbit (`Effect::Orbit`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Orbiter {
+    /// How far from the path it circles, px; 0 flies the path itself (`ballistics::orbit_point`).
+    pub radius: f64,
+    /// Where on its circle it starts, radians clockwise from `+x` on screen.
+    pub phase: f64,
+    /// The stage tick it stopped at: where it struck, or left the map.
+    pub to: u32,
+}
+
 /// What an event did, in order, for the client to show.
 ///
 /// **Stages.** An event's effects play as one or more stages. `Volley` and `Dropped` each start
@@ -339,9 +352,9 @@ pub enum Effect {
     GameOver {
         winner: Option<Team>,
     },
-    /// `seat` fires `shot`, starting a stage: the volley's projectiles (`Fired`, `Helix`, `Beacon`)
-    /// follow, then what they do in tick order. A Dual, Dual+ or Double turn has two volleys, the
-    /// second from wherever the shooter stands once the first has settled.
+    /// `seat` fires `shot`, starting a stage: the volley's projectiles (`Fired`, `Helix`, `Orbit`,
+    /// `Beacon`) follow, then what they do in tick order. A Dual, Dual+ or Double turn has two
+    /// volleys, the second from wherever the shooter stands once the first has settled.
     Volley {
         seat: u8,
         shot: Shot,
@@ -356,6 +369,16 @@ pub enum Effect {
         amplitude: f64,
         hertz: f64,
         strands: Vec<Strand>,
+    },
+    /// Thistleback's S2: projectiles circling one path in the screen's plane, each striking on its
+    /// own. `legs` is the path, which touches nothing itself; orbiter `i` is at
+    /// `ballistics::orbit_point(leg.flight, t, leg.offset, spin, orbiters[i].radius,
+    /// orbiters[i].phase)` for each leg tick `t` until its `to`.
+    Orbit {
+        seat: u8,
+        legs: Vec<Leg>,
+        spin: Spin,
+        orbiters: Vec<Orbiter>,
     },
     /// The Teleport item's beacon: one path like `Fired`, but it hurts and carves nothing. If it
     /// lands, `Teleported` follows.
@@ -1154,7 +1177,7 @@ impl Game {
     }
 
     /// `explode`, with `harm` saying what the blast deals each living mobile (by seat), for a blast
-    /// that hurts by a rule of its own.
+    /// that hurts by a rule of its own (Thistleback's SS).
     pub(crate) fn explode_by(&mut self, blast: &Blast, crater: f64, tick: u32, effects: &mut Vec<Effect>, harm: impl Fn(u8, &Target) -> i32) {
         let dirty = self.terrain.carve(blast.center, crater);
         effects.push(Effect::Exploded {
@@ -1278,7 +1301,7 @@ impl Game {
         let paths: Vec<&Leg> = effects[from..]
             .iter()
             .flat_map(|effect| match effect {
-                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } => legs.as_slice(),
+                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Orbit { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } => legs.as_slice(),
                 _ => &[],
             })
             .collect();

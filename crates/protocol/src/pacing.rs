@@ -99,6 +99,11 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 busy = busy.max(stage.base + ticks_to_seconds(last));
                 stage.base
             }
+            Effect::Orbit { orbiters, .. } => {
+                let last = orbiters.iter().map(|orbiter| orbiter.to).max().unwrap_or(0);
+                busy = busy.max(stage.base + ticks_to_seconds(last));
+                stage.base
+            }
             Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
             Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
             Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } => stage.blast + DAMAGE_AFTER_BLAST,
@@ -164,7 +169,8 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use lobshot_sim::{
-        game::{Event, Game, MobileKind, Seat, Setup, Shot, Strand, SuddenDeathKind, Team},
+        ballistics::Spin,
+        game::{Event, Game, MobileKind, Orbiter, Seat, Setup, Shot, Strand, SuddenDeathKind, Team},
         items::Loadout,
         map::{MapRef, NoAssets},
         movement::Footing,
@@ -362,6 +368,24 @@ mod unit {
         let schedule = schedule(&effects);
         assert_eq!(schedule.at, [0.0, 0.0, 0.5, 0.5 + DAMAGE_AFTER_BLAST, 1.0]);
         assert_eq!(schedule.end, 2.0 + FALL_SECONDS + TAIL_SECONDS, "the last strand is the last thing to land");
+    }
+
+    #[test]
+    fn an_orbit_lasts_until_its_last_orbiter_stops() {
+        let spin = Spin { hertz: 0.5, ramp: 0.5, until: u32::MAX };
+        let orbiter = |radius, to| Orbiter { radius, phase: 0.0, to };
+        let effects = vec![
+            Effect::Volley { seat: 0, shot: Shot::S2 },
+            Effect::Orbit {
+                seat: 0,
+                legs: Vec::new(),
+                spin,
+                orbiters: vec![orbiter(0.0, TICKS_PER_SECOND), orbiter(35.0, 3 * TICKS_PER_SECOND), orbiter(35.0, 2 * TICKS_PER_SECOND)],
+            },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at, [0.0, 0.0]);
+        assert_eq!(schedule.end, 3.0 + FALL_SECONDS + TAIL_SECONDS);
     }
 
     #[test]

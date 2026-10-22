@@ -11,7 +11,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_assets::Sound;
 use lobshot_protocol::pacing::{self, FALL_SECONDS};
 use lobshot_sim::{
-    ballistics,
+    ballistics::{self, Spin},
     game::{Death, Effect, Event, Leg, SuddenDeathKind, Team},
     items::Item,
     movement::Footing,
@@ -155,11 +155,22 @@ enum Cue {
     SuddenDeath(SuddenDeathKind),
 }
 
-/// Something flying its path: a shell, a beacon, a falling drop, or one strand of a helix, which
-/// winds about the path (amplitude, hertz and phase, for `ballistics::helix_point`).
+/// How a flyer moves about its path, rather than along it.
+#[derive(Clone, Copy)]
+enum About {
+    /// One strand of a helix, winding about the path: amplitude, hertz and phase, for
+    /// `ballistics::helix_point`.
+    Strand(f64, f64, f64),
+    /// One projectile of an orbit, circling the path: its spin, radius and phase, for
+    /// `ballistics::orbit_point`.
+    Orbiter(Spin, f64, f64),
+}
+
+/// Something flying its path: a shell, a beacon, a falling drop, or one strand of a helix or
+/// projectile of an orbit, moving about the path.
 struct Flyer {
     legs: Vec<Leg>,
-    strand: Option<(f64, f64, f64)>,
+    about: Option<About>,
     /// When it leaves and when it stops, in the scene's time.
     from: f32,
     until: f32,
@@ -199,15 +210,16 @@ fn ticks(count: u32) -> f32 {
 }
 
 /// Where a flyer is `seconds` into its stage, following its legs (holding still between legs
-/// while a tornado spins it), and winding about them if it's a strand.
-fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Option<SimVec2> {
+/// while a tornado spins it), and winding or circling about them if it's a strand or an orbiter.
+fn flyer_at(legs: &[Leg], about: Option<About>, seconds: f32) -> Option<SimVec2> {
     // A clock reading in seconds, back to whole ticks.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let tick = (f64::from(seconds) * f64::from(TICKS_PER_SECOND)) as u32;
     let mut last = None;
     for leg in legs {
-        let point = |local: u32| match strand {
-            Some((amplitude, hertz, phase)) => ballistics::helix_point(&leg.flight, local, leg.offset, amplitude, hertz, phase),
+        let point = |local: u32| match about {
+            Some(About::Strand(amplitude, hertz, phase)) => ballistics::helix_point(&leg.flight, local, leg.offset, amplitude, hertz, phase),
+            Some(About::Orbiter(spin, radius, phase)) => ballistics::orbit_point(&leg.flight, local, leg.offset, &spin, radius, phase),
             None => leg.flight.at(local),
         };
         match tick.checked_sub(leg.offset) {
@@ -246,15 +258,15 @@ struct Props<'a> {
     server: &'a AssetServer,
 }
 
-/// What an effect sends flying at `at`: a shell, the strands of a helix, a beacon, or a falling
-/// drop (a bolt drops nothing: it strikes at once, `Bolt` next).
+/// What an effect sends flying at `at`: a shell, the strands of a helix, an orbit's projectiles, a
+/// beacon, or a falling drop (a bolt drops nothing: it strikes at once, `Bolt` next).
 fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) -> Vec<Flyer> {
     let mut flyers = Vec::new();
-    let mut fly = |legs: &[Leg], strand, until: f32, sprite: Sprite| {
+    let mut fly = |legs: &[Leg], about, until: f32, sprite: Sprite| {
         let entity = commands.spawn(flyer_sprite(sprite)).id();
         flyers.push(Flyer {
             legs: legs.to_vec(),
-            strand,
+            about,
             from: at,
             until,
             entity,
@@ -266,7 +278,24 @@ fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) ->
         Effect::Helix { legs, amplitude, hertz, strands, .. } => {
             for strand in strands {
                 let sprite = dot_sprite(props.dot, Color::srgb_u8(0xd6, 0x9b, 0xff), 9.0);
-                fly(legs, Some((*amplitude, *hertz, strand.phase)), at + ticks(strand.to), sprite);
+                fly(legs, Some(About::Strand(*amplitude, *hertz, strand.phase)), at + ticks(strand.to), sprite);
+            }
+        }
+        // Thistleback's S2: a cabbage on the path and two sprouts circling it, each flying until it
+        // strikes.
+        Effect::Orbit { legs, spin, orbiters, .. } => {
+            for orbiter in orbiters {
+                let (color, size) = if orbiter.radius > 0.0 {
+                    (Color::srgb_u8(0x8f, 0xd1, 0x4f), 9.0)
+                } else {
+                    (Color::srgb_u8(0x4f, 0x9a, 0x40), 12.0)
+                };
+                fly(
+                    legs,
+                    Some(About::Orbiter(*spin, orbiter.radius, orbiter.phase)),
+                    at + ticks(orbiter.to),
+                    dot_sprite(props.dot, color, size),
+                );
             }
         }
         Effect::Beacon { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x7f, 0xf0, 0xff), 16.0)),
@@ -360,6 +389,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         // moondisk, the reel).
         Effect::Fired { .. }
         | Effect::Helix { .. }
+        | Effect::Orbit { .. }
         | Effect::Beacon { .. }
         | Effect::Dropped { .. }
         | Effect::Walked { .. }
@@ -566,7 +596,7 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut Query<(&mut Transform
             return false;
         }
         if now >= flyer.from
-            && let (Some(at), Ok((mut transform, mut visibility))) = (flyer_at(&flyer.legs, flyer.strand, now - flyer.from), transforms.get_mut(flyer.entity))
+            && let (Some(at), Ok((mut transform, mut visibility))) = (flyer_at(&flyer.legs, flyer.about, now - flyer.from), transforms.get_mut(flyer.entity))
         {
             transform.translation = world(at).extend(depth::SHOTS);
             *visibility = Visibility::Inherited;
@@ -674,9 +704,19 @@ mod unit {
     #[test]
     fn a_strand_winds_about_the_path_where_the_sim_puts_it() {
         let legs = [leg(0, TICKS_PER_SECOND, 0)];
-        let strand = Some((12.0, 2.0, 1.0));
+        let strand = Some(About::Strand(12.0, 2.0, 1.0));
         let tick = TICKS_PER_SECOND / 4;
         assert_eq!(flyer_at(&legs, strand, 0.25).unwrap(), ballistics::helix_point(&legs[0].flight, tick, 0, 12.0, 2.0, 1.0));
         assert_ne!(flyer_at(&legs, strand, 0.25), flyer_at(&legs, None, 0.25));
+    }
+
+    #[test]
+    fn an_orbiter_circles_the_path_where_the_sim_puts_it() {
+        let legs = [leg(0, TICKS_PER_SECOND, 0)];
+        let spin = Spin { hertz: 0.5, ramp: 0.5, until: u32::MAX };
+        let orbiter = Some(About::Orbiter(spin, 35.0, 1.0));
+        let tick = TICKS_PER_SECOND / 4;
+        assert_eq!(flyer_at(&legs, orbiter, 0.25).unwrap(), ballistics::orbit_point(&legs[0].flight, tick, 0, &spin, 35.0, 1.0));
+        assert_ne!(flyer_at(&legs, orbiter, 0.25), flyer_at(&legs, None, 0.25));
     }
 }

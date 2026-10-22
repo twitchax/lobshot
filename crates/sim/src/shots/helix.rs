@@ -1,7 +1,7 @@
 //! Helix strands (Lanternwing's S2): projectiles winding about one path, which touches nothing
 //! itself, each striking on its own. OpenBound's shape (OB), reimplemented: strand positions come
 //! from `ballistics::helix_point`, which clients draw with too. The strands' flight (`center`,
-//! `weave`, `cut`) is shared with any shot whose projectiles fly about one path.
+//! `weave`, `cut`) is shared with any shot whose projectiles fly about one path (`orbit`).
 
 use crate::{
     ballistics::{self, Flight},

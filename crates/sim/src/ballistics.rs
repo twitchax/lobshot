@@ -53,6 +53,32 @@ pub fn helix_point(flight: &Flight, tick: u32, elapsed: u32, amplitude: f64, her
     at + normal * (amplitude * libm::sin(2.0 * core::f64::consts::PI * hertz * t + phase))
 }
 
+/// How an orbit's projectiles circle its path (`orbit_point`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Spin {
+    /// Turns per second, clockwise on screen whichever way the shot flies.
+    pub hertz: f64,
+    /// Seconds each orbiter takes to swing out from the path to its full radius.
+    pub ramp: f64,
+    /// The shot's elapsed tick its circling stops at (a tornado caught it), each orbiter holding
+    /// its place about the path from then on; `u32::MAX` if it never stops.
+    pub until: u32,
+}
+
+/// Where an orbiter circling `flight` is at the flight's `tick`: the flight's point, plus
+/// `radius · (cos a, sin a)` on screen with `a = phase + 2π · hertz · s` (clockwise, since screen y
+/// points down), where `s` is the shot's spinning time: `elapsed` ticks at the flight's tick 0,
+/// plus `tick`, up to `spin.until`. The radius swings out from 0 over the first `spin.ramp`
+/// seconds; an orbiter with no radius flies the path itself. The sim collides orbiters here, and
+/// clients draw them here.
+#[must_use]
+pub fn orbit_point(flight: &Flight, tick: u32, elapsed: u32, spin: &Spin, radius: f64, phase: f64) -> Vec2 {
+    let s = seconds(elapsed.saturating_add(tick).min(spin.until));
+    let reach = if spin.ramp > 0.0 { radius * (s / spin.ramp).min(1.0) } else { radius };
+    let angle = phase + 2.0 * core::f64::consts::PI * spin.hertz * s;
+    flight.at(tick) + Vec2::new(libm::cos(angle), libm::sin(angle)) * reach
+}
+
 /// Launch speed for a power in bars (continuous, so bots and tests can search between steps).
 #[must_use]
 pub fn launch_speed(bars: f64) -> f64 {
@@ -90,6 +116,27 @@ mod unit {
         let landing = flight.at(tick);
         assert!((landing.x - range).abs() < 0.5, "{landing:?} vs {range}");
         assert!(landing.y.abs() < 0.5, "{landing:?}");
+    }
+
+    #[test]
+    fn an_orbiter_swings_out_and_circles_its_path_clockwise_until_it_stops() {
+        let flight = Flight {
+            origin: Vec2::ZERO,
+            velocity: Vec2::new(300.0, -300.0),
+            accel: Vec2::new(0.0, 600.0),
+        };
+        let spin = Spin { hertz: 0.5, ramp: 0.5, until: u32::MAX };
+        let offset = |tick: u32, spin: &Spin| orbit_point(&flight, tick, 0, spin, 35.0, 0.0) - flight.at(tick);
+        let second = TICKS_PER_SECOND;
+        assert_eq!(offset(0, &spin).length(), 0.0, "it leaves on the path");
+        assert!((offset(second / 4, &spin).length() - 17.5).abs() < 1e-9, "half way out at half the ramp");
+        // A quarter turn at 0.5 Hz takes half a second: from left of the path (y down) to above it.
+        let (a, b) = (offset(second, &spin), offset(second * 3 / 2, &spin));
+        assert!((a - Vec2::new(-35.0, 0.0)).length() < 1e-9 && (b - Vec2::new(0.0, -35.0)).length() < 1e-9, "{a:?} {b:?}");
+        assert!(a.x * b.y - a.y * b.x > 0.0, "clockwise on screen");
+        let stopped = Spin { until: second, ..spin };
+        assert!((offset(2 * second, &stopped) - offset(second, &stopped)).length() < 1e-9, "it holds its place once stopped");
+        assert_eq!(orbit_point(&flight, 777, 0, &spin, 0.0, 1.0), flight.at(777), "no radius flies the path");
     }
 
     #[test]

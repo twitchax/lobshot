@@ -22,13 +22,14 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub).
-const CBCHUI: [(MobileKind, f64); 5] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Trico).
+const CBCHUI: [(MobileKind, f64); 6] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
     (MobileKind::Sparkhorn, 2.30),
     (MobileKind::Marblemole, 2.33),
+    (MobileKind::Thistleback, 2.65),
 ];
 
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
@@ -233,7 +234,7 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
+/// Derives the fitted constants. The other mobiles' gravities (cbchui), and Hookclaw's wind
 /// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
