@@ -153,7 +153,7 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   charged the bot think time, so a slow model plays on a bot's clock. It plays through
   `lobshot-lab play` (a step a process over a save file) or `lobshot-lab mcp` (the same as MCP
   tools over stdio, for any MCP client; the lab holds no API key). The MCP server is a plain
-  JSON-RPC loop: four methods, with no async runtime or SDK macros generating the dispatch.
+  JSON-RPC loop of four methods, synchronous like the rest of the lab.
 - **`lab`** hosts games exactly as the server does (`sim::referee`, the bot loadout, the default
   room rules, the server's bot think time) and runs thousands of 1v1 games between SearchBots:
   every pair of mobiles on every map variant, each seed played twice with the seats swapped. It

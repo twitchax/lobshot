@@ -1,8 +1,8 @@
 //! `lobshot-lab mcp`: an MCP server on stdin and stdout, so an agent (Claude Code, or any MCP
 //! client) can play through `agent`. MCP's stdio transport is JSON-RPC 2.0, one message a line,
 //! and a server with only tools needs four methods: `initialize`, `ping`, `tools/list` and
-//! `tools/call`. That is written out plainly here, with no async runtime and no SDK macros
-//! generating the dispatch: it is the `match` in `Server::answer`.
+//! `tools/call`. That is written out plainly here, synchronous like the rest of the lab: the
+//! dispatch is the `match` in `Server::answer`.
 
 use std::io::{BufRead, Write};
 
