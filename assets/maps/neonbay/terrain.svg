@@ -1,0 +1,825 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1100" viewBox="0 0 2000 1100">
+  <!-- Neonbay terrain, shared by every variant: a harbour city's blocks at night, moonlight from
+       the upper left, neon on the walls. A template: `cargo xtask art` fills the land slot with the
+       path built from the variant's land.ron (the same path the collision mask is drawn from) and
+       every other slot with the <use>s its dress rules in land.ron place. Everything else here is
+       drawn by hand. Opaque = ground.
+
+       Windows are patterns tiled across the whole map and shown through each building's window
+       area (an `area` prop the width of its columns): columns every 40 px (80 for the works'
+       windows) from x = 0, rows from each style's phase, the numbers land.ron's generator uses, so
+       every facade gets whole windows. Lit windows are overlays of longer periods (3, 5, 7 and 9
+       columns), so the lights never repeat across one building. -->
+  <defs>
+    <path id="land" d="{{land}}"/>
+    <clipPath id="landClip"><use href="#land"/></clipPath>
+
+    <!-- an area: a white field 100 wide from its origin (top middle) down past the map, scaled to
+         a facade's or a window field's width -->
+    <rect id="area" x="-50" y="0" width="100" height="1300" fill="#fff"/>
+
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.01 0.03" numOctaves="3" seed="21" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.08  0 0 0 0 0.25  0 0 0 2.4 -1.2"/>
+    </filter>
+    <filter id="soften" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="feather" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="featherWide" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="50"/></filter>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="glowWide" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="12"/></filter>
+
+    <!-- facade washes: origin at the top middle, 100 wide (scaled to the roof level's width) -->
+    <rect id="washSlate" x="-50" y="0" width="100" height="1300" fill="#5d6caa"/>
+    <rect id="washSand" x="-50" y="0" width="100" height="1300" fill="#b59a80"/>
+    <rect id="washBrick" x="-50" y="0" width="100" height="1300" fill="#a8564f"/>
+    <rect id="washOchre" x="-50" y="0" width="100" height="1300" fill="#b9884a"/>
+    <rect id="washSteel" x="-50" y="0" width="100" height="1300" fill="#4a80ad"/>
+    <rect id="washSteelDeep" x="-50" y="0" width="100" height="1300" fill="#4b66a6"/>
+    <rect id="washTeal" x="-50" y="0" width="100" height="1300" fill="#2f8b8c"/>
+    <rect id="washRose" x="-50" y="0" width="100" height="1300" fill="#b0647e"/>
+    <rect id="washPlum" x="-50" y="0" width="100" height="1300" fill="#8a5596"/>
+    <rect id="washQuay" x="-50" y="0" width="100" height="1300" fill="#7d8296"/>
+    <rect id="washRust" x="-50" y="0" width="100" height="1300" fill="#a65a3e"/>
+    <rect id="washOlive" x="-50" y="0" width="100" height="1300" fill="#6f8350"/>
+
+    <!-- materials, at their own size whatever the facade's width -->
+    <pattern id="bricks" x="0" y="0" width="28" height="14" patternUnits="userSpaceOnUse">
+      <path d="M 0,6.6 H 28 M 0,13.6 H 28 M 6,0 V 6.6 M 20,7 V 13.6" stroke="#2a1530" stroke-width="1.2" opacity="0.35"/>
+      <path d="M 0.5,0.8 H 5 M 7,0.8 H 19 M 21,7.8 H 27.5 M 0.5,7.8 H 13" stroke="#ffffff" stroke-width="0.9" opacity="0.12"/>
+    </pattern>
+    <pattern id="ribs" x="0" y="0" width="12" height="40" patternUnits="userSpaceOnUse">
+      <rect x="0" width="4" height="40" fill="#ffffff" opacity="0.14"/>
+      <rect x="7" width="3" height="40" fill="#1a1030" opacity="0.28"/>
+    </pattern>
+    <mask id="brickMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{brickAreas}}
+    </mask>
+    <mask id="ribMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{ribAreas}}
+    </mask>
+    <pattern id="slabs" x="0" y="0" width="80" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 0,59 H 80 M 79,0 V 60 M 39,0 V 30 M 0,29.5 H 80" stroke="#15112a" stroke-width="1.6" opacity="0.3"/>
+      <path d="M 1,1 H 38 M 41,1 H 78 M 1,31 H 78" stroke="#ffffff" stroke-width="1.2" opacity="0.18"/>
+      <g fill="#15112a" opacity="0.3"><circle cx="8" cy="8" r="1.6"/><circle cx="71" cy="8" r="1.6"/><circle cx="8" cy="52" r="1.6"/><circle cx="71" cy="52" r="1.6"/></g>
+    </pattern>
+    <mask id="slabMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{slabAreas}}
+    </mask>
+    <!-- a corbel table: little brick brackets under a brick building's coping -->
+    <pattern id="corbels" x="0" y="0" width="14" height="1200" patternUnits="userSpaceOnUse">
+      <path d="M 2,0 H 12 V 4 L 9,9 H 5 L 2,4 Z" fill="#15112a" opacity="0.35"/>
+      <path d="M 2,0 H 4 V 4 L 5,9 H 4 L 2,4 Z" fill="#ffffff" opacity="0.15"/>
+    </pattern>
+    <mask id="corbelBandMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <use href="#land" transform="translate(0,13)" fill="#fff"/>
+      <use href="#land" transform="translate(0,23)" fill="#000"/>
+    </mask>
+
+    <!-- window areas -->
+    <mask id="officeMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{officeWin}}
+    </mask>
+    <mask id="decoMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{decoWin}}
+    </mask>
+    <mask id="brickWinMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{brickWin}}
+    </mask>
+    <mask id="worksMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+{{worksWin}}
+    </mask>
+
+    <!-- panes, one cell each, origin at the cell's corner -->
+    <path id="paneOffice" d="M 5,7 H 35 V 45 H 5 Z"/>
+    <path id="paneDeco" d="M 7,9 H 17 V 51 H 7 Z M 23,9 H 33 V 51 H 23 Z"/>
+    <path id="paneBrick" d="M 11,52 V 24 A 9 9 0 0 1 29,24 V 52 Z"/>
+    <path id="paneWorks" d="M 12,72 V 20 C 26,12 54,12 68,20 V 72 Z"/>
+    <!-- a dark pane's moonlit glint -->
+    <path id="glintOffice" d="M 5,7 H 21 L 5,27 Z M 26,7 H 31 L 13,45 H 8 Z"/>
+    <path id="glintDeco" d="M 7,9 H 17 L 7,25 Z M 23,9 H 33 L 23,25 Z"/>
+    <path id="glintBrick" d="M 11,24 A 9 9 0 0 1 24,16 L 11,38 Z"/>
+    <path id="glintWorks" d="M 12,20 C 20,16 30,14 38,14 L 12,52 Z"/>
+
+    <!-- lit panes: a halo, the pane, a brighter core -->
+    <g id="litOffice"><path d="M 2,4 H 38 V 48 H 2 Z" fill="#ffd27a" opacity="0.22"/><use href="#paneOffice" fill="#ffc861"/><path d="M 9,11 H 31 V 41 H 9 Z" fill="#fff0bd"/></g>
+    <g id="amberOffice"><path d="M 2,4 H 38 V 48 H 2 Z" fill="#ff9e57" opacity="0.2"/><use href="#paneOffice" fill="#ffa55a"/><path d="M 9,11 H 31 V 41 H 9 Z" fill="#ffd79a"/></g>
+    <g id="blindOffice"><use href="#paneOffice" fill="#f3c06a"/><path d="M 5,12 H 35 M 5,17 H 35 M 5,22 H 35 M 5,27 H 35" stroke="#b07a3a" stroke-width="2"/><path d="M 9,32 H 31 V 41 H 9 Z" fill="#fff0bd"/></g>
+    <g id="tvOffice"><use href="#paneOffice" fill="#4d7fd0"/><path d="M 9,22 H 31 V 41 H 9 Z" fill="#a8ecff"/><path d="M 9,22 H 31 V 26 H 9 Z" fill="#e4fbff"/></g>
+
+    <g id="litDeco"><path d="M 4,6 H 36 V 54 H 4 Z" fill="#ffd27a" opacity="0.2"/><use href="#paneDeco" fill="#ffc861"/><path d="M 9,13 H 15 V 47 H 9 Z M 25,13 H 31 V 47 H 25 Z" fill="#fff0bd"/></g>
+    <g id="amberDeco"><use href="#paneDeco" fill="#ffa55a"/><path d="M 9,13 H 15 V 47 H 9 Z M 25,13 H 31 V 47 H 25 Z" fill="#ffd79a"/></g>
+    <g id="blindDeco"><use href="#paneDeco" fill="#f3c06a"/><path d="M 7,15 H 17 M 7,21 H 17 M 7,27 H 17 M 23,15 H 33 M 23,21 H 33 M 23,27 H 33" stroke="#b07a3a" stroke-width="2"/></g>
+    <g id="tvDeco"><use href="#paneDeco" fill="#4d7fd0"/><path d="M 9,30 H 15 V 47 H 9 Z M 25,30 H 31 V 47 H 25 Z" fill="#a8ecff"/></g>
+
+    <g id="litBrick"><path d="M 8,55 V 24 A 12 12 0 0 1 32,24 V 55 Z" fill="#ffd27a" opacity="0.22"/><use href="#paneBrick" fill="#ffc861"/><path d="M 14,49 V 25 A 6 6 0 0 1 26,25 V 49 Z" fill="#fff0bd"/></g>
+    <g id="amberBrick"><use href="#paneBrick" fill="#ffa55a"/><path d="M 14,49 V 25 A 6 6 0 0 1 26,25 V 49 Z" fill="#ffd79a"/></g>
+    <g id="blindBrick"><use href="#paneBrick" fill="#f3c06a"/><path d="M 11,26 H 29 M 11,31 H 29 M 11,36 H 29" stroke="#b07a3a" stroke-width="2"/></g>
+    <g id="tvBrick"><use href="#paneBrick" fill="#4d7fd0"/><path d="M 14,38 H 26 V 49 H 14 Z" fill="#a8ecff"/></g>
+
+    <g id="litWorks"><path d="M 8,75 V 18 C 24,8 56,8 72,18 V 75 Z" fill="#ffd27a" opacity="0.2"/><use href="#paneWorks" fill="#ffc861"/><path d="M 18,66 V 24 C 30,19 50,19 62,24 V 66 Z" fill="#fff0bd"/></g>
+    <g id="amberWorks"><use href="#paneWorks" fill="#ffa55a"/><path d="M 18,66 V 24 C 30,19 50,19 62,24 V 66 Z" fill="#ffd79a"/></g>
+    <g id="blindWorks"><use href="#paneWorks" fill="#f3c06a"/><path d="M 12,30 H 68 M 12,38 H 68" stroke="#b07a3a" stroke-width="2.4"/></g>
+    <g id="tvWorks"><use href="#paneWorks" fill="#4d7fd0"/><path d="M 18,44 H 62 V 66 H 18 Z" fill="#a8ecff"/></g>
+
+    <!-- dark panes and their frames, a cell a tile -->
+    <pattern id="officeDark" x="0" y="26" width="40" height="56" patternUnits="userSpaceOnUse">
+      <path d="M 0,47 H 40 V 56 H 0 Z" fill="#15112a" opacity="0.14"/>
+      <use href="#paneOffice" fill="#222c58"/><use href="#glintOffice" fill="#3a4f8c"/>
+    </pattern>
+    <pattern id="officeFrame" x="0" y="26" width="40" height="56" patternUnits="userSpaceOnUse">
+      <use href="#paneOffice" fill="none" stroke="#15112a" stroke-width="1.6"/>
+      <path d="M 20,7 V 45 M 5,19 H 35" stroke="#15112a" stroke-width="1.4"/>
+      <path d="M 3,45.5 H 37" stroke="#dfe4f4" stroke-width="2" opacity="0.6"/>
+    </pattern>
+    <pattern id="decoDark" x="0" y="50" width="40" height="60" patternUnits="userSpaceOnUse">
+      <use href="#paneDeco" fill="#222c58"/><use href="#glintDeco" fill="#3a4f8c"/>
+    </pattern>
+    <pattern id="decoFrame" x="0" y="50" width="40" height="60" patternUnits="userSpaceOnUse">
+      <use href="#paneDeco" fill="none" stroke="#15112a" stroke-width="1.5"/>
+      <path d="M 7,19 H 17 M 23,19 H 33" stroke="#15112a" stroke-width="1.3"/>
+      <!-- a chevron on the spandrel under each pair -->
+      <path d="M 9,58 L 20,53.5 L 31,58" fill="none" stroke="#e8d7a0" stroke-width="1.6" opacity="0.75"/>
+      <path d="M 0,1 V 59 M 40,1 V 59" stroke="#ffffff" stroke-width="2" opacity="0.1"/>
+    </pattern>
+    <pattern id="brickDark" x="0" y="30" width="40" height="64" patternUnits="userSpaceOnUse">
+      <use href="#paneBrick" fill="#222c58"/><use href="#glintBrick" fill="#3a4f8c"/>
+    </pattern>
+    <pattern id="brickFrame" x="0" y="30" width="40" height="64" patternUnits="userSpaceOnUse">
+      <use href="#paneBrick" fill="none" stroke="#15112a" stroke-width="1.5"/>
+      <path d="M 20,15 V 52 M 11,35 H 29" stroke="#15112a" stroke-width="1.3"/>
+      <!-- the arch's stone ring and the sill -->
+      <path d="M 8.5,24.5 A 11.5 11.5 0 0 1 31.5,24.5" fill="none" stroke="#e7d4b8" stroke-width="3.2"/>
+      <path d="M 8.5,24.5 A 11.5 11.5 0 0 1 31.5,24.5" fill="none" stroke="#15112a" stroke-width="0.9" opacity="0.6" transform="translate(0,1.8)"/>
+      <rect x="8" y="52" width="24" height="4" fill="#e7d4b8"/>
+      <path d="M 8,56 H 32" stroke="#15112a" stroke-width="1" opacity="0.5"/>
+    </pattern>
+    <pattern id="worksDark" x="0" y="8" width="80" height="84" patternUnits="userSpaceOnUse">
+      <use href="#paneWorks" fill="#222c58"/><use href="#glintWorks" fill="#3a4f8c"/>
+    </pattern>
+    <pattern id="worksFrame" x="0" y="8" width="80" height="84" patternUnits="userSpaceOnUse">
+      <use href="#paneWorks" fill="none" stroke="#15112a" stroke-width="1.8"/>
+      <path d="M 26,15 V 72 M 40,13 V 72 M 54,15 V 72 M 12,33 H 68 M 12,46 H 68 M 12,59 H 68" stroke="#2a2a3c" stroke-width="1.6"/>
+      <!-- the segmental arch of headers and the sill -->
+      <path d="M 9,19 C 24,9 56,9 71,19" fill="none" stroke="#7a2f2e" stroke-width="4.5"/>
+      <path d="M 9,19 C 24,9 56,9 71,19" fill="none" stroke="#c46e5c" stroke-width="2"/>
+      <rect x="8" y="72" width="64" height="5" fill="#d8cbb4"/>
+      <path d="M 8,77 H 72" stroke="#15112a" stroke-width="1" opacity="0.5"/>
+    </pattern>
+
+    <!-- lit overlays: longer tiles, a few cells lit in each -->
+    <pattern id="officeLit1" x="0" y="26" width="120" height="112" patternUnits="userSpaceOnUse"><use href="#litOffice" x="40" y="0"/></pattern>
+    <pattern id="officeLit2" x="0" y="26" width="200" height="168" patternUnits="userSpaceOnUse"><use href="#amberOffice" x="0" y="56"/><use href="#litOffice" x="120" y="112"/></pattern>
+    <pattern id="officeLit3" x="0" y="26" width="280" height="224" patternUnits="userSpaceOnUse"><use href="#blindOffice" x="80" y="0"/><use href="#litOffice" x="200" y="56"/><use href="#amberOffice" x="160" y="168"/></pattern>
+    <pattern id="officeLit4" x="0" y="26" width="360" height="280" patternUnits="userSpaceOnUse"><use href="#tvOffice" x="240" y="112"/><use href="#tvOffice" x="40" y="224"/></pattern>
+    <pattern id="decoLit1" x="0" y="50" width="120" height="120" patternUnits="userSpaceOnUse"><use href="#litDeco" x="40" y="0"/></pattern>
+    <pattern id="decoLit2" x="0" y="50" width="200" height="180" patternUnits="userSpaceOnUse"><use href="#amberDeco" x="0" y="60"/><use href="#litDeco" x="120" y="120"/></pattern>
+    <pattern id="decoLit3" x="0" y="50" width="280" height="240" patternUnits="userSpaceOnUse"><use href="#blindDeco" x="80" y="0"/><use href="#litDeco" x="200" y="60"/><use href="#amberDeco" x="160" y="180"/></pattern>
+    <pattern id="decoLit4" x="0" y="50" width="360" height="300" patternUnits="userSpaceOnUse"><use href="#tvDeco" x="240" y="120"/><use href="#tvDeco" x="40" y="240"/></pattern>
+    <pattern id="brickLit1" x="0" y="30" width="120" height="128" patternUnits="userSpaceOnUse"><use href="#litBrick" x="40" y="0"/></pattern>
+    <pattern id="brickLit2" x="0" y="30" width="200" height="192" patternUnits="userSpaceOnUse"><use href="#amberBrick" x="0" y="64"/><use href="#litBrick" x="120" y="128"/></pattern>
+    <pattern id="brickLit3" x="0" y="30" width="280" height="256" patternUnits="userSpaceOnUse"><use href="#blindBrick" x="80" y="0"/><use href="#litBrick" x="200" y="64"/><use href="#amberBrick" x="160" y="192"/></pattern>
+    <pattern id="brickLit4" x="0" y="30" width="360" height="320" patternUnits="userSpaceOnUse"><use href="#tvBrick" x="240" y="128"/><use href="#tvBrick" x="40" y="256"/></pattern>
+    <pattern id="worksLit1" x="0" y="8" width="240" height="168" patternUnits="userSpaceOnUse"><use href="#litWorks" x="80" y="0"/></pattern>
+    <pattern id="worksLit2" x="0" y="8" width="400" height="252" patternUnits="userSpaceOnUse"><use href="#amberWorks" x="0" y="84"/><use href="#litWorks" x="240" y="168"/></pattern>
+    <pattern id="worksLit3" x="0" y="8" width="560" height="336" patternUnits="userSpaceOnUse"><use href="#blindWorks" x="160" y="0"/><use href="#litWorks" x="400" y="84"/><use href="#amberWorks" x="320" y="252"/></pattern>
+
+    <!-- the roof cap: the land's top 12 px (the coping and the cornices), its lit top edge, the
+         shadow it casts on the wall under it, the moonlit upper storeys, the deep lower ones, and
+         the light and shade down each wall's corners -->
+    <mask id="capMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <rect x="-100" width="2200" height="1200" fill="#fff"/>
+      <use href="#land" transform="translate(0,12)" fill="#000"/>
+    </mask>
+    <mask id="ridgeMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <rect x="-100" width="2200" height="1200" fill="#fff"/>
+      <use href="#land" transform="translate(0,3)" fill="#000"/>
+    </mask>
+    <mask id="eaveShadeMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <use href="#land" transform="translate(0,11)" fill="#fff"/>
+      <use href="#land" transform="translate(0,26)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <mask id="topLightMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <rect x="-100" width="2200" height="1200" fill="#fff"/>
+      <use href="#land" transform="translate(0,150)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <mask id="deepMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <use href="#land" transform="translate(0,330)" fill="#fff" filter="url(#featherWide)"/>
+    </mask>
+    <mask id="litEdgeMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <use href="#land" fill="#fff"/>
+      <use href="#land" transform="translate(7,0)" fill="#000"/>
+    </mask>
+    <mask id="shadeEdgeMask" maskUnits="userSpaceOnUse" x="-100" y="0" width="2200" height="1200">
+      <use href="#land" fill="#fff"/>
+      <use href="#land" transform="translate(-10,0)" fill="#000"/>
+    </mask>
+    <linearGradient id="farBelow" x1="0" y1="820" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16123a" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#16123a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2a1640" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="streetGlow" x1="0" y1="1000" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8a5c" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ff8a5c" stop-opacity="0.16"/>
+    </linearGradient>
+
+    <!-- shipping containers, side on: a 20 ft box 80 x 40 (origin at its top middle) drawn in
+         currentColor, ribbed, with its rails, corner posts and castings; the colours wrap it -->
+    <pattern id="corrugation" x="0" y="0" width="5" height="40" patternUnits="userSpaceOnUse">
+      <rect width="2" height="40" fill="#ffffff" opacity="0.16"/>
+      <rect x="3" width="1.4" height="40" fill="#15112a" opacity="0.2"/>
+    </pattern>
+    <g id="box20">
+      <rect x="-40" y="0" width="80" height="40" fill="currentColor"/>
+      <rect x="-36" y="4" width="72" height="32" fill="url(#corrugation)"/>
+      <rect x="-40" y="0" width="80" height="4" fill="#ffffff" opacity="0.3"/>
+      <rect x="-40" y="35" width="80" height="5" fill="#15112a" opacity="0.32"/>
+      <rect x="-40" y="0" width="4" height="40" fill="#15112a" opacity="0.18"/>
+      <rect x="36" y="0" width="4" height="40" fill="#15112a" opacity="0.3"/>
+      <g fill="#c9cde0" stroke="#15112a" stroke-width="0.8">
+        <rect x="-40" y="0" width="5" height="4"/><rect x="35" y="0" width="5" height="4"/>
+        <rect x="-40" y="36" width="5" height="4"/><rect x="35" y="36" width="5" height="4"/>
+      </g>
+      <rect x="18" y="9" width="12" height="6" fill="#f2f0e6" opacity="0.7"/>
+      <path d="M 19.5,11 H 28.5 M 19.5,13 H 25" stroke="#15112a" stroke-width="0.8" opacity="0.6"/>
+      <rect x="-40" y="0" width="80" height="40" fill="none" stroke="#15112a" stroke-width="1.6"/>
+    </g>
+    <g id="box20Red" color="#c4473e"><use href="#box20"/></g>
+    <g id="box20Blue" color="#2f6db0"><use href="#box20"/></g>
+    <g id="box20Teal" color="#25968f"><use href="#box20"/></g>
+    <g id="box20Yellow" color="#dba63a"><use href="#box20"/></g>
+    <g id="box20Green" color="#4c9446"><use href="#box20"/></g>
+    <g id="box20Orange" color="#dc7330"><use href="#box20"/></g>
+    <g id="box20Plum" color="#86509a"><use href="#box20"/></g>
+    <!-- the crane's load: two 40 ft boxes, 112 x 46 each (origin at the top middle) -->
+    <g id="box40">
+      <rect x="-56" y="0" width="112" height="46" fill="currentColor"/>
+      <rect x="-52" y="4" width="104" height="37" fill="url(#corrugation)"/>
+      <rect x="-56" y="0" width="112" height="4" fill="#ffffff" opacity="0.3"/>
+      <rect x="-56" y="41" width="112" height="5" fill="#15112a" opacity="0.32"/>
+      <rect x="-56" y="0" width="4" height="46" fill="#15112a" opacity="0.18"/>
+      <rect x="52" y="0" width="4" height="46" fill="#15112a" opacity="0.3"/>
+      <g fill="#c9cde0" stroke="#15112a" stroke-width="0.8">
+        <rect x="-56" y="0" width="5" height="4"/><rect x="51" y="0" width="5" height="4"/>
+        <rect x="-56" y="42" width="5" height="4"/><rect x="51" y="42" width="5" height="4"/>
+      </g>
+      <rect x="-56" y="0" width="112" height="46" fill="none" stroke="#15112a" stroke-width="1.6"/>
+    </g>
+    <g id="boxPair">
+      <g color="#dc7330"><use href="#box40"/></g>
+      <g color="#2f6db0" transform="translate(0,46)"><use href="#box40"/></g>
+      <!-- a painted logo on the top box: a wave in a ring -->
+      <circle cx="-22" cy="23" r="11" fill="none" stroke="#fff4e0" stroke-width="2.4"/>
+      <path d="M -31,25 C -27,19 -23,19 -21,24 C -19,28 -15,28 -13,23" fill="none" stroke="#fff4e0" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M -4,18 H 34 M -4,24 H 26 M -4,30 H 30" stroke="#fff4e0" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+    </g>
+
+    <!-- neon: each sign's tubes as one path, drawn as a glow, the tube and its hot core -->
+    <path id="nCocktail" d="M -15,-16 H 15 L 0,1 Z M 0,1 V 16 M -9,16 H 9 M 5,-9 L 12,-22"/>
+    <path id="nOlive" d="M -6.4,-9 a 3.4,3.4 0 1 0 6.8,0 a 3.4,3.4 0 1 0 -6.8,0"/>
+    <path id="nFish" d="M -26,0 C -16,-14 8,-14 16,0 C 8,14 -16,14 -26,0 Z M 16,0 L 28,-10 V 10 Z M -6,-11 C -2,-4 -2,4 -6,11"/>
+    <path id="nFishEye" d="M -16.6,-3 a 1.6,1.6 0 1 0 3.2,0 a 1.6,1.6 0 1 0 -3.2,0"/>
+    <path id="nBowl" d="M -22,0 H 22 C 20,14 10,20 0,20 C -10,20 -20,14 -22,0 Z M -8,24 H 8"/>
+    <path id="nSticks" d="M 6,-4 L 24,-26 M 12,-2 L 28,-20"/>
+    <path id="nSteam" d="M -10,-6 C -14,-12 -6,-16 -10,-22 M 0,-6 C -4,-12 4,-16 0,-24"/>
+    <path id="nStar" d="M 0,-22 L 5.29,-7.28 L 20.92,-6.8 L 8.56,2.78 L 12.93,17.8 L 0,9 L -12.93,17.8 L -8.56,2.78 L -20.92,-6.8 L -5.29,-7.28 Z"/>
+    <path id="nRing" d="M -30,0 a 30,30 0 1 0 60,0 a 30,30 0 1 0 -60,0"/>
+    <path id="nAnchor" d="M 0,-20 V 20 M -10,-11 H 10 M -20,4 C -18,16 -8,22 0,20 C 8,22 18,16 20,4 M -24,9 L -20,2 L -15,8 M 15,8 L 20,2 L 24,9 M -4,-24 a 4,4 0 1 0 8,0 a 4,4 0 1 0 -8,0"/>
+    <path id="nMoon" d="M 4,-20 A 20 20 0 1 0 4,20 A 15 15 0 1 1 4,-20 Z"/>
+    <path id="nTwinkle" d="M 16,-12 L 18,-6 L 24,-4 L 18,-2 L 16,4 L 14,-2 L 8,-4 L 14,-6 Z"/>
+    <path id="nWave" d="M -26,-6 C -20,-14 -12,-14 -8,-6 C -4,2 4,2 8,-6 C 12,-14 20,-14 26,-6 M -26,8 C -20,0 -12,0 -8,8 C -4,16 4,16 8,8 C 12,0 20,0 26,8"/>
+    <path id="nCat" d="M -16,8 C -18,-4 -16,-10 -14,-18 L -6,-10 C -2,-11 2,-11 6,-10 L 14,-18 C 16,-10 18,-4 16,8 C 12,16 -12,16 -16,8 Z M -20,4 H -12 M 12,4 H 20 M -20,8 L -12,7 M 12,7 L 20,8"/>
+    <path id="nCatEyes" d="M -8,-1 h 3.4 M 4.6,-1 h 3.4"/>
+
+    <g id="neonCocktail">
+      <ellipse rx="46" ry="42" fill="#ff4fa8" opacity="0.22" filter="url(#glowWide)"/>
+      <rect x="-24" y="-30" width="48" height="56" rx="7" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nCocktail" stroke="#ff4fa8" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nCocktail" stroke="#ff4fa8" stroke-width="3.4"/>
+        <use href="#nCocktail" stroke="#ffe3f2" stroke-width="1.3"/>
+        <use href="#nOlive" stroke="#9dff6a" stroke-width="3"/>
+        <use href="#nOlive" stroke="#efffe0" stroke-width="1.1"/>
+      </g>
+    </g>
+    <g id="neonFish">
+      <ellipse rx="52" ry="34" fill="#38e8ff" opacity="0.22" filter="url(#glowWide)"/>
+      <rect x="-34" y="-20" width="68" height="40" rx="8" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nFish" stroke="#38e8ff" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nFish" stroke="#38e8ff" stroke-width="3.2"/>
+        <use href="#nFish" stroke="#e0fdff" stroke-width="1.2"/>
+        <use href="#nFishEye" stroke="#ff6fb8" stroke-width="2.6"/>
+      </g>
+    </g>
+    <g id="neonBowl">
+      <ellipse rx="48" ry="44" fill="#ff9a3a" opacity="0.22" filter="url(#glowWide)"/>
+      <rect x="-30" y="-32" width="62" height="62" rx="8" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nBowl" stroke="#ff8a3a" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nBowl" stroke="#ff8a3a" stroke-width="3.4"/>
+        <use href="#nBowl" stroke="#ffe6cc" stroke-width="1.3"/>
+        <use href="#nSticks" stroke="#ffe04a" stroke-width="3"/>
+        <use href="#nSticks" stroke="#fffbe0" stroke-width="1.1"/>
+        <use href="#nSteam" stroke="#e8f6ff" stroke-width="2.4" opacity="0.9"/>
+      </g>
+    </g>
+    <g id="neonMoon">
+      <ellipse rx="44" ry="42" fill="#b07bff" opacity="0.22" filter="url(#glowWide)"/>
+      <circle r="30" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nMoon" stroke="#c39bff" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nMoon" stroke="#c39bff" stroke-width="3.2"/>
+        <use href="#nMoon" stroke="#f3ecff" stroke-width="1.2"/>
+        <use href="#nTwinkle" stroke="#ffe04a" stroke-width="2.2"/>
+      </g>
+    </g>
+    <g id="neonWave">
+      <ellipse rx="50" ry="34" fill="#38e8ff" opacity="0.2" filter="url(#glowWide)"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nWave" stroke="#38e8ff" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nWave" stroke="#38e8ff" stroke-width="3.2"/>
+        <use href="#nWave" stroke="#e0fdff" stroke-width="1.2"/>
+      </g>
+    </g>
+    <g id="neonCat">
+      <ellipse rx="42" ry="38" fill="#ff4fa8" opacity="0.22" filter="url(#glowWide)"/>
+      <rect x="-28" y="-28" width="56" height="50" rx="9" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nCat" stroke="#ff4fa8" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nCat" stroke="#ff4fa8" stroke-width="3"/>
+        <use href="#nCat" stroke="#ffe3f2" stroke-width="1.1"/>
+        <use href="#nCatEyes" stroke="#9dff6a" stroke-width="3"/>
+      </g>
+    </g>
+    <g id="neonAnchor">
+      <ellipse rx="40" ry="44" fill="#38e8ff" opacity="0.22" filter="url(#glowWide)"/>
+      <rect x="-30" y="-34" width="60" height="64" rx="8" fill="#1b1533" stroke="#15112a" stroke-width="2.2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nAnchor" stroke="#38e8ff" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nAnchor" stroke="#38e8ff" stroke-width="3.2"/>
+        <use href="#nAnchor" stroke="#e0fdff" stroke-width="1.2"/>
+      </g>
+    </g>
+    <!-- a band of lit glyphs across the Exchange's top floor (origin at its middle, 120 wide) -->
+    <g id="ticker">
+      <rect x="-62" y="-9" width="124" height="18" fill="#120e26" stroke="#15112a" stroke-width="2"/>
+      <rect x="-62" y="-14" width="124" height="28" fill="#38e8ff" opacity="0.15" filter="url(#glow)"/>
+      <path d="M -56,0 h 8 M -44,0 h 4 M -36,0 h 12 M -20,0 h 6 M -10,0 h 10 M 4,0 h 4 M 12,0 h 14 M 30,0 h 6 M 40,0 h 10 M 54,0 h 4" stroke="#8dff7a" stroke-width="4"/>
+      <path d="M -40,-4 l 4,-2 l 4,2 M 18,-4 l 4,2 l 4,-2" fill="none" stroke="#ff6f9a" stroke-width="1.6"/>
+    </g>
+
+    <!-- an iron fire escape: five landings a brick storey (64 px) apart, at the sills, with their
+         stairs and a drop ladder (origin at the top landing's middle, 70 wide) -->
+    <g id="fireEscapeFlight" fill="none" stroke-linecap="round">
+      <path d="M -35,0 H 35 M -35,-18 H 35 M -35,0 V -18 M 35,0 V -18 M -22,0 V -18 M -9,0 V -18 M 4,0 V -18 M 17,0 V -18 M -28,1 L 24,62" stroke="#15112a" stroke-width="5"/>
+      <path d="M -35,0 H 35 M -35,-18 H 35 M -35,0 V -18 M 35,0 V -18 M -22,0 V -18 M -9,0 V -18 M 4,0 V -18 M 17,0 V -18 M -28,1 L 24,62" stroke="#3a3858" stroke-width="2.4"/>
+      <path d="M -24,6 L 20,56" stroke="#3a3858" stroke-width="7" stroke-dasharray="1.4 4.4"/>
+      <path d="M -35,-18.8 H 35" stroke="#8a90bd" stroke-width="1"/>
+    </g>
+    <g id="fireEscape">
+      <use href="#fireEscapeFlight"/>
+      <use href="#fireEscapeFlight" transform="translate(0,64) scale(-1 1)"/>
+      <use href="#fireEscapeFlight" transform="translate(0,128)"/>
+      <use href="#fireEscapeFlight" transform="translate(0,192) scale(-1 1)"/>
+      <path d="M -35,256 H 35 M -35,238 H 35 M -35,256 V 238 M 35,256 V 238 M 22,256 V 300 M 30,256 V 300 M 22,266 H 30 M 22,276 H 30 M 22,286 H 30" fill="none" stroke="#15112a" stroke-width="4.6" stroke-linecap="round"/>
+      <path d="M -35,256 H 35 M -35,238 H 35 M -35,256 V 238 M 35,256 V 238 M 22,256 V 300 M 30,256 V 300 M 22,266 H 30 M 22,276 H 30 M 22,286 H 30" fill="none" stroke="#3a3858" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+    <!-- a window air conditioner, over a window's lower half (origin at its top middle) -->
+    <g id="acBox" stroke="#15112a" stroke-width="1.4" stroke-linejoin="round">
+      <rect x="-12" y="0" width="24" height="14" fill="#a9aec8"/>
+      <path d="M -9,4 H 9 M -9,7 H 9 M -9,10 H 9" stroke="#6a7090" stroke-width="1.2"/>
+      <path d="M -11,1.5 H 11" stroke="#e6e9f8" stroke-width="1"/>
+      <path d="M 6,14 C 6,20 3,24 3,30" fill="none" stroke="#7fd0ff" stroke-width="1.2" opacity="0.6"/>
+    </g>
+
+    <!-- the Starlight's front: deco piers, a neon star, a column of lit discs, posters and the
+         marquee (origin at the roof's middle, 104 wide) -->
+    <path id="nDisc" d="M -9,0 a 9,9 0 1 0 18,0 a 9,9 0 1 0 -18,0"/>
+    <g id="disc">
+      <g fill="none"><use href="#nDisc" stroke="#ffd84a" stroke-width="8" opacity="0.45" filter="url(#glow)"/><use href="#nDisc" stroke="#ffd84a" stroke-width="2.8"/><use href="#nDisc" stroke="#fffbe0" stroke-width="1"/></g>
+      <use href="#nStar" transform="scale(0.28)" fill="#ff6fb8"/>
+    </g>
+    <g id="palaceFront">
+      <!-- piers -->
+      <g fill="#a56bb0"><rect x="-52" y="12" width="14" height="1100"/><rect x="38" y="12" width="14" height="1100"/></g>
+      <g fill="#6a3a78"><rect x="-40" y="12" width="3" height="1100"/><rect x="49" y="12" width="3" height="1100"/></g>
+      <path d="M -52,12 V 1112 M -38,12 V 1112 M 38,12 V 1112 M 52,12 V 1112" stroke="#15112a" stroke-width="1.4"/>
+      <path d="M -50,40 L -45,32 L -40,40 M 40,40 L 45,32 L 50,40 M -50,52 L -45,44 L -40,52 M 40,52 L 45,44 L 50,52" fill="none" stroke="#f4d690" stroke-width="1.8"/>
+      <!-- the star medallion under the cornice -->
+      <circle cy="62" r="34" fill="#ffd84a" opacity="0.25" filter="url(#glowWide)"/>
+      <circle cy="62" r="30" fill="#1b1533" stroke="#15112a" stroke-width="2.4"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,62)">
+        <use href="#nRing" transform="scale(0.85)" stroke="#ff4fa8" stroke-width="3"/>
+        <use href="#nStar" stroke="#ffd84a" stroke-width="9" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nStar" stroke="#ffd84a" stroke-width="3.2"/>
+        <use href="#nStar" stroke="#fffbe0" stroke-width="1.2"/>
+      </g>
+      <!-- a column of discs down the middle, on a dark board with a pink tube round it -->
+      <rect x="-17" y="110" width="34" height="214" rx="6" fill="#1b1533" stroke="#15112a" stroke-width="2.4"/>
+      <rect x="-13" y="114" width="26" height="206" rx="4" fill="none" stroke="#ff4fa8" stroke-width="7" opacity="0.4" filter="url(#glow)"/>
+      <rect x="-13" y="114" width="26" height="206" rx="4" fill="none" stroke="#ff4fa8" stroke-width="2.6"/>
+      <rect x="-13" y="114" width="26" height="206" rx="4" fill="none" stroke="#ffe3f2" stroke-width="0.9"/>
+      <use href="#disc" y="136"/><use href="#disc" y="176"/><use href="#disc" y="216"/><use href="#disc" y="256"/><use href="#disc" y="296"/>
+      <!-- posters in lit frames -->
+      <g stroke="#15112a" stroke-width="2">
+        <rect x="-34" y="346" width="26" height="40" fill="#f4d690"/><rect x="8" y="346" width="26" height="40" fill="#f4d690"/>
+        <rect x="-31" y="349" width="20" height="34" fill="#2a3a7a" stroke-width="1"/><rect x="11" y="349" width="20" height="34" fill="#7a2a5a" stroke-width="1"/>
+      </g>
+      <circle cx="-21" cy="361" r="6" fill="#f6f2e2"/><path d="M -28,377 L -21,368 L -14,377 Z" fill="#38e8ff"/>
+      <path d="M 14,374 L 28,356 M 16,368 L 26,360" stroke="#ffd84a" stroke-width="2.6" stroke-linecap="round"/><circle cx="28" cy="356" r="3.4" fill="#fffbe0"/>
+      <!-- the marquee: a lit board ringed with bulbs -->
+      <rect x="-56" y="410" width="112" height="52" fill="#ffe7a0" opacity="0.3" filter="url(#glowWide)"/>
+      <rect x="-56" y="414" width="112" height="44" fill="#f2e6c8" stroke="#15112a" stroke-width="2.4"/>
+      <rect x="-56" y="458" width="112" height="8" fill="#5a3068" stroke="#15112a" stroke-width="2"/>
+      <path d="M -40,428 h 10 M -26,428 h 14 M -8,428 h 6 M 2,428 h 16 M 22,428 h 12 M -34,444 h 18 M -12,444 h 8 M 0,444 h 12 M 16,444 h 14" stroke="#7a2a5a" stroke-width="5" stroke-linecap="round"/>
+      <path d="M -52,418 H 52 M -52,454 H 52" stroke="#ffd84a" stroke-width="3.4" stroke-dasharray="0.1 7" stroke-linecap="round"/>
+      <path d="M -52,418 H 52 M -52,454 H 52" stroke="#fffbe0" stroke-width="1.4" stroke-dasharray="0.1 7" stroke-linecap="round"/>
+    </g>
+
+    <!-- floodlights at a tower's crown wash its top storeys from below (origin at the roof's
+         middle, 100 wide, scaled to the facade) -->
+    <linearGradient id="floodWash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd9a0" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/>
+    </linearGradient>
+    <rect id="crownLight" x="-50" y="12" width="100" height="70" fill="url(#floodWash)"/>
+
+    <!-- B's warehouse fronts: a column of loading doors under the hoist, one a storey (84 px,
+         origin at the column's top middle); painted numbers; the quay's fenders and ladder -->
+    <g id="loadingDoor" stroke="#15112a" stroke-linejoin="round">
+      <rect x="-26" y="8" width="52" height="66" fill="#6a4632" stroke-width="2"/>
+      <rect x="-26" y="8" width="26" height="66" fill="#7c533a" stroke="none"/>
+      <path d="M 0,8 V 74 M -26,22 L 0,10 M 0,10 L 26,22 M -24,60 L 0,74 M 0,74 L 24,60" fill="none" stroke="#3a2620" stroke-width="1.6"/>
+      <rect x="-26" y="8" width="52" height="66" fill="none" stroke-width="2"/>
+      <path d="M -30,74 H 30" stroke="#d8cbb4" stroke-width="4"/>
+      <path d="M -30,6 H 30" stroke="#7a2f2e" stroke-width="4"/>
+    </g>
+    <g id="loadingDoors">
+      <use href="#loadingDoor"/><use href="#loadingDoor" y="84"/><use href="#loadingDoor" y="168"/><use href="#loadingDoor" y="252"/><use href="#loadingDoor" y="336"/>
+    </g>
+    <path id="numeral7" d="M -22,-30 H 22 V -20 L -2,30 H -16 L 7,-20 H -22 Z"/>
+    <path id="numeral9" d="M 2,30 L 14,4 C 26,-14 18,-30 0,-30 C -18,-30 -24,-16 -20,-4 C -16,8 -4,10 8,4 L -10,30 Z M 0,-20 C 8,-20 12,-14 10,-8 C 8,-2 -2,0 -8,-4 C -12,-8 -10,-20 0,-20 Z"/>
+    <!-- a warehouse's number on an enamel plate (origin at its middle) -->
+    <g id="plate">
+      <circle r="35" fill="#15112a" opacity="0.3" transform="translate(2,3)"/>
+      <circle r="34" fill="#f2ead6" stroke="#15112a" stroke-width="2.6"/>
+      <circle r="28" fill="none" stroke="#c4473e" stroke-width="4"/>
+      <path d="M -24,-14 A 28 28 0 0 1 -6,-27" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
+    </g>
+    <g id="plate7"><use href="#plate"/><use href="#numeral7" transform="scale(0.62)" fill="#2a2440"/></g>
+    <g id="plate9"><use href="#plate"/><use href="#numeral9" transform="scale(0.62)" fill="#2a2440" fill-rule="evenodd"/></g>
+    <g id="quayFace">
+      <!-- the plinth's top course, tyre fenders on chains, and a ladder (origin at the plinth's top middle, 160 wide) -->
+      <rect x="-80" y="0" width="160" height="10" fill="#c9cdd8"/>
+      <path d="M -80,10 H 80" stroke="#15112a" stroke-width="1.6"/>
+      <g stroke="#15112a" stroke-width="2">
+        <path d="M -50,10 V 30 M 40,10 V 30" stroke="#3a3858" stroke-width="2"/>
+        <rect x="-60" y="30" width="20" height="30" rx="7" fill="#26223a"/><rect x="30" y="30" width="20" height="30" rx="7" fill="#26223a"/>
+      </g>
+      <path d="M -56,34 V 56 M 34,34 V 56" stroke="#4a4668" stroke-width="2"/>
+      <g fill="none" stroke-linecap="round"><path d="M -6,10 V 300 M 6,10 V 300 M -6,24 H 6 M -6,40 H 6 M -6,56 H 6 M -6,72 H 6 M -6,88 H 6 M -6,104 H 6 M -6,120 H 6" stroke="#15112a" stroke-width="4"/><path d="M -6,10 V 300 M 6,10 V 300 M -6,24 H 6 M -6,40 H 6 M -6,56 H 6 M -6,72 H 6 M -6,88 H 6 M -6,104 H 6 M -6,120 H 6" stroke="#9aa0c0" stroke-width="1.8"/></g>
+    </g>
+
+    <!-- out from the walls (origin at the wall where the bracket fixes; R signs stick out to +x) -->
+    <g id="bladeR">
+      <path d="M 0,0 H 14 M 0,10 L 10,0 M 0,150 H 14 M 0,140 L 10,150" fill="none" stroke="#15112a" stroke-width="4" stroke-linecap="round"/>
+      <path d="M 0,0 H 14 M 0,150 H 14" fill="none" stroke="#6a6f98" stroke-width="1.8"/>
+      <rect x="6" y="-8" width="34" height="166" rx="7" fill="#ff4fa8" opacity="0.3" filter="url(#glowWide)"/>
+      <rect x="10" y="-4" width="26" height="158" rx="5" fill="#1b1533" stroke="#15112a" stroke-width="2.4"/>
+      <rect x="13" y="-1" width="20" height="152" rx="3" fill="none" stroke="#ff4fa8" stroke-width="2.4"/>
+      <rect x="13" y="-1" width="20" height="152" rx="3" fill="none" stroke="#ffe3f2" stroke-width="0.9"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nMoon" transform="translate(23,18) scale(0.36)" stroke="#c39bff" stroke-width="7"/>
+        <use href="#nStar" transform="translate(23,50) scale(0.36)" stroke="#ffd84a" stroke-width="7"/>
+        <use href="#nStar" transform="translate(23,82) scale(0.36)" stroke="#ffd84a" stroke-width="7"/>
+        <use href="#nStar" transform="translate(23,114) scale(0.36)" stroke="#ffd84a" stroke-width="7"/>
+      </g>
+      <path d="M 18,136 H 28" stroke="#38e8ff" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <use id="bladeL" href="#bladeR" transform="scale(-1 1)"/>
+    <g id="bladeBowlR">
+      <path d="M 0,0 H 14 M 0,10 L 10,0 M 0,110 H 14 M 0,100 L 10,110" fill="none" stroke="#15112a" stroke-width="4" stroke-linecap="round"/>
+      <rect x="6" y="-8" width="34" height="126" rx="7" fill="#ff8a3a" opacity="0.3" filter="url(#glowWide)"/>
+      <rect x="10" y="-4" width="26" height="118" rx="5" fill="#b8352f" stroke="#15112a" stroke-width="2.4"/>
+      <rect x="13" y="-1" width="20" height="112" rx="3" fill="none" stroke="#ffd84a" stroke-width="2.2"/>
+      <g fill="#fff3d0"><circle cx="23" cy="14" r="5"/><circle cx="23" cy="34" r="5"/><circle cx="23" cy="54" r="5"/><circle cx="23" cy="74" r="5"/><circle cx="23" cy="94" r="5"/></g>
+      <g fill="#b8352f"><rect x="20" y="11" width="6" height="6" rx="1"/><path d="M 19,34 H 27 M 23,30 V 38" stroke="#b8352f" stroke-width="2.4"/><circle cx="23" cy="54" r="2.6"/><path d="M 19,72 L 27,76 M 19,76 L 27,72" stroke="#b8352f" stroke-width="2.2"/><path d="M 19,94 H 27" stroke="#b8352f" stroke-width="2.6"/></g>
+    </g>
+    <use id="bladeBowlL" href="#bladeBowlR" transform="scale(-1 1)"/>
+    <!-- string lights across a gap: 56 and 96 px spans (origin at the west end) -->
+    <g id="lights56">
+      <path d="M 0,0 Q 28,20 56,0" fill="none" stroke="#15112a" stroke-width="1.4"/>
+      <g opacity="0.45" filter="url(#glow)"><circle cx="9.3" cy="5.6" r="5" fill="#ffd27a"/><circle cx="18.7" cy="8.9" r="5" fill="#ff6fb8"/><circle cx="28" cy="10" r="5" fill="#7ff0ff"/><circle cx="37.3" cy="8.9" r="5" fill="#ffd27a"/><circle cx="46.7" cy="5.6" r="5" fill="#ff6fb8"/></g>
+      <g stroke="#15112a" stroke-width="0.8"><circle cx="9.3" cy="7.6" r="2.6" fill="#fff0bd"/><circle cx="18.7" cy="10.9" r="2.6" fill="#ffc0e0"/><circle cx="28" cy="12" r="2.6" fill="#d0fbff"/><circle cx="37.3" cy="10.9" r="2.6" fill="#fff0bd"/><circle cx="46.7" cy="7.6" r="2.6" fill="#ffc0e0"/></g>
+    </g>
+    <g id="lights96">
+      <path d="M 0,0 Q 48,28 96,0" fill="none" stroke="#15112a" stroke-width="1.4"/>
+      <g opacity="0.45" filter="url(#glow)"><circle cx="12" cy="6.1" r="5" fill="#ffd27a"/><circle cx="24" cy="10.5" r="5" fill="#ff6fb8"/><circle cx="36" cy="13.1" r="5" fill="#7ff0ff"/><circle cx="48" cy="14" r="5" fill="#ffd27a"/><circle cx="60" cy="13.1" r="5" fill="#ff6fb8"/><circle cx="72" cy="10.5" r="5" fill="#7ff0ff"/><circle cx="84" cy="6.1" r="5" fill="#ffd27a"/></g>
+      <g stroke="#15112a" stroke-width="0.8"><circle cx="12" cy="8.1" r="2.6" fill="#fff0bd"/><circle cx="24" cy="12.5" r="2.6" fill="#ffc0e0"/><circle cx="36" cy="15.1" r="2.6" fill="#d0fbff"/><circle cx="48" cy="16" r="2.6" fill="#fff0bd"/><circle cx="60" cy="15.1" r="2.6" fill="#ffc0e0"/><circle cx="72" cy="12.5" r="2.6" fill="#d0fbff"/><circle cx="84" cy="8.1" r="2.6" fill="#fff0bd"/></g>
+    </g>
+    <!-- a wall lamp with its pool of light (origin at the wall) -->
+    <g id="lampR" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,0 H 10 C 14,0 16,3 16,6" fill="none" stroke="#15112a" stroke-width="3.6"/>
+      <path d="M 0,0 H 10 C 14,0 16,3 16,6" fill="none" stroke="#6a6f98" stroke-width="1.6"/>
+      <path d="M 16,8 L 4,60 H 28 Z" fill="#ffe2a0" opacity="0.14"/>
+      <circle cx="16" cy="12" r="10" fill="#ffd27a" opacity="0.4" filter="url(#glow)"/>
+      <path d="M 9,7 H 23 L 20,13 H 12 Z" fill="#3a3858" stroke="#15112a" stroke-width="1.4"/>
+      <circle cx="16" cy="14" r="3.4" fill="#fff0bd" stroke="#15112a" stroke-width="1"/>
+    </g>
+    <use id="lampL" href="#lampR" transform="scale(-1 1)"/>
+    <!-- a hoist beam over the loading doors, its block, rope and a crate (origin at the wall top) -->
+    <g id="hoist" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -6,0 H 30 V 8 H -6 Z" fill="#6a4632" stroke="#15112a" stroke-width="2"/>
+      <path d="M -6,1.4 H 30" stroke="#a8784e" stroke-width="1.4"/>
+      <circle cx="24" cy="14" r="5" fill="#3a3858" stroke="#15112a" stroke-width="1.6"/>
+      <path d="M 28,14 V 70 M 20,14 V 40" stroke="#c9b48a" stroke-width="1.6"/>
+      <path d="M 16,70 H 40 V 92 H 16 Z" fill="#b8844a" stroke="#15112a" stroke-width="1.8"/>
+      <path d="M 16,70 L 40,92 M 16,81 H 40" stroke="#7a5430" stroke-width="1.4"/>
+      <path d="M 18,71.6 H 38" stroke="#e8b878" stroke-width="1.2"/>
+    </g>
+    <!-- a life ring on its hook (origin at the hook) -->
+    <g id="lifeRing">
+      <path d="M 0,0 V 6" stroke="#15112a" stroke-width="2.4"/>
+      <circle cy="20" r="13" fill="none" stroke="#15112a" stroke-width="10"/>
+      <circle cy="20" r="13" fill="none" stroke="#f4f0e6" stroke-width="7"/>
+      <circle cy="20" r="13" fill="none" stroke="#e0533f" stroke-width="7" stroke-dasharray="10.2 10.2" stroke-dashoffset="5"/>
+    </g>
+    <!-- the crane's spreader on the box, its twistlocks and lights (origin at the box's top middle) -->
+    <g id="spreader" stroke-linejoin="round">
+      <path d="M -58,-10 H 58 V 0 H -58 Z" fill="#e0a832" stroke="#15112a" stroke-width="2"/>
+      <path d="M -58,-8.4 H 58" stroke="#ffe08a" stroke-width="1.4"/>
+      <path d="M -14,-10 V -22 H 14 V -10" fill="#c28a22" stroke="#15112a" stroke-width="2"/>
+      <circle cx="-50" cy="-14" r="5" fill="#ff8a3a" opacity="0.5" filter="url(#glow)"/><circle cx="50" cy="-14" r="5" fill="#ff8a3a" opacity="0.5" filter="url(#glow)"/>
+      <circle cx="-50" cy="-12.6" r="2.4" fill="#ffd27a" stroke="#15112a" stroke-width="0.8"/><circle cx="50" cy="-12.6" r="2.4" fill="#ffd27a" stroke="#15112a" stroke-width="0.8"/>
+    </g>
+    <!-- a cat on a cornice, eyes catching the neon (origin at its feet) -->
+    <g id="cat">
+      <path d="M -8,0 C -9,-6 -7,-12 -3,-14 L -4,-21 L 0,-17 H 3 L 6,-21 L 6,-14 C 9,-11 9,-5 8,0 Z M 8,-2 C 14,-2 16,-6 14,-10" fill="#15112a" stroke="#15112a" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="0" cy="-14.5" r="1.1" fill="#b6ff6a"/><circle cx="4" cy="-14.5" r="1.1" fill="#b6ff6a"/>
+    </g>
+
+    <!-- behind the roofs (origin at the foot, on the roof) -->
+    <g id="waterTower" stroke="#15112a" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -20,0 L -16,-54 M 20,0 L 16,-54 M -6,0 L -5,-54 M 6,0 L 5,-54" fill="none" stroke-width="5.4"/>
+      <path d="M -20,0 L -16,-54 M 20,0 L 16,-54 M -6,0 L -5,-54 M 6,0 L 5,-54" fill="none" stroke="#4a4e76" stroke-width="2.6"/>
+      <path d="M -19,-6 L 17,-28 M 19,-6 L -17,-28 M -18,-30 L 16,-50 M 18,-30 L -16,-50" fill="none" stroke="#2c2c48" stroke-width="1.8"/>
+      <path d="M -27,-54 H 30" fill="none" stroke-width="3.6"/>
+      <path d="M 26,-2 V -54 M 31,-2 V -54" fill="none" stroke="#2c2c48" stroke-width="1.6"/>
+      <path d="M 26,-12 H 31 M 26,-22 H 31 M 26,-32 H 31 M 26,-42 H 31" fill="none" stroke="#2c2c48" stroke-width="1.2"/>
+      <path d="M -24,-54 V -100 H 24 V -54 Z" fill="#7a523c" stroke-width="2.2"/>
+      <path d="M -24,-100 V -54 H -14 V -100 Z" fill="#a8774e" stroke="none"/>
+      <path d="M 14,-100 V -54 H 24 V -100 Z" fill="#5a3a2e" stroke="none"/>
+      <path d="M -19,-99 V -55 M -10,-99 V -55 M -2,-99 V -55 M 6,-99 V -55 M 14,-99 V -55" fill="none" stroke="#4a3024" stroke-width="1"/>
+      <path d="M -25,-63 H 25 M -25,-77 H 25 M -25,-91 H 25" fill="none" stroke="#2a2232" stroke-width="2.6"/>
+      <path d="M -24,-54 V -100 H 24 V -54 Z" fill="none" stroke-width="2.2"/>
+      <path d="M -29,-100 L 0,-124 L 29,-100 Z" fill="#5a6088" stroke-width="2.2"/>
+      <path d="M -29,-100 L 0,-124 L -7,-100 Z" fill="#8d95c0" stroke="none"/>
+      <path d="M -29,-100 L 0,-124 L 29,-100 Z" fill="none" stroke-width="2.2"/>
+      <path d="M 0,-124 V -133" fill="none" stroke-width="2.6"/>
+      <circle cy="-134" r="2.2" fill="#8d95c0"/>
+    </g>
+    <g id="mast" stroke-linecap="round" fill="none">
+      <path d="M -10,0 L -2,-160 M 10,0 L 2,-160" stroke="#15112a" stroke-width="4.4"/>
+      <path d="M -10,0 L -2,-160 M 10,0 L 2,-160" stroke="#5c6290" stroke-width="2"/>
+      <path d="M -9.6,-6 L 8.8,-26 L -8.2,-46 L 7.6,-66 L -7,-86 L 6.4,-106 L -5.8,-126 L 5,-146" stroke="#15112a" stroke-width="2.6"/>
+      <path d="M -9.6,-6 L 8.8,-26 L -8.2,-46 L 7.6,-66 L -7,-86 L 6.4,-106 L -5.8,-126 L 5,-146" stroke="#5c6290" stroke-width="1.1"/>
+      <path d="M -6,-80 H 6 M -4,-120 H 4" stroke="#15112a" stroke-width="3.4"/>
+      <path d="M 0,-160 V -188" stroke="#15112a" stroke-width="3.2"/>
+      <path d="M 0,-160 V -188" stroke="#8a90b8" stroke-width="1.4"/>
+      <circle cy="-190" r="11" fill="#ff3a4a" opacity="0.4" filter="url(#glow)"/>
+      <circle cy="-190" r="3.4" fill="#ff5a64" stroke="#15112a" stroke-width="1.3"/>
+      <circle cx="-7" cy="-82" r="2.6" fill="#ff5a64" stroke="#15112a" stroke-width="1"/>
+      <circle cx="7" cy="-82" r="2.6" fill="#ff5a64" stroke="#15112a" stroke-width="1"/>
+      <!-- a dish on the side -->
+      <path d="M 8,-52 C 22,-64 26,-40 14,-36 Z" fill="#c3c8e2" stroke="#15112a" stroke-width="1.6"/>
+      <path d="M 10,-46 L 20,-50" stroke="#15112a" stroke-width="1.4"/>
+    </g>
+    <g id="antenna" fill="none" stroke-linecap="round">
+      <path d="M 0,0 V -54 M -16,-50 H 16 M -12,-40 H 12 M -8,-30 H 8 M -16,-50 L -18,-54 M 16,-50 L 18,-54" stroke="#15112a" stroke-width="3.6"/>
+      <path d="M 0,0 V -54 M -16,-50 H 16 M -12,-40 H 12 M -8,-30 H 8" stroke="#7a80aa" stroke-width="1.5"/>
+    </g>
+    <g id="dish" stroke="#15112a" stroke-linejoin="round">
+      <path d="M -4,0 L 0,-12 L 4,0 Z" fill="#5c6290" stroke-width="1.6"/>
+      <path d="M -16,-26 C -10,-8 12,-6 16,-14 C 6,-16 -6,-20 -16,-26 Z" fill="#c3c8e2" stroke-width="1.8"/>
+      <path d="M 0,-12 L 2,-18 M 0,-16 L -8,-28" stroke-width="1.6"/>
+    </g>
+    <g id="hvac" stroke="#15112a" stroke-linejoin="round">
+      <rect x="-20" y="-22" width="40" height="22" fill="#7d84a8" stroke-width="2"/>
+      <rect x="-20" y="-22" width="14" height="22" fill="#9ca3c6" stroke="none"/>
+      <circle cx="6" cy="-11" r="7.5" fill="#3a3d5e" stroke-width="1.6"/>
+      <path d="M 6,-18 V -4 M -1,-11 H 13" stroke="#6a7090" stroke-width="1.4"/>
+      <rect x="-20" y="-22" width="40" height="22" fill="none" stroke-width="2"/>
+    </g>
+    <!-- the Meridian's crown: stepped back, a needle and its beacon (origin at the crown's top) -->
+    <g id="spireDeco" stroke="#15112a" stroke-linejoin="round">
+      <path d="M -24,0 V -16 H -17 V -32 H -10 V -50 H 10 V -32 H 17 V -16 H 24 V 0 Z" fill="#4f5b96" stroke-width="2.2"/>
+      <path d="M -24,0 V -16 H -17 V -32 H -10 V -50 H -4 V 0 Z" fill="#7a86c4" stroke="none"/>
+      <path d="M -24,0 V -16 H -17 V -32 H -10 V -50 H 10 V -32 H 17 V -16 H 24 V 0 Z" fill="none" stroke-width="2.2"/>
+      <path d="M -4,-50 L 0,-132 L 4,-50 Z" fill="#c9cfee" stroke-width="2"/>
+      <g stroke="none"><rect x="-1.2" y="-46" width="2.4" height="44" fill="#38e8ff"/></g>
+      <rect x="-3" y="-48" width="6" height="48" fill="#38e8ff" opacity="0.35" filter="url(#glow)" stroke="none"/>
+      <circle cy="-136" r="11" fill="#ff3a4a" opacity="0.4" filter="url(#glow)" stroke="none"/>
+      <circle cy="-136" r="3.4" fill="#ff5a64" stroke-width="1.3"/>
+    </g>
+    <!-- a rooftop sign's scaffold, 100 wide and 80 tall (origin at its foot's middle) -->
+    <g id="signFrame" fill="none" stroke-linecap="round">
+      <path d="M -44,0 V -80 M 44,0 V -80 M -15,0 V -80 M 15,0 V -80 M -46,-80 H 46 M -46,-40 H 46 M -44,0 L -15,-40 M -15,0 L -44,-40 M 15,0 L 44,-40 M 44,0 L 15,-40 M -44,-40 L -15,-80 M 15,-40 L 44,-80" stroke="#15112a" stroke-width="3.8"/>
+      <path d="M -44,0 V -80 M 44,0 V -80 M -15,0 V -80 M 15,0 V -80 M -46,-80 H 46 M -46,-40 H 46" stroke="#4a4e76" stroke-width="1.8"/>
+    </g>
+    <g id="roofCocktail">
+      <use href="#signFrame"/>
+      <g transform="translate(0,-92) scale(2.2)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nCocktail" stroke="#ff4fa8" stroke-width="5" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nCocktail" stroke="#ff4fa8" stroke-width="1.8"/>
+        <use href="#nCocktail" stroke="#ffe3f2" stroke-width="0.7"/>
+        <use href="#nOlive" stroke="#9dff6a" stroke-width="1.6"/>
+      </g>
+    </g>
+    <g id="roofStar">
+      <use href="#signFrame" transform="scale(0.8 1)"/>
+      <g transform="translate(0,-112)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nRing" transform="scale(1.3)" stroke="#ff4fa8" stroke-width="10" opacity="0.4" filter="url(#glow)"/>
+        <use href="#nRing" transform="scale(1.3)" stroke="#ff4fa8" stroke-width="2.6"/>
+        <use href="#nStar" transform="scale(1.45)" stroke="#ffd84a" stroke-width="7" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nStar" transform="scale(1.45)" stroke="#ffd84a" stroke-width="2.4"/>
+        <use href="#nStar" transform="scale(1.45)" stroke="#fffbe0" stroke-width="0.9"/>
+      </g>
+    </g>
+    <g id="roofWave">
+      <use href="#signFrame"/>
+      <g transform="translate(0,-90) scale(1.6)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nWave" stroke="#38e8ff" stroke-width="6" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nWave" stroke="#38e8ff" stroke-width="2"/>
+        <use href="#nWave" stroke="#e0fdff" stroke-width="0.8"/>
+      </g>
+    </g>
+    <g id="roofFish">
+      <use href="#signFrame"/>
+      <g transform="translate(0,-92) scale(1.7)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <use href="#nFish" stroke="#38e8ff" stroke-width="6" opacity="0.5" filter="url(#glow)"/>
+        <use href="#nFish" stroke="#38e8ff" stroke-width="2"/>
+        <use href="#nFish" stroke="#e0fdff" stroke-width="0.8"/>
+        <use href="#nFishEye" stroke="#ff6fb8" stroke-width="1.8"/>
+      </g>
+    </g>
+    <!-- B: a warehouse's roof light, a refrigeration plant, a yard floodlight -->
+    <g id="roofMonitor" stroke="#15112a" stroke-linejoin="round">
+      <path d="M -70,0 V -24 L -60,-34 H 60 L 70,-24 V 0 Z" fill="#6a4632" stroke-width="2.2"/>
+      <path d="M -70,-24 L -60,-34 H 60 L 70,-24 Z" fill="#8a90b4" stroke-width="2"/>
+      <path d="M -70,-24 L -60,-34 H -40 L -48,-24 Z" fill="#b8bedb" stroke="none"/>
+      <g fill="#ffcf6a" stroke-width="1.2"><rect x="-62" y="-20" width="14" height="14"/><rect x="-42" y="-20" width="14" height="14" fill="#2a3060"/><rect x="-22" y="-20" width="14" height="14"/><rect x="-2" y="-20" width="14" height="14"/><rect x="18" y="-20" width="14" height="14" fill="#2a3060"/><rect x="38" y="-20" width="14" height="14"/></g>
+    </g>
+    <g id="condenser" stroke="#15112a" stroke-linejoin="round">
+      <rect x="-30" y="-26" width="60" height="26" fill="#8a96b0" stroke-width="2.2"/>
+      <rect x="-30" y="-26" width="18" height="26" fill="#aab4cc" stroke="none"/>
+      <circle cx="-8" cy="-13" r="8.5" fill="#3a3d5e" stroke-width="1.6"/><circle cx="16" cy="-13" r="8.5" fill="#3a3d5e" stroke-width="1.6"/>
+      <path d="M -8,-21 V -5 M -16,-13 H 0 M 16,-21 V -5 M 8,-13 H 24" stroke="#6a7090" stroke-width="1.3"/>
+      <rect x="-30" y="-26" width="60" height="26" fill="none" stroke-width="2.2"/>
+      <path d="M -6,-30 C -10,-40 -2,-44 -6,-54 M 14,-30 C 10,-40 18,-44 14,-54" fill="none" stroke="#e8f2ff" stroke-width="3" opacity="0.25" stroke-linecap="round"/>
+    </g>
+    <g id="floodlight" stroke-linecap="round">
+      <path d="M 0,0 V -150" stroke="#15112a" stroke-width="6"/>
+      <path d="M 0,0 V -150" stroke="#5c6290" stroke-width="2.8"/>
+      <path d="M -30,-150 L 120,240 H -180 Z" fill="#fff4d0" opacity="0.06"/>
+      <rect x="-22" y="-170" width="44" height="18" rx="2" fill="#3a3858" stroke="#15112a" stroke-width="2"/>
+      <rect x="-24" y="-176" width="48" height="30" fill="#fff0bd" opacity="0.4" filter="url(#glow)"/>
+      <g fill="#fff6d8" stroke="#15112a" stroke-width="1"><circle cx="-14" cy="-161" r="4"/><circle cx="-4" cy="-161" r="4"/><circle cx="6" cy="-161" r="4"/><circle cx="16" cy="-161" r="4"/></g>
+    </g>
+    <!-- the gantry crane over the slip: legs on the pier heads 400 apart, its girder, the trolley
+         and the hoist ropes down to the spreader 160 above its feet (origin between its feet) -->
+    <g id="gantry" stroke-linejoin="round">
+      <g fill="#4a3450" stroke="#15112a" stroke-width="2.4">
+        <path d="M -214,0 L -204,-410 H -188 L -194,0 Z"/>
+        <path d="M 214,0 L 204,-410 H 188 L 194,0 Z"/>
+        <path d="M -236,-430 H 236 V -404 H -236 Z"/>
+        <path d="M -36,-476 H 36 V -430 H -36 Z"/>
+      </g>
+      <g fill="#735479" stroke="none">
+        <path d="M -214,0 L -204,-410 H -199 L -209,0 Z"/><path d="M 194,0 L 188,-410 H 193 L 199,0 Z"/>
+        <path d="M -236,-430 H 236 V -424 H -236 Z"/><path d="M -36,-476 H -24 V -430 H -36 Z"/>
+      </g>
+      <g fill="none" stroke="#15112a" stroke-width="3">
+        <path d="M -200,-404 L -150,-430 M 200,-404 L 150,-430 M -202,-300 L -194,-404 M 202,-300 L 194,-404"/>
+        <path d="M -232,-404 L -206,-430 M -180,-404 L -154,-430 M -128,-404 L -102,-430 M -76,-404 L -50,-430 M 50,-404 L 76,-430 M 102,-404 L 128,-430 M 154,-404 L 180,-430 M 206,-404 L 232,-430" stroke-width="1.6"/>
+      </g>
+      <g fill="#ffd27a" stroke="#15112a" stroke-width="1"><rect x="-26" y="-468" width="10" height="10"/><rect x="-8" y="-468" width="10" height="10"/><rect x="10" y="-468" width="10" height="10" fill="#2a3060"/></g>
+      <path d="M -214,-30 H -194 M -213,-60 H -194 M 194,-30 H 214 M 194,-60 H 213" stroke="#ffd84a" stroke-width="6" stroke-dasharray="6 6" opacity="0.7"/>
+      <!-- the trolley and ropes -->
+      <path d="M -26,-404 H 26 V -388 H -26 Z" fill="#3a3858" stroke="#15112a" stroke-width="2"/>
+      <path d="M -16,-388 L -40,-160 M 16,-388 L 40,-160 M -6,-388 L -14,-160 M 6,-388 L 14,-160" fill="none" stroke="#15112a" stroke-width="2.4"/>
+      <path d="M -16,-388 L -40,-160 M 16,-388 L 40,-160" fill="none" stroke="#8a90b8" stroke-width="0.9"/>
+      <circle cx="-236" cy="-438" r="11" fill="#ff3a4a" opacity="0.4" filter="url(#glow)"/><circle cx="236" cy="-438" r="11" fill="#ff3a4a" opacity="0.4" filter="url(#glow)"/>
+      <circle cx="-236" cy="-436" r="3.4" fill="#ff5a64" stroke="#15112a" stroke-width="1.2"/><circle cx="236" cy="-436" r="3.4" fill="#ff5a64" stroke="#15112a" stroke-width="1.2"/>
+      <circle cy="-482" r="3" fill="#ff5a64" stroke="#15112a" stroke-width="1.2"/>
+    </g>
+
+    <!-- grime: water stains under sills and patched render (origin at the top) -->
+    <path id="stain" d="M -6,0 C -6,14 -4,30 -5,46 C -2,52 3,52 4,44 C 3,30 6,14 6,0 Z" fill="#15112a" opacity="0.1"/>
+    <path id="stainLong" d="M -4,0 C -5,24 -3,50 -4,86 C -1,92 3,90 3,80 C 3,52 5,24 4,0 Z" fill="#15112a" opacity="0.09"/>
+    <path id="patch" d="M -16,-8 H 12 L 16,-4 V 9 H -12 L -16,5 Z" fill="#ffffff" opacity="0.06"/>
+
+    <!-- on the roofs (origin at the surface, up = out of it) -->
+    <g id="vent" stroke="#15112a" stroke-width="1.4" stroke-linejoin="round">
+      <path d="M -4,1 V -12 H 4 V 1 Z" fill="#8f96b8"/>
+      <path d="M -7,-12 H 7 L 5,-16 H -5 Z" fill="#c3c8e2"/>
+      <path d="M -2.6,-11 V 0" stroke="#d8dcf0" stroke-width="1.2"/>
+    </g>
+    <g id="turbine" stroke="#15112a" stroke-linejoin="round">
+      <path d="M -2.6,1 V -8 H 2.6 V 1 Z" fill="#7d84a8" stroke-width="1.3"/>
+      <path d="M -7,-8 C -8,-15 -4,-19 0,-19 C 4,-19 8,-15 7,-8 Z" fill="#a9b0d0" stroke-width="1.5"/>
+      <path d="M -3.6,-8.6 C -4.4,-13 -2.6,-17 0,-18 M 0,-8.4 V -18.4 M 3.6,-8.6 C 4.4,-13 2.6,-17 0,-18" fill="none" stroke-width="1"/>
+      <path d="M -6,-10 C -6.4,-14 -4,-17 -1.6,-17.6" fill="none" stroke="#e6e9f8" stroke-width="1.2"/>
+    </g>
+    <g id="hatch" stroke="#15112a" stroke-width="1.4" stroke-linejoin="round">
+      <path d="M -11,1 V -6 H 11 V 1 Z" fill="#7d84a8"/>
+      <path d="M -12,-6 L -9,-9 H 9 L 12,-6 Z" fill="#b8bedb"/>
+    </g>
+    <g id="puddle"><ellipse cx="0" cy="0.5" rx="11" ry="1.6" fill="#6ad8ff" opacity="0.5"/><ellipse cx="-3" cy="0.4" rx="3.5" ry="0.8" fill="#ff8ad0" opacity="0.8"/></g>
+    <g id="gravel" fill="#4a4f74"><circle cx="-4" cy="-0.6" r="1.4"/><circle cx="2" cy="-0.8" r="1.1"/><circle cx="6" cy="-0.4" r="0.9" fill="#9aa0c4"/></g>
+  </defs>
+
+  <!-- behind the roofs: water towers, masts, billboards, the crane. Not solid. -->
+  <g>
+{{behind}}
+  </g>
+
+  <g clip-path="url(#landClip)">
+    <rect x="-100" width="2200" height="1200" fill="#52608f"/>
+    <g>
+{{washes}}
+    </g>
+    <rect x="-100" width="2200" height="1200" fill="url(#bricks)" mask="url(#brickMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="url(#ribs)" mask="url(#ribMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="url(#slabs)" mask="url(#slabMask)"/>
+    <rect x="-100" width="2200" height="1200" filter="url(#mottle)" opacity="0.35"/>
+    <g>
+{{grime}}
+    </g>
+    <!-- windows: dark panes, then the lit ones, then the frames over both -->
+    <g mask="url(#officeMask)">
+      <rect x="-100" width="2200" height="1200" fill="url(#officeDark)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#officeLit1)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#officeLit2)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#officeLit3)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#officeLit4)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#officeFrame)"/>
+    </g>
+    <g mask="url(#decoMask)">
+      <rect x="-100" width="2200" height="1200" fill="url(#decoDark)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#decoLit1)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#decoLit2)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#decoLit3)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#decoLit4)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#decoFrame)"/>
+    </g>
+    <g mask="url(#brickWinMask)">
+      <rect x="-100" width="2200" height="1200" fill="url(#brickDark)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#brickLit1)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#brickLit2)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#brickLit3)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#brickLit4)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#brickFrame)"/>
+    </g>
+    <g mask="url(#worksMask)">
+      <rect x="-100" width="2200" height="1200" fill="url(#worksDark)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#worksLit1)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#worksLit2)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#worksLit3)"/>
+      <rect x="-100" width="2200" height="1200" fill="url(#worksFrame)"/>
+    </g>
+    <!-- light and depth: moonlight on the upper storeys and the west corners, shade down the east
+         ones, the lower storeys sinking toward the street far below -->
+    <rect x="-100" width="2200" height="1200" fill="#d6e2ff" opacity="0.1" mask="url(#topLightMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="#d6e2ff" opacity="0.2" mask="url(#litEdgeMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="#15112a" opacity="0.28" mask="url(#shadeEdgeMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="#1a1440" opacity="0.4" mask="url(#deepMask)"/>
+    <rect x="-100" y="820" width="2200" height="300" fill="url(#farBelow)"/>
+    <rect x="-100" y="1000" width="2200" height="120" fill="url(#streetGlow)"/>
+    <!-- the cap: shadow under it, the coping, its moonlit edge, the line where it meets the wall -->
+    <rect x="-100" width="2200" height="1200" fill="#15112a" opacity="0.4" mask="url(#eaveShadeMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="#aab0cf" mask="url(#capMask)"/>
+    <rect x="-100" width="2200" height="1200" fill="#eef1ff" mask="url(#ridgeMask)"/>
+    <use href="#land" transform="translate(0,12)" fill="none" stroke="#15112a" stroke-width="1.8"/>
+    <use href="#land" transform="translate(0,7)" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.35"/>
+    <g mask="url(#brickMask)"><rect x="-100" width="2200" height="1200" fill="url(#corbels)" mask="url(#corbelBandMask)"/></g>
+    <!-- the containers over their cap, and the signs, which give their own light -->
+    <g>
+{{boxes}}
+    </g>
+    <g>
+{{signs}}
+    </g>
+  </g>
+
+  <!-- silhouette outline -->
+  <use href="#land" fill="none" stroke="#15112a" stroke-width="4.6" stroke-linejoin="round"/>
+
+  <!-- out from the walls and over the gaps: blade signs, hoists, lamps, string lights -->
+  <g>
+{{hung}}
+  </g>
+  <g>
+{{roofs}}
+  </g>
+</svg>

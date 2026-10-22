@@ -1,0 +1,261 @@
+// Neonbay B, "docks": the land, the one source for both the terrain art and the collision mask.
+//
+// World pixels, y down. Each block is a closed chain of cubic Béziers (here straight lines: two
+// control points at the thirds, then the end), run clockwise on screen: the flat roofs as walkable
+// `Top`s left to right, then `Rock` for the cornices, down the walls (which stand past the map's
+// bottom, in the harbour far below) and back. Roofs are barely roughened (`rough: 0.1`), the
+// containers not at all. Windowed walls stand 28 or 12 px past a multiple of 40 (of 80 for the
+// warehouses), so each style's windows (tiled from x = 0 in terrain.svg) fill a facade whole.
+// `dress` places decorations into the map's terrain.svg, one rule per slot (`{{name}}`).
+//
+// B: warehouses at the edges, then a stack of containers eight high, a cold store, and the harbour
+// office on each pier head across the slip. A gantry crane spans the slip (scenery, not solid) and
+// holds two boxes over it: a floating block, cover from the middle arcs, which flat shots pass
+// under and high ones over. Spawns are mirrored about x = 1000.
+Land(
+    size: (2000, 1100),
+    islands: [
+        // Warehouse 7: brick, loading doors under a hoist, low at the edge. One spawn (130).
+        (
+            start: (-50.0, 650.0),
+            edges: [
+                Top((2.0, 650.0), (54.0, 650.0), (106.0, 650.0)),
+                Top((158.0, 650.0), (210.0, 650.0), (262.0, 650.0)),
+                Rock((262.0, 653.3), (262.0, 656.7), (262.0, 660.0)),
+                Rock((258.7, 660.7), (255.3, 661.3), (252.0, 662.0)),
+                Rock((252.0, 821.3), (252.0, 980.7), (252.0, 1140.0)),
+                Rock((154.7, 1140.0), (57.3, 1140.0), (-40.0, 1140.0)),
+                Rock((-40.0, 980.7), (-40.0, 821.3), (-40.0, 662.0)),
+                Rock((-43.3, 661.3), (-46.7, 660.7), (-50.0, 660.0)),
+                Rock((-50.0, 656.7), (-50.0, 653.3), (-50.0, 650.0)),
+            ],
+            rough: 0.1,
+        ),
+        // The stack: containers eight high on a quay plinth, the highest roof. One spawn (420).
+        (
+            start: (340.0, 420.0),
+            edges: [
+                Top((393.3, 420.0), (446.7, 420.0), (500.0, 420.0)),
+                Rock((500.0, 660.0), (500.0, 900.0), (500.0, 1140.0)),
+                Rock((446.7, 1140.0), (393.3, 1140.0), (340.0, 1140.0)),
+                Rock((340.0, 900.0), (340.0, 660.0), (340.0, 420.0)),
+            ],
+            rough: 0.0,
+        ),
+        // Cold store: ribbed steel. One spawn (640).
+        (
+            start: (538.0, 500.0),
+            edges: [
+                Top((572.0, 500.0), (606.0, 500.0), (640.0, 500.0)),
+                Top((674.0, 500.0), (708.0, 500.0), (742.0, 500.0)),
+                Rock((742.0, 503.3), (742.0, 506.7), (742.0, 510.0)),
+                Rock((738.7, 510.7), (735.3, 511.3), (732.0, 512.0)),
+                Rock((732.0, 721.3), (732.0, 930.7), (732.0, 1140.0)),
+                Rock((670.7, 1140.0), (609.3, 1140.0), (548.0, 1140.0)),
+                Rock((548.0, 930.7), (548.0, 721.3), (548.0, 512.0)),
+                Rock((544.7, 511.3), (541.3, 510.7), (538.0, 510.0)),
+                Rock((538.0, 506.7), (538.0, 503.3), (538.0, 500.0)),
+            ],
+            rough: 0.1,
+        ),
+        // Harbour office on the west pier head, by the slip. One spawn (840).
+        (
+            start: (778.0, 660.0),
+            edges: [
+                Top((819.3, 660.0), (860.7, 660.0), (902.0, 660.0)),
+                Rock((902.0, 663.3), (902.0, 666.7), (902.0, 670.0)),
+                Rock((898.7, 670.7), (895.3, 671.3), (892.0, 672.0)),
+                Rock((892.0, 828.0), (892.0, 984.0), (892.0, 1140.0)),
+                Rock((857.3, 1140.0), (822.7, 1140.0), (788.0, 1140.0)),
+                Rock((788.0, 984.0), (788.0, 828.0), (788.0, 672.0)),
+                Rock((784.7, 671.3), (781.3, 670.7), (778.0, 670.0)),
+                Rock((778.0, 666.7), (778.0, 663.3), (778.0, 660.0)),
+            ],
+            rough: 0.1,
+        ),
+        // The crane's two boxes, hung over the slip. No spawn.
+        (
+            start: (944.0, 520.0),
+            edges: [
+                Top((981.3, 520.0), (1018.7, 520.0), (1056.0, 520.0)),
+                Rock((1056.0, 550.7), (1056.0, 581.3), (1056.0, 612.0)),
+                Rock((1018.7, 612.0), (981.3, 612.0), (944.0, 612.0)),
+                Rock((944.0, 581.3), (944.0, 550.7), (944.0, 520.0)),
+            ],
+            rough: 0.0,
+        ),
+        // Harbour office on the east pier head (spawn 1160).
+        (
+            start: (1098.0, 660.0),
+            edges: [
+                Top((1139.3, 660.0), (1180.7, 660.0), (1222.0, 660.0)),
+                Rock((1222.0, 663.3), (1222.0, 666.7), (1222.0, 670.0)),
+                Rock((1218.7, 670.7), (1215.3, 671.3), (1212.0, 672.0)),
+                Rock((1212.0, 828.0), (1212.0, 984.0), (1212.0, 1140.0)),
+                Rock((1177.3, 1140.0), (1142.7, 1140.0), (1108.0, 1140.0)),
+                Rock((1108.0, 984.0), (1108.0, 828.0), (1108.0, 672.0)),
+                Rock((1104.7, 671.3), (1101.3, 670.7), (1098.0, 670.0)),
+                Rock((1098.0, 666.7), (1098.0, 663.3), (1098.0, 660.0)),
+            ],
+            rough: 0.1,
+        ),
+        // Ice house: the mirror of the cold store (spawn 1360).
+        (
+            start: (1258.0, 500.0),
+            edges: [
+                Top((1292.0, 500.0), (1326.0, 500.0), (1360.0, 500.0)),
+                Top((1394.0, 500.0), (1428.0, 500.0), (1462.0, 500.0)),
+                Rock((1462.0, 503.3), (1462.0, 506.7), (1462.0, 510.0)),
+                Rock((1458.7, 510.7), (1455.3, 511.3), (1452.0, 512.0)),
+                Rock((1452.0, 721.3), (1452.0, 930.7), (1452.0, 1140.0)),
+                Rock((1390.7, 1140.0), (1329.3, 1140.0), (1268.0, 1140.0)),
+                Rock((1268.0, 930.7), (1268.0, 721.3), (1268.0, 512.0)),
+                Rock((1264.7, 511.3), (1261.3, 510.7), (1258.0, 510.0)),
+                Rock((1258.0, 506.7), (1258.0, 503.3), (1258.0, 500.0)),
+            ],
+            rough: 0.1,
+        ),
+        // The east stack (spawn 1580).
+        (
+            start: (1500.0, 420.0),
+            edges: [
+                Top((1553.3, 420.0), (1606.7, 420.0), (1660.0, 420.0)),
+                Rock((1660.0, 660.0), (1660.0, 900.0), (1660.0, 1140.0)),
+                Rock((1606.7, 1140.0), (1553.3, 1140.0), (1500.0, 1140.0)),
+                Rock((1500.0, 900.0), (1500.0, 660.0), (1500.0, 420.0)),
+            ],
+            rough: 0.0,
+        ),
+        // Warehouse 9: the mirror of Warehouse 7 (spawn 1870).
+        (
+            start: (1738.0, 650.0),
+            edges: [
+                Top((1790.0, 650.0), (1842.0, 650.0), (1894.0, 650.0)),
+                Top((1946.0, 650.0), (1998.0, 650.0), (2050.0, 650.0)),
+                Rock((2050.0, 653.3), (2050.0, 656.7), (2050.0, 660.0)),
+                Rock((2046.7, 660.7), (2043.3, 661.3), (2040.0, 662.0)),
+                Rock((2040.0, 821.3), (2040.0, 980.7), (2040.0, 1140.0)),
+                Rock((1942.7, 1140.0), (1845.3, 1140.0), (1748.0, 1140.0)),
+                Rock((1748.0, 980.7), (1748.0, 821.3), (1748.0, 662.0)),
+                Rock((1744.7, 661.3), (1741.3, 660.7), (1738.0, 660.0)),
+                Rock((1738.0, 656.7), (1738.0, 653.3), (1738.0, 650.0)),
+            ],
+            rough: 0.1,
+        ),
+    ],
+    dress: [
+        Edge(slot: "roofs", along: Top, symbols: ["vent", "vent", "turbine", "hatch", "puddle", "puddle", "gravel", "gravel", "gravel"], every: 46.0, scale: (0.8, 1.1), follow_normal: true, seed: 11),
+        Fill(slot: "grime", symbols: ["stain", "stain", "patch", "stainLong"], spacing: 150.0, depth: (60.0, 700.0), scale: (0.8, 1.2), turn: 0.0, seed: 5),
+        // Each building's facade colour, the width of its walls.
+        Place(slot: "washes", props: [
+            (symbol: "washBrick", at: (106.0, 650.0), scale: 2.92),
+            (symbol: "washQuay", at: (420.0, 420.0), scale: 1.60),
+            (symbol: "washRust", at: (640.0, 500.0), scale: 1.84),
+            (symbol: "washTeal", at: (840.0, 660.0), scale: 1.04),
+            (symbol: "washSlate", at: (1160.0, 660.0), scale: 1.04),
+            (symbol: "washOlive", at: (1360.0, 500.0), scale: 1.84),
+            (symbol: "washQuay", at: (1580.0, 420.0), scale: 1.60),
+            (symbol: "washOchre", at: (1894.0, 650.0), scale: 2.92),
+        ]),
+        // What its walls are made of, by the same areas.
+        Place(slot: "brickAreas", props: [
+            (symbol: "area", at: (106.0, 650.0), scale: 2.92),
+            (symbol: "area", at: (1894.0, 650.0), scale: 2.92),
+        ]),
+        Place(slot: "ribAreas", props: [
+            (symbol: "area", at: (640.0, 500.0), scale: 1.84),
+            (symbol: "area", at: (1360.0, 500.0), scale: 1.84),
+        ]),
+        Place(slot: "slabAreas", props: [
+            (symbol: "area", at: (420.0, 420.0), scale: 1.60),
+            (symbol: "area", at: (1580.0, 420.0), scale: 1.60),
+        ]),
+        // Where its windows go: a style's windows tile its area from the first floor under the roof.
+        Place(slot: "officeWin", props: [
+            (symbol: "area", at: (640.0, 530.0), scale: 1.60),
+            (symbol: "area", at: (1360.0, 530.0), scale: 1.60),
+        ]),
+        Place(slot: "decoWin", props: [
+            (symbol: "area", at: (840.0, 710.0), scale: 0.80),
+            (symbol: "area", at: (1160.0, 710.0), scale: 0.80),
+        ]),
+        Place(slot: "brickWin", props: [
+        ]),
+        Place(slot: "worksWin", props: [
+            (symbol: "area", at: (120.0, 680.0), scale: 2.40),
+            (symbol: "area", at: (1880.0, 680.0), scale: 2.40),
+        ]),
+        // Shipping containers, box by box.
+        Place(slot: "boxes", props: [
+            (symbol: "box20Blue", at: (380.0, 420.0)),
+            (symbol: "box20Orange", at: (460.0, 420.0)),
+            (symbol: "box20Green", at: (380.0, 460.0)),
+            (symbol: "box20Blue", at: (460.0, 460.0)),
+            (symbol: "box20Yellow", at: (380.0, 500.0)),
+            (symbol: "box20Orange", at: (460.0, 500.0)),
+            (symbol: "box20Yellow", at: (380.0, 540.0)),
+            (symbol: "box20Plum", at: (460.0, 540.0)),
+            (symbol: "box20Green", at: (380.0, 580.0)),
+            (symbol: "box20Red", at: (460.0, 580.0)),
+            (symbol: "box20Orange", at: (380.0, 620.0)),
+            (symbol: "box20Red", at: (460.0, 620.0)),
+            (symbol: "box20Green", at: (380.0, 660.0)),
+            (symbol: "box20Teal", at: (460.0, 660.0)),
+            (symbol: "box20Orange", at: (380.0, 700.0)),
+            (symbol: "box20Blue", at: (460.0, 700.0)),
+            (symbol: "boxPair", at: (1000.0, 520.0)),
+            (symbol: "box20Blue", at: (1540.0, 420.0)),
+            (symbol: "box20Yellow", at: (1620.0, 420.0)),
+            (symbol: "box20Green", at: (1540.0, 460.0)),
+            (symbol: "box20Blue", at: (1620.0, 460.0)),
+            (symbol: "box20Teal", at: (1540.0, 500.0)),
+            (symbol: "box20Plum", at: (1620.0, 500.0)),
+            (symbol: "box20Red", at: (1540.0, 540.0)),
+            (symbol: "box20Blue", at: (1620.0, 540.0)),
+            (symbol: "box20Teal", at: (1540.0, 580.0)),
+            (symbol: "box20Blue", at: (1620.0, 580.0)),
+            (symbol: "box20Orange", at: (1540.0, 620.0)),
+            (symbol: "box20Blue", at: (1620.0, 620.0)),
+            (symbol: "box20Green", at: (1540.0, 660.0)),
+            (symbol: "box20Plum", at: (1620.0, 660.0)),
+            (symbol: "box20Red", at: (1540.0, 700.0)),
+            (symbol: "box20Green", at: (1620.0, 700.0)),
+        ]),
+        // Neon and painted signs on the facades, fire escapes and pipes.
+        Place(slot: "signs", props: [
+            (symbol: "loadingDoors", at: (120.0, 680.0)),
+            (symbol: "plate7", at: (40.0, 760.0)),
+            (symbol: "quayFace", at: (420.0, 740.0)),
+            (symbol: "neonFish", at: (640.0, 640.0)),
+            (symbol: "neonAnchor", at: (840.0, 800.0)),
+            (symbol: "neonAnchor", at: (1160.0, 800.0)),
+            (symbol: "neonWave", at: (1360.0, 640.0)),
+            (symbol: "quayFace", at: (1580.0, 740.0)),
+            (symbol: "loadingDoors", at: (1880.0, 680.0)),
+            (symbol: "plate9", at: (1960.0, 760.0)),
+        ]),
+        // Out from the walls and over the gaps: blade signs, hoists, lamps.
+        Place(slot: "hung", props: [
+            (symbol: "hoist", at: (136.0, 662.0)),
+            (symbol: "spreader", at: (1000.0, 520.0)),
+            (symbol: "lifeRing", at: (892.0, 742.0)),
+            (symbol: "lampR", at: (892.0, 700.0)),
+            (symbol: "lifeRing", at: (1108.0, 742.0)),
+            (symbol: "lampL", at: (1108.0, 700.0)),
+            (symbol: "hoist", at: (1896.0, 662.0)),
+        ]),
+        // Behind the roofs: water towers, masts, billboards, cranes. Not solid.
+        Place(slot: "behind", props: [
+            (symbol: "roofMonitor", at: (100.0, 650.0)),
+            (symbol: "floodlight", at: (236.0, 650.0)),
+            (symbol: "condenser", at: (590.0, 500.0)),
+            (symbol: "hvac", at: (712.0, 500.0)),
+            (symbol: "gantry", at: (1000.0, 660.0)),
+            (symbol: "antenna", at: (872.0, 660.0)),
+            (symbol: "antenna", at: (1128.0, 660.0)),
+            (symbol: "roofFish", at: (1360.0, 500.0)),
+            (symbol: "floodlight", at: (1764.0, 650.0)),
+            (symbol: "roofMonitor", at: (1900.0, 650.0)),
+        ]),
+    ],
+)
