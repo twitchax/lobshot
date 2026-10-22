@@ -142,6 +142,7 @@ fn failure(id: &Value, code: i64, message: &str) -> Value {
 fn tools() -> Value {
     let shot = json!({ "type": "string", "enum": ["S1", "S2", "Ss"] });
     let facing = json!({ "type": "string", "enum": ["Left", "Right"] });
+    let maps = format!("{}, or flat; tidewall when left out.", lobshot_assets::MAPS.join(", "));
     json!([
         {
             "name": "rules",
@@ -156,7 +157,7 @@ fn tools() -> Value {
                 "properties": {
                     "mobile": { "type": "string", "description": "Your mobile, e.g. coilback; random when left out." },
                     "against": { "type": "array", "items": { "type": "string" }, "description": "The other team's mobiles, one a seat; random when left out." },
-                    "map": { "type": "string", "description": "tidewall, gablewick, rimewake, glintvein, ashspine, clockrise or flat; tidewall when left out." },
+                    "map": { "type": "string", "description": maps },
                     "team_size": { "type": "integer", "minimum": 1, "maximum": 4, "description": "Players a team; 1 when left out." },
                     "level": { "type": "string", "enum": ["easy", "normal", "hard"], "description": "How well the bots play; normal when left out." },
                     "seed": { "type": "integer", "minimum": 0, "description": "Replays a game: the same seed and setup play the same game." },
@@ -251,6 +252,8 @@ mod unit {
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert_eq!(names, ["rules", "new_game", "view", "trace", "act"]);
         assert!(tools.iter().all(|t| t["inputSchema"]["type"] == "object" && t["description"].is_string()));
+        let maps = tools[1]["inputSchema"]["properties"]["map"]["description"].as_str().unwrap();
+        assert!(lobshot_assets::MAPS.iter().all(|map| maps.contains(map)), "new_game names every map: {maps}");
     }
 
     #[test]

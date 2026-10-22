@@ -238,7 +238,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   behavior), Tuskrack (a walrus on a tank-sled with a fireworks rack, Bigfoot's), Sudsotter (an
   otter in a bathtub buggy, J.Frog's) and Frostfin (a narwhal on an ice sled, Ice's: its S2 and SS
   leave from its tusk, a second barrel, and leave their target brittle to Physical damage).
-  Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged).
+  Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
+  Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond).
 
 ## Testing
 

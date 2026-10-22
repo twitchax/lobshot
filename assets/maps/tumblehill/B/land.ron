@@ -1,0 +1,136 @@
+// Tumblehill B: the land, the one source for both the terrain art and the collision mask.
+//
+// World pixels, y down. Each island is a closed chain of cubic Béziers (two control points, then
+// the end), run clockwise on screen: walkable `Top`s left to right, then `Rock` down the far side
+// and back. The meadow runs past the map's sides and bottom, so its sides are walls; the pond
+// either side of the knoll runs to the bottom, and whoever falls in is lost. Tops are barely
+// roughened (`rough`): turf, not rock. `dress` places decorations into the map's terrain.svg, one
+// rule per slot (`{{name}}`); the props stand behind the land with their feet in the turf, so the
+// grass line plants them. The pond's surface is y = 740, drawn in background.svg.
+//
+// B: a low crest near each edge, then a long slope down to a pond, and a knoll raised out of
+// the pond's middle. Spawns are mirrored about x = 950 (115, 320, 490, 630 and 1270, 1410, 1580,
+// 1785): one behind each crest, one on it, two down the slope.
+//
+// This file was laid out from key points (the east half mirrors the west) and is the source from
+// here on: edit it by hand.
+Land(
+    size: (1900, 1000),
+    islands: [
+        // West Slope: from the west edge over a low crest (x = 320), a long slope runs down to the
+        // pond. Spawns 115, 320, 490 and 630; the bank drops sheer into the water.
+        (
+            start: (-40.0, 596.0),
+            edges: [
+                Top((-13.3, 589.3), (14.2, 584.0), (40.0, 576.0)),
+                Top((65.8, 568.0), (90.0, 558.3), (115.0, 548.0)),
+                Top((140.0, 537.7), (165.8, 524.3), (190.0, 514.0)),
+                Top((214.2, 503.7), (238.3, 492.7), (260.0, 486.0)),
+                Top((281.7, 479.3), (301.3, 474.3), (320.0, 474.0)),
+                Top((338.7, 473.7), (356.3, 478.7), (372.0, 484.0)),
+                Top((387.7, 489.3), (400.7, 499.3), (414.0, 506.0)),
+                Top((427.3, 512.7), (439.0, 520.0), (452.0, 524.0)),
+                Top((465.0, 528.0), (478.7, 528.0), (492.0, 530.0)),
+                Top((505.3, 532.0), (519.3, 531.3), (532.0, 536.0)),
+                Top((544.7, 540.7), (556.3, 550.0), (568.0, 558.0)),
+                Top((579.7, 566.0), (590.7, 577.7), (602.0, 584.0)),
+                Top((613.3, 590.3), (623.7, 592.7), (636.0, 596.0)),
+                Top((648.3, 599.3), (662.7, 601.3), (676.0, 604.0)),
+                Rock((678.7, 607.3), (682.0, 606.3), (684.0, 614.0)),
+                Rock((686.0, 621.7), (687.2, 629.0), (688.0, 650.0)),
+                Rock((688.8, 671.0), (688.7, 706.7), (689.0, 740.0)),
+                Rock((689.3, 773.3), (689.5, 800.0), (690.0, 850.0)),
+                Rock((690.5, 900.0), (691.3, 976.7), (692.0, 1040.0)),
+                Rock((448.0, 1040.0), (204.0, 1040.0), (-40.0, 1040.0)),
+                Rock((-40.0, 892.0), (-40.0, 744.0), (-40.0, 596.0)),
+            ],
+            rough: 0.45,
+        ),
+        // The Knoll: a round hump of meadow raised out of the pond's middle, cliffs into the water
+        // either side. No spawn: cover between the slopes, low enough to lob over from either.
+        (
+            start: (846.0, 650.0),
+            edges: [
+                Top((853.3, 640.0), (859.0, 629.7), (868.0, 620.0)),
+                Top((877.0, 610.3), (886.3, 599.0), (900.0, 592.0)),
+                Top((913.7, 585.0), (933.3, 578.0), (950.0, 578.0)),
+                Top((966.7, 578.0), (986.3, 585.0), (1000.0, 592.0)),
+                Top((1013.7, 599.0), (1023.0, 610.3), (1032.0, 620.0)),
+                Top((1041.0, 629.7), (1046.7, 640.0), (1054.0, 650.0)),
+                Rock((1056.0, 654.7), (1058.7, 655.7), (1060.0, 664.0)),
+                Rock((1061.3, 672.3), (1061.7, 687.3), (1062.0, 700.0)),
+                Rock((1062.3, 712.7), (1062.3, 710.0), (1062.0, 740.0)),
+                Rock((1061.7, 770.0), (1060.7, 830.0), (1060.0, 880.0)),
+                Rock((1059.3, 930.0), (1058.7, 986.7), (1058.0, 1040.0)),
+                Rock((986.0, 1040.0), (914.0, 1040.0), (842.0, 1040.0)),
+                Rock((841.3, 986.7), (840.7, 930.0), (840.0, 880.0)),
+                Rock((839.3, 830.0), (838.3, 770.0), (838.0, 740.0)),
+                Rock((837.7, 710.0), (837.7, 712.7), (838.0, 700.0)),
+                Rock((838.3, 687.3), (838.7, 672.3), (840.0, 664.0)),
+                Rock((841.3, 655.7), (844.0, 654.7), (846.0, 650.0)),
+            ],
+            rough: 0.45,
+        ),
+        // East Slope: West Slope's mirror (spawns 1270, 1410, 1580, 1785).
+        (
+            start: (1224.0, 604.0),
+            edges: [
+                Top((1237.3, 601.3), (1251.7, 599.3), (1264.0, 596.0)),
+                Top((1276.3, 592.7), (1286.7, 590.3), (1298.0, 584.0)),
+                Top((1309.3, 577.7), (1320.3, 566.0), (1332.0, 558.0)),
+                Top((1343.7, 550.0), (1355.3, 540.7), (1368.0, 536.0)),
+                Top((1380.7, 531.3), (1394.7, 532.0), (1408.0, 530.0)),
+                Top((1421.3, 528.0), (1435.0, 528.0), (1448.0, 524.0)),
+                Top((1461.0, 520.0), (1472.7, 512.7), (1486.0, 506.0)),
+                Top((1499.3, 499.3), (1512.3, 489.3), (1528.0, 484.0)),
+                Top((1543.7, 478.7), (1561.3, 473.7), (1580.0, 474.0)),
+                Top((1598.7, 474.3), (1618.3, 479.3), (1640.0, 486.0)),
+                Top((1661.7, 492.7), (1685.8, 503.7), (1710.0, 514.0)),
+                Top((1734.2, 524.3), (1760.0, 537.7), (1785.0, 548.0)),
+                Top((1810.0, 558.3), (1834.2, 568.0), (1860.0, 576.0)),
+                Top((1885.8, 584.0), (1913.3, 589.3), (1940.0, 596.0)),
+                Rock((1940.0, 744.0), (1940.0, 892.0), (1940.0, 1040.0)),
+                Rock((1696.0, 1040.0), (1452.0, 1040.0), (1208.0, 1040.0)),
+                Rock((1208.7, 976.7), (1209.5, 900.0), (1210.0, 850.0)),
+                Rock((1210.5, 800.0), (1210.7, 773.3), (1211.0, 740.0)),
+                Rock((1211.3, 706.7), (1211.2, 671.0), (1212.0, 650.0)),
+                Rock((1212.8, 629.0), (1214.0, 621.7), (1216.0, 614.0)),
+                Rock((1218.0, 606.3), (1221.3, 607.3), (1224.0, 604.0)),
+            ],
+            rough: 0.45,
+        ),
+    ],
+    dress: [
+        Edge(slot: "tufts", along: Top, symbols: ["grassA", "grassA", "grassA", "grassB", "grassB", "grassC", "clover", "daisy", "buttercup"], every: 10.0, scale: (0.85, 1.3), follow_normal: true, mirror: true, seed: 6),
+        Edge(slot: "hangers", along: Under, symbols: ["root", "rootShort", "rootShort"], every: 22.0, scale: (0.7, 1.15), mirror: true, seed: 10),
+        Edge(slot: "walls", along: Wall, symbols: ["fern", "moss", "moss"], every: 70.0, scale: (0.8, 1.15), follow_normal: true, mirror: true, seed: 19),
+        Fill(slot: "pebbles", symbols: ["pebble"], tints: ["#a07a5c", "#8f6c52", "#b8957a", "#9a8f86"], spacing: 30.0, depth: (24.0, 1100.0), scale: (0.5, 1.0), turn: 30.0, seed: 27),
+        Fill(slot: "stones", symbols: ["stoneA", "stoneB", "stoneC", "stoneA"], tints: ["#b59a82", "#a88c78", "#c2ab92", "#9c948e", "#a7a09a"], spacing: 62.0, depth: (34.0, 1100.0), scale: (0.6, 1.2), turn: 25.0, seed: 14),
+        Fill(slot: "rootlets", symbols: ["rootlet", "rootlet", "rootletB"], spacing: 26.0, depth: (16.0, 24.0), scale: (0.7, 1.2), turn: 8.0, mirror: true, seed: 35),
+        Fill(slot: "buried", symbols: ["shot", "shot", "horseshoe", "bone", "worm"], spacing: 210.0, depth: (70.0, 600.0), scale: (0.9, 1.2), turn: 40.0, seed: 37),
+        // Set pieces behind the turf, clear of the spawns: a fence and a windsock by the west crest,
+        // practice targets down the slopes and on the knoll, a bale and a sign on the east slope.
+        Place(slot: "behind", props: [
+        (symbol: "fenceShort", at: (22.0, 583.1), turn: -14.0),
+        (symbol: "windsock", at: (215.0, 505.2)),
+        (symbol: "target", at: (405.0, 513.7)),
+        (symbol: "baleSmall", at: (560.0, 554.4), turn: 14.0),
+        (symbol: "target", at: (950.0, 581.7)),
+        (symbol: "bale", at: (1340.0, 564.4)),
+        (symbol: "signL", at: (1496.0, 504.8)),
+        (symbol: "target", at: (1690.0, 516.0), scale: 0.9),
+        (symbol: "fenceShort", at: (1878.0, 583.1), turn: 14.0),
+        ]),
+        // In front of the banks, on the pond's surface: cattails where the banks meet the water, and
+        // lily pads.
+        Place(slot: "front", props: [
+        (symbol: "reeds", at: (686.0, 740.0)),
+        (symbol: "reedsSmall", at: (860.0, 740.0)),
+        (symbol: "reeds", at: (1042.0, 740.0)),
+        (symbol: "reedsSmall", at: (1216.0, 740.0)),
+        (symbol: "lily", at: (748.0, 740.0)),
+        (symbol: "lily", at: (790.0, 740.0), scale: 0.7),
+        (symbol: "lily", at: (1120.0, 740.0), scale: 0.85),
+        ]),
+    ],
+)

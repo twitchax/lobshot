@@ -1,0 +1,105 @@
+// Tumblehill A: the land, the one source for both the terrain art and the collision mask.
+//
+// World pixels, y down. Each island is a closed chain of cubic Béziers (two control points, then
+// the end), run clockwise on screen: walkable `Top`s left to right, then `Rock` down the far side
+// and back. The meadow runs past the map's sides and bottom, so its sides are walls and nothing
+// standing on it can fall out. Tops are barely roughened (`rough`): turf, not rock. `dress` places
+// decorations into the map's terrain.svg, one rule per slot (`{{name}}`); the props stand behind
+// the land with their feet in the turf, so the grass line plants them.
+//
+// A: two broad hills either side of a valley, and a turf clod with a target adrift over its
+// middle. Spawns are mirrored about x = 950 (120, 340, 560, 800 and 1100, 1340, 1560, 1780):
+// the outer ones behind the hills' crests, the inner ones on the valley's flanks.
+//
+// This file was laid out from key points (the east half mirrors the west) and is the source from
+// here on: edit it by hand.
+Land(
+    size: (1900, 1000),
+    islands: [
+        // The meadow: two broad hills (crests at x = 430 and 1470) either side of a valley. Spawns
+        // 120 and 340 on the west hill's outer flank, 560 and 800 down its inner one; the east
+        // mirrors them.
+        (
+            start: (-40.0, 690.0),
+            edges: [
+                Top((-13.3, 684.7), (11.7, 680.3), (40.0, 674.0)),
+                Top((68.3, 667.7), (98.3, 661.7), (130.0, 652.0)),
+                Top((161.7, 642.3), (195.8, 629.3), (230.0, 616.0)),
+                Top((264.2, 602.7), (301.7, 583.3), (335.0, 572.0)),
+                Top((368.3, 560.7), (398.3, 550.7), (430.0, 548.0)),
+                Top((461.7, 545.3), (494.2, 549.0), (525.0, 556.0)),
+                Top((555.8, 563.0), (585.0, 576.0), (615.0, 590.0)),
+                Top((645.0, 604.0), (675.0, 624.3), (705.0, 640.0)),
+                Top((735.0, 655.7), (766.7, 672.3), (795.0, 684.0)),
+                Top((823.3, 695.7), (849.2, 704.3), (875.0, 710.0)),
+                Top((900.8, 715.7), (925.0, 718.0), (950.0, 718.0)),
+                Top((975.0, 718.0), (999.2, 715.7), (1025.0, 710.0)),
+                Top((1050.8, 704.3), (1076.7, 695.7), (1105.0, 684.0)),
+                Top((1133.3, 672.3), (1165.0, 655.7), (1195.0, 640.0)),
+                Top((1225.0, 624.3), (1255.0, 604.0), (1285.0, 590.0)),
+                Top((1315.0, 576.0), (1344.2, 563.0), (1375.0, 556.0)),
+                Top((1405.8, 549.0), (1438.3, 545.3), (1470.0, 548.0)),
+                Top((1501.7, 550.7), (1531.7, 560.7), (1565.0, 572.0)),
+                Top((1598.3, 583.3), (1635.8, 602.7), (1670.0, 616.0)),
+                Top((1704.2, 629.3), (1738.3, 642.3), (1770.0, 652.0)),
+                Top((1801.7, 661.7), (1831.7, 667.7), (1860.0, 674.0)),
+                Top((1888.3, 680.3), (1913.3, 684.7), (1940.0, 690.0)),
+                Rock((1940.0, 806.7), (1940.0, 923.3), (1940.0, 1040.0)),
+                Rock((1280.0, 1040.0), (620.0, 1040.0), (-40.0, 1040.0)),
+                Rock((-40.0, 923.3), (-40.0, 806.7), (-40.0, 690.0)),
+            ],
+            rough: 0.45,
+        ),
+        // The Target Clod: a lump of turf adrift over the valley, a practice target on its back. No
+        // spawn: cover for flat shots between the valley spawns, well under any lob between the
+        // hills.
+        (
+            start: (884.0, 440.0),
+            edges: [
+                Top((894.7, 436.0), (905.0, 430.7), (916.0, 428.0)),
+                Top((927.0, 425.3), (938.7, 424.0), (950.0, 424.0)),
+                Top((961.3, 424.0), (973.0, 425.3), (984.0, 428.0)),
+                Top((995.0, 430.7), (1005.3, 436.0), (1016.0, 440.0)),
+                Rock((1019.3, 444.0), (1025.7, 447.0), (1026.0, 452.0)),
+                Rock((1026.3, 457.0), (1022.7, 464.3), (1018.0, 470.0)),
+                Rock((1013.3, 475.7), (1005.7, 481.3), (998.0, 486.0)),
+                Rock((990.3, 490.7), (980.0, 494.0), (972.0, 498.0)),
+                Rock((964.0, 502.0), (957.3, 510.0), (950.0, 510.0)),
+                Rock((942.7, 510.0), (936.0, 502.0), (928.0, 498.0)),
+                Rock((920.0, 494.0), (909.7, 490.7), (902.0, 486.0)),
+                Rock((894.3, 481.3), (886.7, 475.7), (882.0, 470.0)),
+                Rock((877.3, 464.3), (873.7, 457.0), (874.0, 452.0)),
+                Rock((874.3, 447.0), (880.7, 444.0), (884.0, 440.0)),
+            ],
+            rough: 0.3,
+        ),
+    ],
+    dress: [
+        Edge(slot: "tufts", along: Top, symbols: ["grassA", "grassA", "grassA", "grassB", "grassB", "grassC", "clover", "daisy", "buttercup"], every: 10.0, scale: (0.85, 1.3), follow_normal: true, mirror: true, seed: 4),
+        Edge(slot: "hangers", along: Under, symbols: ["root", "rootShort", "rootShort"], every: 22.0, scale: (0.7, 1.15), mirror: true, seed: 9),
+        Edge(slot: "walls", along: Wall, symbols: ["fern", "moss", "moss"], every: 70.0, scale: (0.8, 1.15), follow_normal: true, mirror: true, seed: 17),
+        Fill(slot: "pebbles", symbols: ["pebble"], tints: ["#a07a5c", "#8f6c52", "#b8957a", "#9a8f86"], spacing: 30.0, depth: (24.0, 1100.0), scale: (0.5, 1.0), turn: 30.0, seed: 23),
+        Fill(slot: "stones", symbols: ["stoneA", "stoneB", "stoneC", "stoneA"], tints: ["#b59a82", "#a88c78", "#c2ab92", "#9c948e", "#a7a09a"], spacing: 62.0, depth: (34.0, 1100.0), scale: (0.6, 1.2), turn: 25.0, seed: 12),
+        Fill(slot: "rootlets", symbols: ["rootlet", "rootlet", "rootletB"], spacing: 26.0, depth: (16.0, 24.0), scale: (0.7, 1.2), turn: 8.0, mirror: true, seed: 33),
+        Fill(slot: "buried", symbols: ["shot", "shot", "horseshoe", "bone", "worm"], spacing: 210.0, depth: (70.0, 600.0), scale: (0.9, 1.2), turn: 40.0, seed: 31),
+        // Set pieces behind the turf, clear of the spawns: fences and a windsock on the west hill,
+        // practice targets down the flanks and on the clod, bales in the valley, and a sign on the
+        // east hill pointing back down to the range.
+        Place(slot: "behind", props: [
+        (symbol: "fenceShort", at: (40.0, 676.0), turn: -12.5),
+        (symbol: "windsock", at: (232.0, 617.2)),
+        (symbol: "fence", at: (430.0, 550.0), turn: -4.9),
+        (symbol: "target", at: (655.0, 625.2)),
+        (symbol: "baleSmall", at: (872.0, 711.3), turn: 12.9),
+        (symbol: "bales", at: (950.0, 717.9)),
+        (symbol: "bale", at: (1012.0, 716.5)),
+        (symbol: "target", at: (950.0, 426.4)),
+        (symbol: "target", at: (1250.0, 622.3)),
+        (symbol: "fence", at: (1470.0, 550.0), turn: 4.9),
+        (symbol: "signL", at: (1660.0, 615.6)),
+        (symbol: "target", at: (1862.0, 680.7), scale: 0.85),
+        ]),
+        // Only B has a pond to stand reeds in.
+        Place(slot: "front", props: []),
+    ],
+)
