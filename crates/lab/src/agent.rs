@@ -603,6 +603,8 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
             WeatherKind::Force => 'F',
             WeatherKind::Mirror => 'M',
             WeatherKind::Tornado | WeatherKind::Wind => 'T',
+            WeatherKind::Electricity => 'E',
+            WeatherKind::Drain => 'D',
         };
         for y in (0..height).step_by(usize::try_from(cell_h).unwrap_or(1)) {
             mark(column.x, i32::try_from(y).unwrap_or(0), glyph);
@@ -621,7 +623,7 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         surfaces,
         surface_step: step,
         picture: rows.into_iter().map(|row| row.into_iter().collect()).collect(),
-        legend: "# ground, . air, 0-7 a living mobile by seat, and weather columns: F Force, M Mirror, T Tornado.",
+        legend: "# ground, . air, 0-7 a living mobile by seat, and weather columns: F Force, M Mirror, T Tornado, E Electricity, D Drain.",
         cell: [cell_w, cell_h],
     }
 }
@@ -896,8 +898,9 @@ makes you wait longer. Agent turns are charged a fixed time.
 ## Wind and weather
 
 The wind pushes every shot; `wind.across` and `wind.up` give its push right and up. Weather
-columns stand on the map: Force boosts shots through it, Mirror sends them back the way they came,
-Tornado flings them back up. A Wind weather rerolls the wind. The view lists what is coming.
+columns stand on the map: Force boosts shots through it, Drain halves them, Electricity calls a
+bolt down wherever a shot through it lands, Mirror sends them back the way they came, Tornado
+flings them back up. A Wind weather rerolls the wind. The view lists what is coming.
 
 ## SS, sudden death, the slot machine
 

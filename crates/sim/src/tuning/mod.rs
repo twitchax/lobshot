@@ -153,12 +153,16 @@ pub fn column_width(kind: crate::weather::WeatherKind) -> f64 {
     use crate::weather::WeatherKind;
     match kind {
         WeatherKind::Tornado => TORNADO_WIDTH.value,
-        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Wind => BEAM_WIDTH.value,
+        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind => BEAM_WIDTH.value,
     }
 }
 
-/// Force and Mirror beams.
+/// Force, Mirror, Electricity and Drain beams (OB gives Weakness Force's).
 pub const BEAM_WIDTH: Tuned<f64> = cited(40.0, &["OB"]);
+
+/// What a Drain column (GunBound's Weakness) leaves of a shot's damage. OB divides by 1.2 and
+/// subtracts 10 (CONTRADICTION).
+pub const DRAIN_DAMAGE: Tuned<f64> = cited(0.5, &["WP08"]);
 
 /// Tornado columns.
 pub const TORNADO_WIDTH: Tuned<f64> = cited(70.0, &["OB"]);

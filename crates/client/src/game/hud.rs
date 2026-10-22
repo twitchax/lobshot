@@ -392,6 +392,8 @@ fn weather_look(kind: WeatherKind) -> (&'static str, Color) {
         WeatherKind::Force => ("F", Color::srgb_u8(0xe8, 0x6a, 0x3a)),
         WeatherKind::Mirror => ("M", Color::srgb_u8(0xb7, 0x9c, 0xf2)),
         WeatherKind::Tornado => ("T", Color::srgb_u8(0x6f, 0xc4, 0x8a)),
+        WeatherKind::Electricity => ("E", Color::srgb_u8(0xf2, 0xd6, 0x4b)),
+        WeatherKind::Drain => ("D", Color::srgb_u8(0x7a, 0x5c, 0x9e)),
     }
 }
 

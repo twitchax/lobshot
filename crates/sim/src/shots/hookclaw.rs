@@ -25,6 +25,7 @@ pub(super) fn fire(game: &mut Game, gun: &mut Gun, shot: Shot, effects: &mut Vec
                     &gun.blast_on(track, S2_BOOMERANG_BLAST.value, S2_BOOMERANG_DAMAGE.value),
                     S2_BOOMERANG_BLAST.value,
                     &track.impact,
+                    track.marks,
                     out,
                 );
             });
@@ -39,7 +40,7 @@ pub(super) fn fire(game: &mut Game, gun: &mut Gun, shot: Shot, effects: &mut Vec
             } else {
                 gun.blast_on(&track, S1_BLAST.value, SS_EARLY_DAMAGE.value)
             };
-            gun.land(game, &blast, blast.radius, &track.impact, effects);
+            gun.land(game, &blast, blast.radius, &track.impact, track.marks, effects);
         }
     }
 }

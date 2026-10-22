@@ -1,11 +1,11 @@
 //! The weather queue (GunBound's moondisk): five upcoming weathers, the front one activating every
-//! N turns, where N is the number of players (SW-weather). Column weathers (Force, Mirror, Tornado)
-//! stand on the map where the server rolled them; Wind rerolls the wind. The server rolls every
+//! N turns, where N is the number of players (SW-weather). Column weathers (Force, Mirror, Tornado,
+//! Electricity, Drain) stand on the map where the server rolled them; Wind rerolls the wind. The server rolls every
 //! new queue entry and every new wind; the sim only says when one is owed (`Game::pending_roll`).
 
 use serde::{Deserialize, Serialize};
 
-use crate::tuning::{FORCE_DAMAGE, WEATHER_QUEUE, column_width};
+use crate::tuning::{DRAIN_DAMAGE, FORCE_DAMAGE, WEATHER_QUEUE, column_width};
 
 /// A weather.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -18,11 +18,16 @@ pub enum WeatherKind {
     Mirror,
     /// A column that flings shots back up.
     Tornado,
+    /// A column that charges shots passing through it: where one lands, the Thunder item's bolt
+    /// strikes (GF-tiro, GF-vgg).
+    Electricity,
+    /// A column that weakens any shot passing through it (GunBound's Weakness).
+    Drain,
 }
 
 impl WeatherKind {
     /// Every kind the server may roll, in a fixed order.
-    pub const ALL: [Self; 4] = [Self::Wind, Self::Force, Self::Mirror, Self::Tornado];
+    pub const ALL: [Self; 6] = [Self::Wind, Self::Force, Self::Mirror, Self::Tornado, Self::Electricity, Self::Drain];
 
     /// Whether it stands on the map as a column.
     #[must_use]
@@ -99,11 +104,58 @@ impl Weather {
             self.columns.push(Column { kind: next.kind, x: next.x });
         }
     }
+}
 
-    /// The damage multiplier for a shot that passed through `forced` Force columns.
+/// What the columns a projectile passed through did to it. Each kind marks it once, however many
+/// of its columns it crosses (OB).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Marks {
+    /// Force: it hits harder.
+    pub forced: bool,
+    /// Drain: it hits softer.
+    pub drained: bool,
+    /// Electricity: a bolt strikes where it lands.
+    pub charged: bool,
+}
+
+impl Marks {
+    /// Marks the projectile with a column of `kind`. Returns whether the kind marks at all (the
+    /// others turn it, or do nothing).
+    pub fn mark(&mut self, kind: WeatherKind) -> bool {
+        match kind {
+            WeatherKind::Force => self.forced = true,
+            WeatherKind::Drain => self.drained = true,
+            WeatherKind::Electricity => self.charged = true,
+            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado => return false,
+        }
+        true
+    }
+
+    /// The damage multiplier the marks come to.
     #[must_use]
-    pub fn force_multiplier(forced: bool) -> f64 {
-        if forced { FORCE_DAMAGE.value } else { 1.0 }
+    pub fn boost(self) -> f64 {
+        let force = if self.forced { FORCE_DAMAGE.value } else { 1.0 };
+        let drain = if self.drained { DRAIN_DAMAGE.value } else { 1.0 };
+        force * drain
+    }
+}
+
+impl std::ops::BitOr for Marks {
+    type Output = Self;
+
+    /// Both projectiles' marks, for a shot that carries on as another (Coilback's second warhead).
+    fn bitor(self, other: Self) -> Self {
+        Self {
+            forced: self.forced || other.forced,
+            drained: self.drained || other.drained,
+            charged: self.charged || other.charged,
+        }
+    }
+}
+
+impl std::ops::BitOrAssign for Marks {
+    fn bitor_assign(&mut self, other: Self) {
+        *self = *self | other;
     }
 }
 
@@ -151,6 +203,17 @@ mod unit {
         weather.tick(1);
         weather.tick(1);
         assert!(weather.columns.is_empty() && !weather.wind_owed);
+    }
+
+    #[test]
+    fn force_and_drain_multiply_and_each_kind_marks_once() {
+        let mut marks = Marks::default();
+        assert!(marks.mark(WeatherKind::Force) && marks.mark(WeatherKind::Force));
+        assert!((marks.boost() - FORCE_DAMAGE.value).abs() < 1e-12, "two Force columns boost once");
+        assert!(marks.mark(WeatherKind::Drain));
+        assert!((marks.boost() - FORCE_DAMAGE.value * DRAIN_DAMAGE.value).abs() < 1e-12);
+        assert!(!marks.mark(WeatherKind::Mirror) && !marks.charged);
+        assert_eq!(Marks::default() | Marks { charged: true, ..Marks::default() }, Marks { charged: true, ..Marks::default() });
     }
 
     #[test]

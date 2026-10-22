@@ -14,7 +14,6 @@ use crate::{
         SS_TOUCH_PER_SECOND,
     },
     units::{seconds, ticks},
-    weather::Weather,
 };
 
 pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Effect>) {
@@ -32,9 +31,9 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
                 fuse: ticks(S2_FUSE_SECONDS.value),
                 max_bounces: S2_MAX_BOUNCES.value,
             };
-            let (paths, mut landings) = bounce::roll(game, &flights, &rules, |game, _, impact, forced, out| {
-                let blast = gun.blast(impact.at, S2_MARBLE_BLAST.value, S2_MARBLE_DAMAGE.value, Weather::force_multiplier(forced));
-                gun.land(game, &blast, S2_MARBLE_BLAST.value, impact, out);
+            let (paths, mut landings) = bounce::roll(game, &flights, &rules, |game, _, impact, marks, out| {
+                let blast = gun.blast(impact.at, S2_MARBLE_BLAST.value, S2_MARBLE_DAMAGE.value, marks.boost());
+                gun.land(game, &blast, S2_MARBLE_BLAST.value, impact, marks, out);
             });
             effects.extend(paths.into_iter().map(|legs| Effect::Fired { seat: gun.seat, legs }));
             effects.append(&mut landings);
@@ -43,7 +42,14 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: true });
             effects.push(Effect::Fired { seat: gun.seat, legs: track.legs.clone() });
             pierce(game, gun, &track, effects);
-            gun.land(game, &gun.blast_on(&track, SS_LAND_BLAST.value, SS_LAND_DAMAGE.value), SS_LAND_BLAST.value, &track.impact, effects);
+            gun.land(
+                game,
+                &gun.blast_on(&track, SS_LAND_BLAST.value, SS_LAND_DAMAGE.value),
+                SS_LAND_BLAST.value,
+                &track.impact,
+                track.marks,
+                effects,
+            );
         }
     }
 }
@@ -82,7 +88,7 @@ fn pierce(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) 
     }
     touches.sort_by_key(|touch| (touch.to, touch.seat));
     let range = SS_TOUCH_DAMAGE.value;
-    let boost = Weather::force_multiplier(track.forced) * gun.salvo.boost;
+    let boost = track.marks.boost() * gun.salvo.boost;
     for touch in touches {
         let base = (f64::from(range.min) + SS_TOUCH_PER_SECOND.value * seconds(touch.ticks)).min(f64::from(range.max));
         let player = game.players()[usize::from(touch.seat)];

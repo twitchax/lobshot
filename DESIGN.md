@@ -94,10 +94,14 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - **Shots** follow a closed-form trajectory under gravity and wind acceleration, sampled at fixed
   sub-steps. Each mobile's shots are behavior functions in `sim`.
 - **Weather** is GunBound's moondisk: five forecasts, the front one coming up every N turns (N =
-  players). Force, Mirror and Tornado stand as full-height columns where the server rolled them;
-  repeats of a kind stack, a new kind clears them. Force adds 33% damage (GF-tiro); Mirror reverses
-  a shot's sideways motion and wind (OB); Tornado holds a shot a second, then flings it back up (a
-  pick: sources only say it orbits, then exits). Wind rerolls the wind and clears the columns.
+  players). Force, Drain, Electricity, Mirror and Tornado stand as full-height columns where the
+  server rolled them; repeats of a kind stack, a new kind clears them. A shot that starts inside a
+  column is caught by it too. Force adds 33% damage (GF-tiro); Drain (GunBound's Weakness) halves
+  it (WP08); Electricity calls the Thunder item's bolt down where the shot lands, once per
+  projectile (the item is the weather, GF-tiro); Mirror reverses a shot's sideways motion and wind
+  (OB); Tornado holds a shot a second, then flings it back up (a pick: sources only say it orbits,
+  then exits). Wind rerolls the wind and clears the columns; GunBound Classic calls it Meteor
+  (`docs/research/weather.md`).
 - **Turn order** is GunBound's delay system: base + shot + item + 10 per second of turn time
   (Turtle 12). The lowest accumulated delay moves next.
 

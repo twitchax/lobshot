@@ -15,7 +15,6 @@ use crate::{
         drops::{BOLT_DAMAGE, BOLT_WEAPON, CHEST_HEAL_PERCENT, DYNAMITE_BLAST, DYNAMITE_DAMAGE, DYNAMITE_WEAPON, DYNAMITE_WIND, GRAVITY, HAMMER_BLAST, HAMMER_DAMAGE, HAMMER_WEAPON},
     },
     units::Vec2,
-    weather::Weather,
 };
 
 /// What the slot machine can drop.
@@ -123,7 +122,7 @@ fn land(game: &mut Game, Falling { seat, drop, .. }: Falling, effects: &mut Vec<
         damage,
         weapon,
         false_angle: false,
-        boost: Weather::force_multiplier(track.forced),
+        boost: track.marks.boost(),
     };
     match drop.kind {
         DropKind::Dynamite if landed => {

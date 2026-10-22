@@ -6,7 +6,6 @@ use crate::{
     game::{Contact, Effect, Game, Shot},
     tuning::coilback::{S1_BLAST, S1_DAMAGE, S2_WARHEAD_BLAST, S2_WARHEAD_DAMAGE, SS_BLAST, SS_DAMAGE, SS_EARLY_DAMAGE, SS_TRANSFORM_SECONDS},
     units::ticks,
-    weather::Weather,
 };
 
 pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Effect>) {
@@ -22,12 +21,13 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             let (radius, damage) = (S2_WARHEAD_BLAST.value, S2_WARHEAD_DAMAGE.value);
             let mut blasts = Vec::new();
             let first = game.track(flight, 0, 0);
-            gun.land(game, &gun.blast_on(&first, radius, damage), radius, &first.impact, &mut blasts);
+            gun.land(game, &gun.blast_on(&first, radius, damage), radius, &first.impact, first.marks, &mut blasts);
             let mut legs = first.legs.clone();
             if first.impact.contact != Contact::Gone {
                 let second = game.track(first.last.flight, first.last_tick + 1, first.last.offset);
-                let blast = gun.blast(second.impact.at, radius, damage, Weather::force_multiplier(first.forced || second.forced));
-                gun.land(game, &blast, radius, &second.impact, &mut blasts);
+                let marks = first.marks | second.marks;
+                let blast = gun.blast(second.impact.at, radius, damage, marks.boost());
+                gun.land(game, &blast, radius, &second.impact, marks, &mut blasts);
                 legs.extend(second.legs);
             }
             effects.push(Effect::Fired { seat: gun.seat, legs });
@@ -41,7 +41,7 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             } else {
                 gun.blast_on(&track, S1_BLAST.value, SS_EARLY_DAMAGE.value)
             };
-            gun.land(game, &blast, blast.radius, &track.impact, effects);
+            gun.land(game, &blast, blast.radius, &track.impact, track.marks, effects);
         }
     }
 }

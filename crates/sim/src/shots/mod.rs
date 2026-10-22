@@ -23,7 +23,7 @@ use crate::{
         items::{DAMAGE_BOOST, DIG_CRATER, THUNDER_DAMAGE, THUNDER_WEAPON},
     },
     units::{Power, Vec2, ticks},
-    weather::Weather,
+    weather::Marks,
 };
 
 /// What rides on one turn's shots: the armed item, sudden death, and who splash has already hit.
@@ -89,24 +89,25 @@ impl Gun<'_> {
         }
     }
 
-    /// The blast where `track` landed: Force if it passed through one, and the hook if the wind
-    /// turned it around.
+    /// The blast where `track` landed: what the columns it passed through did to it, and the hook
+    /// if the wind turned it around.
     pub fn blast_on(&self, track: &Track, radius: f64, damage: DamageRange) -> Blast {
         let hook = if track.legs.iter().any(Leg::hooked) { self.hook } else { 1.0 };
-        self.blast(track.impact.at, radius, damage, Weather::force_multiplier(track.forced) * hook)
+        self.blast(track.impact.at, radius, damage, track.marks.boost() * hook)
     }
 
     /// A projectile lands: `blast` goes off, direct on a mobile it struck, carving a crater of
-    /// `crater` (widened by the salvo), and Thunder's bolt follows if armed. A projectile that left
-    /// the map does nothing.
-    pub fn land(&self, game: &mut Game, blast: &Blast, crater: f64, impact: &Impact, effects: &mut Vec<Effect>) {
+    /// `crater` (widened by the salvo), and a bolt follows if Thunder is armed or the projectile
+    /// passed through Electricity (one bolt either way: the item is the weather, GF-tiro). A
+    /// projectile that left the map does nothing.
+    pub fn land(&self, game: &mut Game, blast: &Blast, crater: f64, impact: &Impact, marks: Marks, effects: &mut Vec<Effect>) {
         let direct = match impact.contact {
             Contact::Gone | Contact::Column(_) => return,
             Contact::Terrain => None,
             Contact::Mobile(seat) => Some(seat),
         };
         game.explode(blast, crater * self.salvo.crater, direct, impact.tick, effects);
-        if self.salvo.thunder {
+        if self.salvo.thunder || marks.charged {
             let strike = bolt::from_sky(game, blast.center.x);
             bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, impact.tick + ticks(BOLT_DELAY_SECONDS.value), effects);
             let thunder = Blast {
@@ -128,7 +129,7 @@ impl Gun<'_> {
             seat: self.seat,
             legs: track.legs.clone(),
         });
-        self.land(game, &self.blast_on(&track, radius, damage), radius, &track.impact, effects);
+        self.land(game, &self.blast_on(&track, radius, damage), radius, &track.impact, track.marks, effects);
         track
     }
 }
@@ -253,6 +254,46 @@ mod unit {
         let calm_damage = damage_to(&shoot(&mut calm, 0, Shot::S1, 35, power), 1);
         let forced_effects = shoot(&mut forced, 0, Shot::S1, 35, power);
         assert!(damage_to(&forced_effects, 1) > calm_damage, "{forced_effects:?}");
+    }
+
+    /// `game` with a column of `kind` halfway between the duelists.
+    fn midway(game: &crate::game::Game, kind: WeatherKind) -> crate::game::Game {
+        let mut game = game.clone();
+        let x = game.players()[0].footing.x + 400;
+        game.set_columns(vec![Column { kind, x }]);
+        game
+    }
+
+    fn bolts(effects: &[Effect]) -> usize {
+        effects.iter().filter(|e| matches!(e, Effect::Bolt { .. })).count()
+    }
+
+    #[test]
+    fn drain_halves_a_shot_that_passes_through_it() {
+        let mut calm = duel(800);
+        let power = direct_hit_power(&calm, 35);
+        let mut drained = midway(&calm, WeatherKind::Drain);
+        let calm_damage = damage_to(&shoot(&mut calm, 0, Shot::S1, 35, power), 1);
+        let drained_damage = damage_to(&shoot(&mut drained, 0, Shot::S1, 35, power), 1);
+        assert!((f64::from(drained_damage) / f64::from(calm_damage) - 0.5).abs() < 0.02, "{drained_damage} against {calm_damage}");
+    }
+
+    #[test]
+    fn electricity_strikes_where_a_shot_through_it_lands() {
+        let calm = duel(800);
+        let power = direct_hit_power(&calm, 35);
+        let mut charged = midway(&calm, WeatherKind::Electricity);
+        let effects = shoot(&mut charged, 0, Shot::S1, 35, power);
+        assert_eq!(bolts(&effects), 1, "{effects:?}");
+        assert_eq!(bolts(&shoot(&mut calm.clone(), 0, Shot::S1, 35, power)), 0);
+    }
+
+    #[test]
+    fn thunder_through_electricity_still_strikes_once() {
+        let game = armed(Item::Thunder, 800);
+        let power = direct_hit_power(&game, 35);
+        let mut charged = midway(&game, WeatherKind::Electricity);
+        assert_eq!(bolts(&shoot(&mut charged, 0, Shot::S1, 35, power)), 1, "the item is the weather (GF-tiro)");
     }
 
     #[test]

@@ -10,7 +10,6 @@ use crate::{
         sparkhorn::{S1_BALL_BLAST, S1_BALL_DAMAGE, S2_BALL_BLAST, S2_BALL_DAMAGE, S2_BOLT_DEGREES, SPLASH, SS_BALL_BLAST, SS_BOLT_DAMAGE, SS_REACH},
     },
     units::{Vec2, ticks, to_radians},
-    weather::Weather,
 };
 
 /// The SS ball only carves; its bolts do the damage (DB-mob).
@@ -40,7 +39,7 @@ pub(super) fn fire(game: &mut Game, gun: &mut Gun, shot: Shot, effects: &mut Vec
         Shot::Ss => {
             let track = game.track(flight, 0, 0);
             effects.push(Effect::Fired { seat: gun.seat, legs: track.legs.clone() });
-            gun.land(game, &gun.blast_on(&track, SS_BALL_BLAST.value, NO_DAMAGE), SS_BALL_BLAST.value, &track.impact, effects);
+            gun.land(game, &gun.blast_on(&track, SS_BALL_BLAST.value, NO_DAMAGE), SS_BALL_BLAST.value, &track.impact, track.marks, effects);
             if landed(&track) {
                 storm(game, gun, &track, effects);
             }
@@ -74,7 +73,7 @@ fn storm(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) {
     for x in columns {
         let strike = bolt::from_sky(game, x);
         bolt::flash(game, &strike, BOLT_CRATER.value * gun.salvo.crater, tick, effects);
-        let blast = gun.blast(strike.at, BOLT_REACH.value, SS_BOLT_DAMAGE.value, Weather::force_multiplier(track.forced));
+        let blast = gun.blast(strike.at, BOLT_REACH.value, SS_BOLT_DAMAGE.value, track.marks.boost());
         bolt::zap(game, &strike, &blast, effects);
     }
 }

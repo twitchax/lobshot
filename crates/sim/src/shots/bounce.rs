@@ -9,6 +9,7 @@ use crate::{
     game::{Contact, Effect, Game, Impact, Leg, Track},
     terrain::Terrain,
     units::Vec2,
+    weather::Marks,
 };
 
 /// How far around a bounce to look for the ground's slope, px.
@@ -50,8 +51,8 @@ struct Ball {
     /// The stage tick it goes off at, once lit.
     fuse: Option<u32>,
     bounces: u8,
-    /// It passed through Force.
-    forced: bool,
+    /// What the columns it passed through did to it.
+    marks: Marks,
     /// Gravity and wind on it, for falling again from rest.
     accel: Vec2,
 }
@@ -64,10 +65,10 @@ enum Next {
     Contact(Track),
 }
 
-/// Flies the balls, landing each one (`land`, with its index, where it went off, and whether it
-/// passed through Force) as it goes off. Returns each ball's path, by index, and the landings' and
+/// Flies the balls, landing each one (`land`, with its index, where it went off, and what the
+/// columns it passed through did to it) as it goes off. Returns each ball's path, by index, and the landings' and
 /// bounces' effects in tick order.
-pub(super) fn roll(game: &mut Game, flights: &[Flight], bounce: &Bounce, mut land: impl FnMut(&mut Game, usize, &Impact, bool, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
+pub(super) fn roll(game: &mut Game, flights: &[Flight], bounce: &Bounce, mut land: impl FnMut(&mut Game, usize, &Impact, Marks, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
     let mut balls: Vec<Ball> = flights
         .iter()
         .map(|&flight| Ball {
@@ -75,7 +76,7 @@ pub(super) fn roll(game: &mut Game, flights: &[Flight], bounce: &Bounce, mut lan
             motion: Motion::Flying { flight, from: 0, offset: 0 },
             fuse: None,
             bounces: 0,
-            forced: false,
+            marks: Marks::default(),
             accel: flight.accel,
         })
         .collect();
@@ -98,7 +99,7 @@ pub(super) fn roll(game: &mut Game, flights: &[Flight], bounce: &Bounce, mut lan
             Next::Contact(track) => touch(game, ball, &track, bounce, &mut effects),
         };
         if let Some(impact) = went_off {
-            land(game, index, &impact, ball.forced, &mut effects);
+            land(game, index, &impact, ball.marks, &mut effects);
             for next in &mut upcoming {
                 *next = None;
             }
@@ -151,7 +152,7 @@ fn go_off(ball: &mut Ball, tick: u32, track: Option<Track>) -> Impact {
 /// The ball touches what `track` ran into: a mobile sets it off; the ground or a side of the map
 /// bounces it; the map's bottom loses it. Returns where it went off, if it did.
 fn touch(game: &Game, ball: &mut Ball, track: &Track, bounce: &Bounce, effects: &mut Vec<Effect>) -> Option<Impact> {
-    ball.forced |= track.forced;
+    ball.marks |= track.marks;
     ball.legs.extend_from_slice(&track.legs);
     let impact = track.impact;
     let (last, tick) = (track.last, track.last_tick);

@@ -30,7 +30,7 @@ use crate::{
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
-    weather::{Column, Forecast, Weather, WeatherKind},
+    weather::{Column, Forecast, Marks, Weather, WeatherKind},
 };
 
 /// The most players a room seats: 4v4.
@@ -480,8 +480,8 @@ pub struct Track {
     pub legs: Vec<Leg>,
     /// `tick` counts from launch.
     pub impact: Impact,
-    /// It passed through a Force column.
-    pub forced: bool,
+    /// What the columns it passed through did to it.
+    pub marks: Marks,
     /// The last leg and the leg's own tick at impact, to carry on from (Coilback's S2).
     pub last: Leg,
     pub last_tick: u32,
@@ -1043,8 +1043,9 @@ impl Game {
             .collect()
     }
 
-    /// Follows a projectile through the weather to what it hits. Force marks it; Mirror sends it
-    /// back (its sideways speed and wind reversed); Tornado holds it, then flings it back up.
+    /// Follows a projectile through the weather to what it hits. Force, Drain and Electricity mark
+    /// it; Mirror sends it back (its sideways speed and wind reversed); Tornado holds it, then
+    /// flings it back up.
     /// `from_tick` is in `flight`'s own ticks, and `offset` is the shot's elapsed ticks at
     /// `flight`'s tick 0; both 0 is a launch (see `fly_sensing`).
     #[must_use]
@@ -1061,10 +1062,10 @@ impl Game {
             to: from_tick,
             offset,
         };
-        // Where to fly on from; a Force beam moves it on without starting a new leg.
+        // Where to fly on from; a column that only marks it moves it on without starting a new leg.
         let mut cursor = from_tick;
         let mut launched = from_tick == 0 && offset == 0;
-        let mut forced = false;
+        let mut marks = Marks::default();
         loop {
             let impact = self.fly_sensing(&leg.flight, cursor, launched, senses);
             launched = false;
@@ -1080,18 +1081,17 @@ impl Game {
                 return Track {
                     legs,
                     impact: Impact { contact, ..global },
-                    forced,
+                    marks,
                     last: leg,
                     last_tick: impact.tick,
                 };
             };
+            if marks.mark(column.kind) {
+                cursor = impact.tick + 1;
+                continue;
+            }
             let velocity = leg.flight.velocity_at(impact.tick);
             let next = match column.kind {
-                WeatherKind::Force => {
-                    forced = true;
-                    cursor = impact.tick + 1;
-                    continue;
-                }
                 WeatherKind::Mirror => Some((
                     Flight {
                         origin: impact.at,
@@ -1108,8 +1108,8 @@ impl Game {
                     },
                     ticks(TORNADO_HOLD_SECONDS.value),
                 )),
-                // Wind never stands as a column; were one there, it would do nothing.
-                WeatherKind::Wind => {
+                // Marked above. Wind never stands as a column; were one there, it would do nothing.
+                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind => {
                     cursor = impact.tick + 1;
                     continue;
                 }
@@ -1656,7 +1656,7 @@ mod unit {
     fn force_marks_a_shot_fired_from_inside_its_beam() {
         let game = with_column(WeatherKind::Force, 340);
         let flight = game.launch(0, 25, 2.0).unwrap();
-        assert!(game.track(flight, 0, 0).forced);
+        assert!(game.track(flight, 0, 0).marks.forced);
     }
 
     #[test]
@@ -1676,7 +1676,7 @@ mod unit {
         let flight = game.launch(0, 45, 2.4).unwrap();
         let calm = duel(800).track(flight, 0, 0);
         let forced = game.track(flight, 0, 0);
-        assert!(forced.forced && !calm.forced);
+        assert!(forced.marks.forced && !calm.marks.forced);
         assert_eq!(forced.impact, calm.impact, "the path is unchanged");
     }
 

@@ -5,6 +5,7 @@
 use crate::{
     ballistics::{self, Flight},
     game::{Contact, Effect, Game, Impact, Leg, Senses, Strand},
+    weather::Marks,
 };
 
 /// The shape of a helix.
@@ -16,10 +17,10 @@ pub(super) struct Helix<'p> {
 }
 
 /// Flies the strands about `flight`, landing each one (`land`, with its index, its impact, and
-/// whether the path passed through Force) as it strikes; a later strand meets the craters of the
+/// what the columns the path passed through did to it) as it strikes; a later strand meets the craters of the
 /// earlier. Returns the path (cut where the last strand stopped), the strands, and the landings'
 /// effects.
-pub(super) fn fly(game: &mut Game, flight: Flight, helix: &Helix, mut land: impl FnMut(&mut Game, usize, &Impact, bool, &mut Vec<Effect>)) -> (Vec<Leg>, Vec<Strand>, Vec<Effect>) {
+pub(super) fn fly(game: &mut Game, flight: Flight, helix: &Helix, mut land: impl FnMut(&mut Game, usize, &Impact, Marks, &mut Vec<Effect>)) -> (Vec<Leg>, Vec<Strand>, Vec<Effect>) {
     // The path itself only follows the weather, out of the map's sides or bottom.
     let path = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: false });
     let (width, height) = (f64::from(game.terrain().width()), f64::from(game.terrain().height()));
@@ -49,7 +50,7 @@ pub(super) fn fly(game: &mut Game, flight: Flight, helix: &Helix, mut land: impl
                 let impact = Impact { tick: leg.offset + tick, at, contact };
                 ends[index] = Some(impact.tick);
                 if contact != Contact::Gone {
-                    land(game, index, &impact, path.forced, &mut effects);
+                    land(game, index, &impact, path.marks, &mut effects);
                     frames = game.hit_frames();
                 }
             }

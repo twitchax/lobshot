@@ -9,7 +9,6 @@ use crate::{
     game::{Contact, Effect, Game, Shot},
     tuning::lanternwing::{S1_BLAST, S1_DAMAGE, S2_AMPLITUDE, S2_HERTZ, S2_PHASES, S2_STRAND_BLAST, S2_STRAND_DAMAGE, SS_BLAST, SS_DAMAGE, SS_STRIP_REACH},
     units::Vec2,
-    weather::Weather,
 };
 
 pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Effect>) {
@@ -24,9 +23,9 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
                 hertz: S2_HERTZ.value,
                 phases: &S2_PHASES.value,
             };
-            let (legs, strands, mut landings) = helix::fly(game, flight, &shape, |game, _, impact, forced, out| {
-                let blast = gun.blast(impact.at, S2_STRAND_BLAST.value, S2_STRAND_DAMAGE.value, Weather::force_multiplier(forced));
-                gun.land(game, &blast, S2_STRAND_BLAST.value, impact, out);
+            let (legs, strands, mut landings) = helix::fly(game, flight, &shape, |game, _, impact, marks, out| {
+                let blast = gun.blast(impact.at, S2_STRAND_BLAST.value, S2_STRAND_DAMAGE.value, marks.boost());
+                gun.land(game, &blast, S2_STRAND_BLAST.value, impact, marks, out);
             });
             effects.push(Effect::Helix {
                 seat: gun.seat,
@@ -43,7 +42,7 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             if matches!(track.impact.contact, Contact::Terrain | Contact::Mobile(_)) {
                 strip(game, track.impact.at, track.impact.tick, effects);
             }
-            gun.land(game, &gun.blast_on(&track, SS_BLAST.value, SS_DAMAGE.value), SS_BLAST.value, &track.impact, effects);
+            gun.land(game, &gun.blast_on(&track, SS_BLAST.value, SS_DAMAGE.value), SS_BLAST.value, &track.impact, track.marks, effects);
         }
     }
 }
