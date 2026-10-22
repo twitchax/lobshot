@@ -19,7 +19,7 @@ use lobshot_sim::{
     game::{Effect, Event, MobileKind, Phase, Player, Shot, Team},
     log::Log,
     map::{Arena, MapRef},
-    referee::Entrant,
+    referee::{Entrant, XorShift},
 };
 
 use crate::host::{Happened, Host};
@@ -209,7 +209,7 @@ pub fn play(spec: &Spec, maps: &Maps) -> Res<(Outcome, Log)> {
         mobile: Some(spec.mobiles[usize::from(team == Team::B)]),
         items: bot::LOADOUT,
     });
-    let mut host = Host::seat(&arena, &entrants, &RoomOptions::default(), vec![Some(spec.level); 2], spec.seed, maps)?;
+    let mut host = Host::seat(&arena, &entrants, &RoomOptions::default(), vec![Some(spec.level); 2], XorShift::new(spec.seed), maps)?;
     let first = host.log().setup.order[0];
     let mut sides = [Side::default(); 2];
     let mut out = Vec::new();

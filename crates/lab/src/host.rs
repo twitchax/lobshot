@@ -44,14 +44,13 @@ pub struct Host {
 
 impl Host {
     /// Seats `entrants` on `arena` under `options`' rules (max wind, sudden death), every roll
-    /// from `seed`. `bots` says who plays each seat.
+    /// from `dice`. `bots` says who plays each seat.
     ///
     /// # Errors
     ///
     /// Fails when the arena can't seat them or its map can't be loaded.
-    pub fn seat(arena: &Arena, entrants: &[Entrant], options: &RoomOptions, bots: Vec<Option<Level>>, seed: u64, assets: &dyn MapAssets) -> Res<Self> {
+    pub fn seat(arena: &Arena, entrants: &[Entrant], options: &RoomOptions, bots: Vec<Option<Level>>, mut dice: XorShift, assets: &dyn MapAssets) -> Res<Self> {
         anyhow::ensure!(bots.len() == entrants.len(), "{} seats but {} players", entrants.len(), bots.len());
-        let mut dice = XorShift::new(seed);
         let setup = referee::setup(arena, entrants, options.max_wind, options.sudden_death, &mut dice)?;
         let game = Game::new(&setup, assets).context("setting up the game")?;
         Ok(Self {
@@ -88,6 +87,13 @@ impl Host {
     #[must_use]
     pub fn saved(&self) -> &Saved {
         &self.saved
+    }
+
+    /// SearchBot takes over `seat` at `level`: for a dead agent, whose slot machine it then spins.
+    pub fn hand_to_bot(&mut self, seat: u8, level: Level) {
+        if let Some(bot) = self.saved.bots.get_mut(usize::from(seat)) {
+            *bot = Some(level);
+        }
     }
 
     /// Whether SearchBot plays `seat` (and at what level).
@@ -197,7 +203,7 @@ mod unit {
             mobile: Some(MobileKind::Coilback),
             items: bot::LOADOUT,
         });
-        Host::seat(&arena, &entrants, &RoomOptions::default(), bots, seed, &maps).unwrap()
+        Host::seat(&arena, &entrants, &RoomOptions::default(), bots, XorShift::new(seed), &maps).unwrap()
     }
 
     #[test]
@@ -285,7 +291,7 @@ mod unit {
                     .map(|seed| {
                         let (arena, entrants, maps) = (&arena, &entrants, &maps);
                         scope.spawn(move || {
-                            let mut host = Host::seat(arena, entrants, &RoomOptions::default(), vec![Some(level); 8], seed * 7919, maps).unwrap();
+                            let mut host = Host::seat(arena, entrants, &RoomOptions::default(), vec![Some(level); 8], XorShift::new(seed * 7919), maps).unwrap();
                             let (mut shots, mut hits) = (0, 0);
                             let mut out = Vec::new();
                             while host.game().turns() < 4000 {

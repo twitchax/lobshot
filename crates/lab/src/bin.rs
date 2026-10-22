@@ -1,4 +1,5 @@
-//! The `lobshot-lab` binary: SearchBot balance runs, and replaying any game they played.
+//! The `lobshot-lab` binary: SearchBot balance runs and replaying any game they played, and an
+//! LLM agent's way in: `play`, a turn a call over a save file, and `mcp`, an MCP server.
 
 // `cargo llvm-cov` on nightly sets `coverage_nightly`; elsewhere this is inert, so the source builds
 // on stable. Enable the feature only in a crate root that uses `#[coverage(off)]`: an unused
@@ -19,10 +20,17 @@ use tracing_subscriber::EnvFilter;
 
 use lobshot_assets::{MAPS, maps::Maps};
 use lobshot_lab::{
+    agent::{self, NewGame, Session, TraceRequest},
     balance::{self, LevelName, Spec},
+    mcp::Server,
     report::{BAND, Band, Report},
 };
-use lobshot_sim::{base::Void, game::MobileKind};
+use lobshot_protocol::Action;
+use lobshot_sim::{
+    base::Void,
+    game::{MobileKind, Shot},
+    units::Facing,
+};
 
 /// Headless lobshot: bot-vs-bot balance runs and the interface for LLM agents.
 #[derive(Debug, Parser)]
@@ -44,6 +52,76 @@ enum Command {
         #[command(flatten)]
         assets: AssetsArg,
     },
+    /// Play one seat against SearchBot a step at a time, as an LLM agent does: each step reads and
+    /// rewrites the save file and prints JSON.
+    Play(PlayArgs),
+    /// Serve the same steps as MCP tools on stdin and stdout, for an MCP client such as Claude Code.
+    Mcp {
+        #[command(flatten)]
+        assets: AssetsArg,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct PlayArgs {
+    #[command(subcommand)]
+    step: PlayStep,
+    /// The game's save file.
+    #[arg(long, global = true, default_value = "game.json")]
+    game: PathBuf,
+    /// The generated assets (`cargo make art` writes them).
+    #[arg(long, global = true, default_value = "assets/gen")]
+    assets: PathBuf,
+}
+
+#[derive(Debug, Subcommand)]
+enum PlayStep {
+    /// How the game plays: coordinates, actions, delay, weather, every mobile and item.
+    Rules,
+    /// Start a game in the save file, replacing any there, and print what you see.
+    New {
+        /// Your mobile; random when left out.
+        #[arg(long)]
+        mobile: Option<String>,
+        /// The other team's mobiles, one a seat; random when left out.
+        #[arg(long, value_delimiter = ',')]
+        against: Vec<String>,
+        /// A lobby map, or `flat`; Tidewall when left out.
+        #[arg(long)]
+        map: Option<String>,
+        /// Players a team, 1 to 4.
+        #[arg(long)]
+        team_size: Option<u8>,
+        /// How well the bots play: easy, normal or hard.
+        #[arg(long)]
+        level: Option<String>,
+        /// Replays a game: the same seed and setup play the same game.
+        #[arg(long)]
+        seed: Option<u64>,
+    },
+    /// What you see now, and what happened since you last looked.
+    View,
+    /// Where a shot would land if you fired it now, and whom it would hurt. Changes nothing.
+    Trace {
+        /// S1, S2 or SS.
+        #[arg(long, value_parser = shot)]
+        shot: Shot,
+        /// Degrees above level toward where you face.
+        #[arg(long, allow_negative_numbers = true)]
+        aim: i16,
+        /// Twentieths of a bar, 0 to 80.
+        #[arg(long)]
+        power: u8,
+        /// Face this way first: left or right.
+        #[arg(long, value_parser = facing)]
+        facing: Option<Facing>,
+        /// Arm the item in this loadout slot first.
+        #[arg(long)]
+        item: Option<u8>,
+    },
+    /// Your move, as the wire's JSON: '{"Shoot":{"shot":"S1","aim":45,"power":48}}',
+    /// '{"Walk":{"facing":"Left","steps":40}}', '{"Item":{"slot":0}}' or Pass.
+    Act { action: String },
 }
 
 #[derive(Debug, clap::Args)]
@@ -122,6 +200,8 @@ fn main() -> ExitCode {
     let result = match Cli::parse().command {
         Command::Balance(args) => balance(&args),
         Command::Game { id, assets } => game(&id, &assets.assets),
+        Command::Play(args) => play(&args),
+        Command::Mcp { assets } => Server::new(Maps::new(&assets.assets)).serve(std::io::stdin().lock(), std::io::stdout().lock()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -177,6 +257,88 @@ fn game(id: &Spec, assets: &Path) -> Void {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn play(args: &PlayArgs) -> Void {
+    let maps = Maps::new(&args.assets);
+    let load = || -> anyhow::Result<Session> {
+        let text = std::fs::read_to_string(&args.game).with_context(|| format!("reading {} (start a game with `play new`)", args.game.display()))?;
+        Session::load(serde_json::from_str(&text).with_context(|| format!("reading {}", args.game.display()))?, &maps)
+    };
+    let store = |session: &Session| -> Void {
+        let text = serde_json::to_string(&session.save()).context("saving the game")?;
+        std::fs::write(&args.game, text).with_context(|| format!("writing {}", args.game.display()))
+    };
+    let printed = match &args.step {
+        PlayStep::Rules => {
+            print!("{}", agent::rules());
+            return Ok(());
+        }
+        PlayStep::New {
+            mobile,
+            against,
+            map,
+            team_size,
+            level,
+            seed,
+        } => {
+            let new = NewGame {
+                mobile: mobile.clone(),
+                against: against.clone(),
+                map: map.clone(),
+                team_size: *team_size,
+                level: level.clone(),
+                seed: *seed,
+            };
+            let mut session = Session::new(&new, &maps)?;
+            let view = session.view(&maps)?;
+            store(&session)?;
+            serde_json::to_string_pretty(&view)
+        }
+        PlayStep::View => {
+            let mut session = load()?;
+            let view = session.view(&maps)?;
+            store(&session)?;
+            serde_json::to_string_pretty(&view)
+        }
+        &PlayStep::Trace { shot, aim, power, facing, item } => serde_json::to_string_pretty(&load()?.trace(&TraceRequest { shot, aim, power, facing, item })?),
+        PlayStep::Act { action } => {
+            // A bare word (Pass) is the JSON string it names.
+            let json = if action.trim_start().starts_with(['{', '"']) {
+                action.clone()
+            } else {
+                format!("{:?}", action.trim())
+            };
+            let action: Action = serde_json::from_str(&json).with_context(|| format!("{action:?} isn't an action"))?;
+            let mut session = load()?;
+            session.act(action)?;
+            let view = session.view(&maps)?;
+            store(&session)?;
+            serde_json::to_string_pretty(&view)
+        }
+    };
+    println!("{}", printed.context("writing the reply")?);
+    Ok(())
+}
+
+/// A shot by name, any case.
+fn shot(name: &str) -> anyhow::Result<Shot> {
+    match name.to_lowercase().as_str() {
+        "s1" => Ok(Shot::S1),
+        "s2" => Ok(Shot::S2),
+        "ss" => Ok(Shot::Ss),
+        _ => anyhow::bail!("{name:?} isn't a shot: S1, S2 or SS"),
+    }
+}
+
+/// A facing by name, any case.
+fn facing(name: &str) -> anyhow::Result<Facing> {
+    match name.to_lowercase().as_str() {
+        "left" => Ok(Facing::Left),
+        "right" => Ok(Facing::Right),
+        _ => anyhow::bail!("{name:?} isn't a facing: left or right"),
+    }
+}
+
 #[cfg(test)]
 mod unit {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -191,5 +353,14 @@ mod unit {
         for bad in ["35", "65..35", "a..b", "0..101", "-1..50"] {
             assert!(bad.parse::<BandArg>().is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn shots_and_facings_parse_in_any_case() {
+        assert_eq!(shot("ss").unwrap(), Shot::Ss);
+        assert_eq!(shot("S2").unwrap(), Shot::S2);
+        assert!(shot("s3").is_err());
+        assert_eq!(facing("LEFT").unwrap(), Facing::Left);
+        assert!(facing("up").is_err());
     }
 }

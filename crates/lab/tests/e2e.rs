@@ -89,3 +89,125 @@ fn e2e_balance_without_built_maps_says_how_to_build_them() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("cargo make art"), "{}", String::from_utf8_lossy(&out.stderr));
 }
+
+/// A plain agent's next move from its view: face the nearest enemy, then the S1 at 45 degrees
+/// that `trace` says hurts it most (powers `step` apart), or a pass when none does.
+fn next_move(view: &serde_json::Value, step: usize, mut trace: impl FnMut(u8) -> serde_json::Value) -> serde_json::Value {
+    let players = view["players"].as_array().unwrap();
+    let me = players.iter().find(|p| p["you"] == true).unwrap();
+    let enemy = players
+        .iter()
+        .filter(|p| p["alive"] == true && p["team"] != me["team"])
+        .min_by_key(|p| (p["x"].as_i64().unwrap() - me["x"].as_i64().unwrap()).abs())
+        .unwrap();
+    let toward = if enemy["x"].as_i64() > me["x"].as_i64() { "Right" } else { "Left" };
+    if me["facing"] != toward {
+        return serde_json::json!({ "Walk": { "facing": toward, "steps": 0 } });
+    }
+    let best = (0..=80_u8)
+        .step_by(step)
+        .filter_map(|power| {
+            let traced = trace(power);
+            let hurt: i64 = traced["damage"].as_array()?.iter().filter(|h| h["enemy"] == true).map(|h| h["amount"].as_i64().unwrap()).sum();
+            (hurt > 0).then_some((hurt, power))
+        })
+        .max();
+    best.map_or_else(|| serde_json::json!("Pass"), |(_, power)| serde_json::json!({ "Shoot": { "shot": "S1", "aim": 45, "power": power } }))
+}
+
+/// An MCP client of one `lobshot-lab mcp` process: JSON-RPC a line at a time.
+struct Client {
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+    id: u32,
+}
+
+impl Client {
+    fn request(&mut self, method: &str, params: &serde_json::Value) -> serde_json::Value {
+        use std::io::{BufRead as _, Write as _};
+
+        self.id += 1;
+        writeln!(self.stdin, "{}", serde_json::json!({ "jsonrpc": "2.0", "id": self.id, "method": method, "params": params })).unwrap();
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).unwrap();
+        let reply: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(reply["id"], self.id, "{reply}");
+        reply["result"].clone()
+    }
+
+    /// A tool's reply, parsed as the JSON it carries.
+    fn tool(&mut self, name: &str, arguments: &serde_json::Value) -> serde_json::Value {
+        let result = self.request("tools/call", &serde_json::json!({ "name": name, "arguments": arguments }));
+        assert_eq!(result["isError"], false, "{result}");
+        serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap()
+    }
+}
+
+/// uat-003: an agent plays a whole game against SearchBot through `lobshot-lab mcp`, speaking
+/// MCP's JSON-RPC over the process's stdin and stdout as an MCP client does.
+#[test]
+fn e2e_agent_plays_a_full_game_over_mcp() {
+    let dir = TempDir::new().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_lobshot-lab"))
+        .current_dir(dir.path())
+        .arg("mcp")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut client = Client {
+        stdin: child.stdin.take().unwrap(),
+        stdout: std::io::BufReader::new(child.stdout.take().unwrap()),
+        id: 0,
+    };
+    let init = client.request(
+        "initialize",
+        &serde_json::json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "e2e", "version": "0" } }),
+    );
+    assert_eq!(init["protocolVersion"], "2025-06-18");
+    assert_eq!(client.request("tools/list", &serde_json::json!({}))["tools"].as_array().unwrap().len(), 5);
+
+    let mut view = client.tool(
+        "new_game",
+        &serde_json::json!({ "mobile": "coilback", "against": ["sparkhorn"], "map": "flat", "level": "easy", "seed": 7 }),
+    );
+    for _ in 0..150 {
+        if view["over"] == true {
+            break;
+        }
+        let action = next_move(&view, 4, |power| client.tool("trace", &serde_json::json!({ "shot": "S1", "aim": 45, "power": power })));
+        view = client.tool("act", &serde_json::json!({ "action": action }));
+    }
+    assert_eq!(view["over"], true, "{view}");
+    assert!(view["status"].as_str().unwrap().starts_with("Game over"), "{view}");
+    drop(client);
+    assert!(child.wait().unwrap().success(), "it ends when its input does");
+}
+
+/// The same agent through `lobshot-lab play`, a process a step over a save file.
+#[test]
+fn e2e_agent_plays_a_full_game_over_the_cli() {
+    let dir = TempDir::new().unwrap();
+    let json = |args: &[&str]| -> serde_json::Value { serde_json::from_str(&stdout(&run_in(dir.path(), args))).unwrap() };
+    let rules = stdout(&run_in(dir.path(), &["play", "rules"]));
+    assert!(rules.contains("## Mobiles"));
+
+    let mut view = json(&["play", "new", "--mobile", "coilback", "--against", "sparkhorn", "--map", "flat", "--level", "easy", "--seed", "7"]);
+    assert!(dir.path().join("game.json").exists());
+    for _ in 0..150 {
+        if view["over"] == true {
+            break;
+        }
+        let action = next_move(&view, 8, |power| json(&["play", "trace", "--shot", "s1", "--aim", "45", "--power", &power.to_string()]));
+        view = json(&["play", "act", &action.to_string()]);
+    }
+    assert_eq!(view["over"], true, "{view}");
+    let again = json(&["play", "view"]);
+    assert_eq!(
+        (again["over"].clone(), again["happened"].clone()),
+        (serde_json::json!(true), serde_json::json!([])),
+        "nothing new since the last look"
+    );
+    let refused = run_in(dir.path(), &["play", "act", "Pass"]);
+    assert!(!refused.status.success() && String::from_utf8_lossy(&refused.stderr).contains("over"));
+}

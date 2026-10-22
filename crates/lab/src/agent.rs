@@ -1,0 +1,1089 @@
+//! The interface LLM agents play through (`DESIGN.md`, "Bots and the lab"): one seat in a hosted
+//! game, beside and against SearchBot. An agent sees what a player sees (`View`), may ask where a
+//! shot would land under the wind the HUD shows (`Session::trace`: what SearchBot's search knows,
+//! nothing more), and acts with the wire's own `Action`. Its turns are charged the bot think time,
+//! so a slow model plays on the same clock as a quick one. The CLI (`lobshot-lab play`) and the
+//! MCP server (`lobshot-lab mcp`) are thin shells over a `Session`.
+
+use std::fmt::Write as _;
+
+use anyhow::{Context as _, ensure};
+use serde::{Deserialize, Serialize};
+
+use lobshot_assets::{maps::Maps, mobile_slug};
+use lobshot_protocol::{Action, RoomOptions};
+use lobshot_sim::{
+    base::Res,
+    bot::{self, Level},
+    game::{Death, Effect, Event, Game, MobileKind, Phase, Player, Shot, SsState, Team},
+    items::Item,
+    map::MapRef,
+    referee::{self, Entrant, XorShift},
+    tuning,
+    units::{Facing, Power},
+    weather::WeatherKind,
+};
+
+use crate::{
+    balance::{LevelName, level_name, mobile},
+    host::{Happened, Host, Saved},
+};
+
+/// An agent's game that hasn't ended by this many turns stops there.
+pub const TURN_CAP: i64 = 300;
+
+/// The agent's terrain picture: this many columns across, whatever the map's width.
+const PICTURE_COLUMNS: u32 = 100;
+
+/// How to set up an agent's game. Everything has a default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct NewGame {
+    /// Your mobile, by name; random when left out.
+    pub mobile: Option<String>,
+    /// The other team's mobiles, by name, one a seat; random when left out.
+    pub against: Vec<String>,
+    /// A lobby map, or `flat`; the server's default when left out.
+    pub map: Option<String>,
+    /// Players a team, 1 to 4 (1 when left out). Your teammates are bots too.
+    pub team_size: Option<u8>,
+    /// How well the bots play: easy, normal or hard (normal when left out).
+    pub level: Option<String>,
+    /// Where the game's rolls start; a fresh one when left out (every view reports it).
+    pub seed: Option<u64>,
+}
+
+/// An agent's game, saved: the host's state, and which seat is the agent's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedSession {
+    pub host: Saved,
+    pub you: u8,
+    pub level: Level,
+    pub seed: u64,
+    /// How much of the log the agent has been told about.
+    pub seen: usize,
+}
+
+/// One agent's game.
+#[derive(Debug, Clone)]
+pub struct Session {
+    host: Host,
+    you: u8,
+    level: Level,
+    seed: u64,
+    seen: usize,
+}
+
+impl Session {
+    /// Sets up a game as `new` asks and plays the bots' turns up to the agent's first.
+    ///
+    /// # Errors
+    ///
+    /// Fails on a name that isn't a mobile, map or level, a team size outside 1 to 4, or a map
+    /// that can't seat everyone.
+    pub fn new(new: &NewGame, maps: &Maps) -> Res<Self> {
+        let size = new.team_size.unwrap_or(1);
+        ensure!((1..=4).contains(&size), "teams are 1 to 4 players, not {size}");
+        ensure!(new.against.len() <= usize::from(size), "{} opponents for a team of {size}", new.against.len());
+        let level = new.level.as_deref().map(str::parse::<LevelName>).transpose()?.map_or(Level::Normal, |l| l.0);
+        let seed = new.seed.unwrap_or_else(fresh_seed);
+        let options = RoomOptions {
+            team_size: size,
+            ..RoomOptions::default()
+        };
+        let map = new.map.clone().unwrap_or_else(|| options.map.clone());
+        let mut dice = XorShift::new(seed);
+        let arena = referee::arena(maps.arenas(&map)?, &mut dice)?;
+
+        let you = new.mobile.as_deref().map(mobile).transpose()?;
+        let against: Vec<MobileKind> = new.against.iter().map(|name| mobile(name)).collect::<Res<_>>()?;
+        let mut entrants = vec![Entrant {
+            team: Team::A,
+            mobile: you,
+            items: bot::LOADOUT,
+        }];
+        entrants.extend((1..size).map(|_| Entrant {
+            team: Team::A,
+            mobile: None,
+            items: bot::LOADOUT,
+        }));
+        entrants.extend((0..usize::from(size)).map(|i| Entrant {
+            team: Team::B,
+            mobile: against.get(i).copied(),
+            items: bot::LOADOUT,
+        }));
+        let mut bots = vec![Some(level); entrants.len()];
+        bots[0] = None;
+        let host = Host::seat(&arena, &entrants, &options, bots, dice, maps)?;
+        let mut session = Self { host, you: 0, level, seed, seen: 0 };
+        session.play_bots()?;
+        Ok(session)
+    }
+
+    /// Picks a saved game back up.
+    ///
+    /// # Errors
+    ///
+    /// Fails when its log doesn't replay.
+    pub fn load(saved: SavedSession, maps: &Maps) -> Res<Self> {
+        Ok(Self {
+            host: Host::load(saved.host, maps)?,
+            you: saved.you,
+            level: saved.level,
+            seed: saved.seed,
+            seen: saved.seen,
+        })
+    }
+
+    #[must_use]
+    pub fn save(&self) -> SavedSession {
+        SavedSession {
+            host: self.host.saved().clone(),
+            you: self.you,
+            level: self.level,
+            seed: self.seed,
+            seen: self.seen,
+        }
+    }
+
+    #[must_use]
+    pub fn game(&self) -> &Game {
+        self.host.game()
+    }
+
+    /// What the agent sees now, with what happened since it last looked.
+    ///
+    /// # Errors
+    ///
+    /// Fails only if the log no longer replays: a bug.
+    pub fn view(&mut self, maps: &Maps) -> Res<View> {
+        let happened = self.since_seen(maps)?;
+        self.seen = self.host.log().events.len();
+        Ok(view(self, &happened))
+    }
+
+    /// The agent's move. Then the bots play until it's the agent's turn again or the game ends.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the game refuses the action (not your turn, an aim out of range, an item you
+    /// can't use); nothing changes then.
+    pub fn act(&mut self, action: Action) -> Res<()> {
+        if let Phase::Over { .. } = self.game().phase() {
+            anyhow::bail!("the game is over");
+        }
+        // Every agent turn takes the bot's think time (the module's note on clocks).
+        let event = action.event(self.you, tuning::bot::THINK.value);
+        self.host.commit(event).context("the game refused that")?;
+        self.play_bots()
+    }
+
+    /// Where a shot would land if fired now, and whom it would hurt: the shot fired in a copy of
+    /// the game, in the wind as it is, turned to `facing` first and with the item at `item` armed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the shot couldn't be fired now: not your turn, an aim out of range, an SS that
+    /// is locked, an item you can't use.
+    pub fn trace(&self, request: &TraceRequest) -> Res<Trace> {
+        let mut scratch = self.game().clone();
+        let you = self.you;
+        if let Some(facing) = request.facing {
+            scratch.apply(Event::Walk { seat: you, facing, steps: 0 })?;
+        }
+        if let Some(slot) = request.item {
+            scratch.apply(Event::UseItem {
+                seat: you,
+                slot,
+                time: lobshot_sim::units::Centis(0),
+            })?;
+        }
+        let power = Power::from_twentieths(request.power)?;
+        let effects = scratch.apply(Event::Shoot {
+            seat: you,
+            shot: request.shot,
+            aim: request.aim,
+            power,
+            time: lobshot_sim::units::Centis(0),
+        })?;
+        Ok(trace(self.game(), you, &effects))
+    }
+
+    /// Plays every bot turn up to the agent's next one. A dead agent's slot machine is SearchBot's
+    /// to spin from then on.
+    fn play_bots(&mut self) -> Res<()> {
+        if !self.game().players()[usize::from(self.you)].alive {
+            self.host.hand_to_bot(self.you, self.level);
+        }
+        self.host.run(TURN_CAP, &mut Vec::new())
+    }
+
+    /// The events since the agent last looked, with what they did: the log replayed.
+    fn since_seen(&self, maps: &Maps) -> Res<Vec<Happened>> {
+        let log = self.host.log();
+        let mut game = Game::new(&log.setup, maps)?;
+        let mut happened = Vec::new();
+        for (i, &event) in log.events.iter().enumerate() {
+            let effects = game.apply(event)?;
+            if i >= self.seen {
+                happened.push(Happened { event, effects });
+            }
+        }
+        Ok(happened)
+    }
+}
+
+/// A seed from the clock: an agent's game needn't be reproducible unless it asks for a seed.
+fn fresh_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(1, |since| u64::try_from(since.as_nanos() % u128::from(u64::MAX)).unwrap_or(1))
+}
+
+/// A shot to trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TraceRequest {
+    pub shot: Shot,
+    pub aim: i16,
+    /// Twentieths of a bar, 0 to 80.
+    pub power: u8,
+    #[serde(default)]
+    pub facing: Option<Facing>,
+    /// A loadout slot to arm first.
+    #[serde(default)]
+    pub item: Option<u8>,
+}
+
+/// Where a traced shot went.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Trace {
+    /// One line for the agent: what the shot would do.
+    pub summary: String,
+    /// Where each projectile's flight ended, `[x, y]`; off the map when outside it.
+    pub ends: Vec<[i32; 2]>,
+    /// Every blast, `[x, y]`.
+    pub blasts: Vec<[i32; 2]>,
+    pub damage: Vec<Hurt>,
+    /// Seats that would die.
+    pub deaths: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Hurt {
+    pub seat: u8,
+    pub amount: i32,
+    pub enemy: bool,
+}
+
+fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
+    let players = game.players();
+    let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != players[usize::from(you)].team);
+    let mut damage: Vec<Hurt> = Vec::new();
+    let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
+    for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
+        match effect {
+            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } => {
+                if let Some(leg) = legs.last() {
+                    ends.push(point(leg.flight.at(leg.to)));
+                }
+            }
+            Effect::Exploded { at, .. } => blasts.push(point(*at)),
+            Effect::Damaged { seat, amount } | Effect::Shielded { seat, amount } => match damage.iter_mut().find(|h| h.seat == *seat) {
+                Some(hurt) => hurt.amount += amount,
+                None => damage.push(Hurt {
+                    seat: *seat,
+                    amount: *amount,
+                    enemy: enemy(*seat),
+                }),
+            },
+            Effect::Died { seat, .. } => deaths.push(*seat),
+            _ => {}
+        }
+    }
+    let to_enemies: i32 = damage.iter().filter(|h| h.enemy).map(|h| h.amount).sum();
+    let to_friends: i32 = damage.iter().filter(|h| !h.enemy).map(|h| h.amount).sum();
+    let mut summary = if to_enemies > 0 {
+        format!("Hits the enemy for {to_enemies}.")
+    } else {
+        "Hurts no enemy.".to_owned()
+    };
+    if to_friends > 0 {
+        let _ = write!(summary, " Costs your side {to_friends}.");
+    }
+    if let Some(&[x, y]) = blasts.first().or(ends.first()) {
+        let _ = write!(summary, " Lands near x={x}, y={y}.");
+    } else {
+        summary.push_str(" Leaves the map.");
+    }
+    if !deaths.is_empty() {
+        let _ = write!(summary, " Kills seat {}.", deaths.iter().map(u8::to_string).collect::<Vec<_>>().join(", seat "));
+    }
+    Trace { summary, ends, blasts, damage, deaths }
+}
+
+fn point(at: lobshot_sim::units::Vec2) -> [i32; 2] {
+    // Map coordinates fit an i32 many times over.
+    #[allow(clippy::cast_possible_truncation)]
+    [at.x.round() as i32, at.y.round() as i32]
+}
+
+/// What the agent sees: what a player sees on the HUD and the map, in numbers.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct View {
+    /// One line: whose turn it is, or how the game ended.
+    pub status: String,
+    pub you: u8,
+    pub your_turn: bool,
+    pub over: bool,
+    /// The winning team once it's over; `None` for a draw (or still playing).
+    pub winner: Option<Team>,
+    /// Turns played so far.
+    pub turn: i64,
+    /// This game's seed: `new_game` with it plays the same game.
+    pub seed: u64,
+    pub map: MapView,
+    pub wind: WindView,
+    pub weather: WeatherView,
+    pub sudden_death: Option<SuddenDeathView>,
+    pub players: Vec<PlayerView>,
+    /// Slot-machine drops still falling.
+    pub drops: Vec<DropView>,
+    /// What you may do, on your turn.
+    pub options: Option<Options>,
+    /// What happened since you last looked, in order.
+    pub happened: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MapView {
+    pub name: String,
+    pub variant: String,
+    pub width: u32,
+    pub height: u32,
+    /// The ground's top every `surface_step` px from x = 0, as y (down from the top); `None` where
+    /// a column is open to the bottom (falling there is death).
+    pub surface: Vec<Option<i32>>,
+    pub surface_step: u32,
+    /// The map as text, top row first: `#` ground, `.` air, a digit a living mobile's seat, `|` a
+    /// weather column. Each character is `cell[0]` px wide and `cell[1]` tall.
+    pub picture: Vec<String>,
+    pub cell: [u32; 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct WindView {
+    pub strength: u8,
+    /// Where it blows toward, degrees counterclockwise from screen-right: 90 blows up.
+    pub direction: u16,
+    /// Its push to the right (negative: left) and up (negative: down).
+    pub across: f64,
+    pub up: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct WeatherView {
+    /// Columns standing now.
+    pub columns: Vec<WeatherSpot>,
+    /// What comes next, front first; the front arrives in `turns_until_next` turns.
+    pub coming: Vec<WeatherSpot>,
+    pub turns_until_next: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct WeatherSpot {
+    pub kind: WeatherKind,
+    /// The column's center (no column for Wind, which rerolls the wind).
+    pub x: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SuddenDeathView {
+    pub kind: &'static str,
+    pub from_turn: u32,
+    pub on: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PlayerView {
+    pub seat: u8,
+    pub team: Team,
+    pub mobile: &'static str,
+    pub you: bool,
+    pub alive: bool,
+    /// Where it stands: the ground under it.
+    pub x: i32,
+    pub y: i32,
+    pub facing: Facing,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub shield: i32,
+    pub max_shield: i32,
+    /// Accumulated delay: the living player with the least moves next.
+    pub delay: u32,
+    /// Unused items, by loadout slot.
+    pub items: Vec<SlotItem>,
+    pub ss: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SlotItem {
+    pub slot: u8,
+    pub item: Item,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct DropView {
+    pub kind: lobshot_sim::drops::DropKind,
+    pub x: i32,
+    /// It lands when the turn count reaches this.
+    pub lands_at_turn: i64,
+}
+
+/// What the agent may do this turn.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Options {
+    pub shots: Vec<ShotOption>,
+    /// Items it may use now (one a turn).
+    pub items: Vec<SlotItem>,
+    /// Pixels it may still walk this turn.
+    pub moves_left: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ShotOption {
+    pub shot: Shot,
+    pub can_fire: bool,
+    /// Degrees above level, toward where it faces (90 is straight up).
+    pub aim_min: i16,
+    pub aim_max: i16,
+    /// Full damage only from these angles; the rest of the range deals less.
+    pub true_min: i16,
+    pub true_max: i16,
+    /// What firing it adds to your delay, before your mobile's base delay and items.
+    pub delay: u32,
+}
+
+fn view(session: &Session, happened: &[Happened]) -> View {
+    let game = session.game();
+    let you = session.you;
+    let (over, winner) = match game.phase() {
+        Phase::Over { winner } => (true, winner),
+        Phase::Turn { .. } => (false, None),
+    };
+    let your_turn = game.phase() == (Phase::Turn { seat: you }) && game.pending_roll().is_none();
+    let my_team = game.players()[usize::from(you)].team;
+    let status = match game.phase() {
+        Phase::Over { winner: Some(team) } if team == my_team => "Game over: your team won.".to_owned(),
+        Phase::Over { winner: Some(_) } => "Game over: your team lost.".to_owned(),
+        Phase::Over { winner: None } => "Game over: a draw.".to_owned(),
+        Phase::Turn { .. } if game.turns() >= TURN_CAP => format!("Stopped at the {TURN_CAP}-turn cap."),
+        Phase::Turn { seat } if seat == you => "Your turn.".to_owned(),
+        Phase::Turn { seat } => format!("Seat {seat}'s turn."),
+    };
+    let (across, up) = game.wind().components();
+    let weather = game.weather();
+    View {
+        status,
+        you,
+        your_turn,
+        over,
+        winner,
+        turn: game.turns(),
+        seed: session.seed,
+        map: map_view(game, &session.host.log().setup.map),
+        wind: WindView {
+            strength: game.wind().strength,
+            direction: game.wind().direction,
+            across: round2(across),
+            up: round2(up),
+        },
+        weather: WeatherView {
+            columns: weather.columns.iter().map(|c| WeatherSpot { kind: c.kind, x: c.x }).collect(),
+            coming: weather.queue.iter().map(|f| WeatherSpot { kind: f.kind, x: f.x }).collect(),
+            turns_until_next: weather.turns_left,
+        },
+        sudden_death: session.host.log().setup.sudden_death.map(|sd| SuddenDeathView {
+            kind: sd.kind.name(),
+            from_turn: sd.turn,
+            on: game.sudden_death().is_some(),
+        }),
+        players: (0_u8..).zip(game.players()).map(|(seat, p)| player_view(game, seat, p, you)).collect(),
+        drops: game
+            .drops()
+            .iter()
+            .map(|f| DropView {
+                kind: f.drop.kind,
+                x: f.drop.x,
+                lands_at_turn: f.lands,
+            })
+            .collect(),
+        options: your_turn.then(|| options(game, you)),
+        happened: narrate(game, you, happened),
+    }
+}
+
+fn round2(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
+fn map_view(game: &Game, map: &MapRef) -> MapView {
+    let terrain = game.terrain();
+    let (width, height) = (terrain.width(), terrain.height());
+    let (name, variant) = match map {
+        MapRef::Asset { name, variant, .. } => (name.clone(), variant.clone()),
+        MapRef::Flat { .. } => (lobshot_assets::FLAT.to_owned(), "A".to_owned()),
+        MapRef::Hills { .. } => ("hills".to_owned(), "A".to_owned()),
+    };
+    let step = 50;
+    let surface = (0..width.div_ceil(step)).map(|i| terrain.surface_at_or_below(i32::try_from(i * step).unwrap_or(i32::MAX), 0)).collect();
+    let cell_w = width.div_ceil(PICTURE_COLUMNS).max(1);
+    // Text characters are about twice as tall as wide.
+    let cell_h = 2 * cell_w;
+    let mut rows: Vec<Vec<char>> = (0..height.div_ceil(cell_h))
+        .map(|row| {
+            (0..width.div_ceil(cell_w))
+                .map(|column| {
+                    // Each cell's center, kept on the map at its far edges.
+                    let (x, y) = ((column * cell_w + cell_w / 2).min(width - 1), (row * cell_h + cell_h / 2).min(height - 1));
+                    let solid = terrain.is_solid(i32::try_from(x).unwrap_or(i32::MAX), i32::try_from(y).unwrap_or(i32::MAX));
+                    if solid { '#' } else { '.' }
+                })
+                .collect()
+        })
+        .collect();
+    let mut mark = |x: i32, y: i32, c: char| {
+        let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y)) else { return };
+        if let Some(cell) = rows
+            .get_mut(usize::try_from(y / cell_h).unwrap_or(usize::MAX))
+            .and_then(|r| r.get_mut(usize::try_from(x / cell_w).unwrap_or(usize::MAX)))
+        {
+            *cell = c;
+        }
+    };
+    for column in &game.weather().columns {
+        for y in (0..height).step_by(usize::try_from(cell_h).unwrap_or(1)) {
+            mark(column.x, i32::try_from(y).unwrap_or(0), '|');
+        }
+    }
+    for (seat, player) in (0_u8..).zip(game.players()).filter(|(_, p)| p.alive) {
+        let center = player.center();
+        #[allow(clippy::cast_possible_truncation)]
+        mark(center.x.round() as i32, center.y.round() as i32, char::from(b'0' + seat));
+    }
+    MapView {
+        name,
+        variant,
+        width,
+        height,
+        surface,
+        surface_step: step,
+        picture: rows.into_iter().map(|row| row.into_iter().collect()).collect(),
+        cell: [cell_w, cell_h],
+    }
+}
+
+fn player_view(game: &Game, seat: u8, player: &Player, you: u8) -> PlayerView {
+    let tuning = player.tuning();
+    PlayerView {
+        seat,
+        team: player.team,
+        mobile: tuning.name,
+        you: seat == you,
+        alive: player.alive,
+        x: player.footing.x,
+        y: player.footing.y,
+        facing: player.facing,
+        hp: player.hp,
+        max_hp: tuning.hp.value,
+        shield: player.shield,
+        max_shield: tuning.shield.value,
+        delay: player.clock.delay,
+        items: slot_items(player, |_| true),
+        ss: match game.ss_state(seat) {
+            Ok(SsState::Ready) => "ready".to_owned(),
+            Ok(SsState::Locked(turns)) => format!("locked for {turns} more of its turns"),
+            Ok(SsState::Off(kind)) => format!("off for the rest of the game ({} sudden death)", kind.name()),
+            Ok(SsState::Armed(item)) => format!("not with {} armed", item.name()),
+            Err(_) => "unknown".to_owned(),
+        },
+    }
+}
+
+fn slot_items(player: &Player, keep: impl Fn(u8) -> bool) -> Vec<SlotItem> {
+    (0_u8..)
+        .zip(player.items)
+        .filter_map(|(slot, item)| item.filter(|_| keep(slot)).map(|item| SlotItem { slot, item }))
+        .collect()
+}
+
+fn options(game: &Game, you: u8) -> Options {
+    let player = &game.players()[usize::from(you)];
+    let shots = [Shot::S1, Shot::S2, Shot::Ss]
+        .into_iter()
+        .map(|shot| {
+            let tuning = shot.tuning(player.tuning());
+            let aim = tuning.aim.value;
+            ShotOption {
+                shot,
+                can_fire: game.can_shoot(you, shot),
+                aim_min: aim.min,
+                aim_max: aim.max,
+                true_min: aim.true_min,
+                true_max: aim.true_max,
+                delay: tuning.delay.value,
+            }
+        })
+        .collect();
+    Options {
+        shots,
+        items: slot_items(player, |slot| game.can_use_item(you, slot)),
+        moves_left: player.moves_left,
+    }
+}
+
+/// What happened, a line an event, as a player watching would put it.
+fn narrate(game: &Game, you: u8, happened: &[Happened]) -> Vec<String> {
+    let who = |seat: u8| -> String {
+        if seat == you {
+            return "You".to_owned();
+        }
+        game.players()
+            .get(usize::from(seat))
+            .map_or_else(|| format!("Seat {seat}"), |p| format!("Seat {seat} ({}, team {:?})", p.tuning().name, p.team))
+    };
+    let mut lines = Vec::new();
+    for h in happened {
+        let mut line = String::new();
+        match h.event {
+            Event::Shoot { seat, shot, aim, power, .. } => {
+                let _ = write!(line, "{} fired {shot:?} at {aim} degrees, power {} ({:.2} bars).", who(seat), power.twentieths(), power.bars());
+            }
+            Event::Pass { seat, .. } => {
+                let _ = write!(line, "{} passed.", who(seat));
+            }
+            Event::Forfeit { seat } => {
+                let _ = write!(line, "{} forfeited.", who(seat));
+            }
+            _ => {}
+        }
+        for effect in &h.effects {
+            let said = match effect {
+                Effect::Walked { seat, to, .. } => format!(" {} walked to x={}.", who(*seat), to.x),
+                Effect::Damaged { seat, amount } => format!(" {} took {amount} damage.", who(*seat)),
+                Effect::Shielded { seat, amount } => format!(" {}'s shield took {amount}.", who(*seat)),
+                Effect::Healed { seat, amount } => format!(" {} healed {amount}.", who(*seat)),
+                Effect::Died { seat, death } => format!(
+                    " {} died ({}).",
+                    who(*seat),
+                    match death {
+                        Death::Blasted => "out of HP",
+                        Death::Bunged => "fell off the map",
+                        Death::Forfeited => "forfeited",
+                    }
+                ),
+                Effect::ItemUsed { seat, item, .. } => format!(" {} used {}.", who(*seat), item.name()),
+                Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", who(*seat), to.x),
+                Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", who(*seat), who(*with)),
+                Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
+                Effect::WeatherChanged { columns, .. } => {
+                    let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
+                    if standing.is_empty() {
+                        " The weather cleared.".to_owned()
+                    } else {
+                        format!(" Weather now: {}.", standing.join(", "))
+                    }
+                }
+                Effect::Spun { seat } => format!(" {} spun the slot machine.", who(*seat)),
+                Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
+                Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
+                Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
+                Effect::GameOver { winner } => match winner {
+                    Some(team) => format!(" Game over: team {team:?} won."),
+                    None => " Game over: a draw.".to_owned(),
+                },
+                _ => String::new(),
+            };
+            line.push_str(&said);
+        }
+        let line = line.trim().to_owned();
+        if !line.is_empty() {
+            lines.push(line);
+        }
+    }
+    lines
+}
+
+/// How to play, for an agent that has never seen the game.
+#[must_use]
+pub fn rules() -> String {
+    let mut text = String::from(RULES);
+    text.push_str("\n## Mobiles\n");
+    for mobile in MobileKind::ALL {
+        let t = mobile.tuning();
+        let _ = writeln!(text, "\n### {} (`{}`)\n", t.name, mobile_slug(mobile));
+        let _ = writeln!(text, "{}", about(mobile));
+        let _ = write!(text, "\nHP {}", t.hp.value);
+        if t.shield.value > 0 {
+            let _ = write!(text, ", shield {} (regains {} a turn)", t.shield.value, t.shield_regen.value);
+        }
+        let _ = writeln!(
+            text,
+            "; base delay {}, plus {} a second of turn time; walks {} px a turn.",
+            t.base_delay.value, t.delay_per_second.value, t.move_budget.value
+        );
+        for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+            let s = shot.tuning(t);
+            let aim = s.aim.value;
+            let _ = writeln!(
+                text,
+                "- {shot:?}: delay {}, aim {} to {} (full damage {} to {}).",
+                s.delay.value, aim.min, aim.max, aim.true_min, aim.true_max
+            );
+        }
+    }
+    text.push_str("\n## Items\n\n");
+    for item in Item::ALL {
+        let _ = writeln!(text, "- {} (`{item:?}`): {} Adds {} delay.", item.name(), item_about(item), item.tuning().delay.value);
+    }
+    let _ = writeln!(text, "\nBots play at {} level unless the game says otherwise.", level_name(Level::Normal));
+    text
+}
+
+const RULES: &str = "# lobshot, for agents
+
+Turn-based artillery: two teams of mobiles (tanks) on a 2D map. A mobile dies when its HP runs out
+or it falls off the bottom of the map. The last team standing wins.
+
+## Coordinates
+
+World pixels: x grows right, y grows DOWN from the top of the map. A player's x and y are where it
+stands on the ground. The view's `picture` is the map as text, and `surface` gives the ground's top
+along the map.
+
+## Your turn
+
+On your turn you may walk (it doesn't end the turn), use one item, then shoot or pass. Act with the
+wire's own JSON actions:
+
+- `{\"Walk\": {\"facing\": \"Left\", \"steps\": 40}}`: turn to face Left or Right and walk up to
+  `steps` px (slopes and your remaining moves may stop you sooner). `steps: 0` just turns.
+- `{\"Item\": {\"slot\": 0}}`: use the item in that loadout slot.
+- `{\"Shoot\": {\"shot\": \"S1\", \"aim\": 45, \"power\": 48}}`: fire. `shot` is S1, S2 or Ss.
+  `aim` is degrees above level toward where you face (90 is straight up), within the shot's range.
+  `power` is in twentieths of a bar: 0 to 80 (the power bar is 4 bars long).
+- `\"Pass\"`: end the turn without shooting.
+
+Before you shoot, `trace` tells you where a shot would land and whom it would hurt in the wind as
+it is now. It knows nothing you can't see.
+
+## Delay: who moves next
+
+Every turn adds to your delay: your mobile's base delay, the shot's delay (or a pass's), any
+item's, and time. The living player with the least delay moves next, so a heavy shot or an item
+makes you wait longer. Agent turns are charged a fixed time.
+
+## Wind and weather
+
+The wind pushes every shot; `wind.across` and `wind.up` give its push right and up. Weather
+columns stand on the map: Force boosts shots through it, Mirror sends them back the way they came,
+Tornado flings them back up. A Wind weather rerolls the wind. The view lists what is coming.
+
+## SS, sudden death, the slot machine
+
+SS is each mobile's special shot: after you fire it, it locks for a few of your turns. Sudden death
+starts at a set turn: Double fires every S1 and S2 twice, Big Bomb makes bigger craters, SS Death
+lets everyone fire SS every turn; items are off from then on. A dead player's slot machine drops
+things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dying or turning
+around); if you die, it is spun for you.
+";
+
+fn about(mobile: MobileKind) -> &'static str {
+    match mobile {
+        MobileKind::Coilback => "A sturdy mortar. S1 is one heavy round; S2 two warheads, the second carrying on through the first's crater; SS a shell that grows in flight and hits much harder.",
+        MobileKind::Lanternwing => {
+            "A moth mech with a shield. S1 is a laser bolt; S2 two strands winding about one path, each its own hit; SS a ball that strips every nearby mobile's shield where it lands."
+        }
+        MobileKind::Hookclaw => {
+            "Throws boomerangs that the wind bends hard: one the wind turns around in flight deals more. S1 is one, S2 four in a cluster, SS one that turns golden if it stays up long enough."
+        }
+        MobileKind::Sparkhorn => {
+            "Lands a ball that calls lightning onto the impact; ground above a target blocks its bolt. S1's bolt strikes straight down, S2's two come in a V from either side, SS sends one down onto every mobile in reach. Has a shield."
+        }
+        MobileKind::Marblemole => {
+            "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground."
+        }
+    }
+}
+
+fn item_about(item: Item) -> &'static str {
+    match item {
+        Item::Dual => "Your S1 or S2 fires twice.",
+        Item::DualPlus => "Your shot, then the other of S1 and S2.",
+        Item::Teleport => "The shot hurts no one and carries you to where it lands.",
+        Item::PowerUp => "This turn's shot hits harder.",
+        Item::Sacrifice => "Pay some HP for a harder-hitting shot this turn.",
+        Item::Dig => "This turn's shot carves bigger craters.",
+        Item::Heal => "A small heal, at once.",
+        Item::BigHeal => "A big heal, at once.",
+        Item::WindFlip => "The wind turns around, at once.",
+        Item::Thunder => "A bolt strikes wherever this turn's shot lands.",
+        Item::Swap => "Trade places with your weakest living teammate; it ends your turn.",
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use std::path::Path;
+
+    use pretty_assertions::assert_eq;
+
+    use lobshot_sim::units::Centis;
+
+    use super::*;
+
+    fn maps() -> Maps {
+        Maps::new(Path::new("no-assets"))
+    }
+
+    fn flat(seed: u64) -> NewGame {
+        NewGame {
+            mobile: Some("coilback".into()),
+            against: vec!["sparkhorn".into()],
+            map: Some("flat".into()),
+            level: Some("hard".into()),
+            seed: Some(seed),
+            ..NewGame::default()
+        }
+    }
+
+    /// The shot that hurts the enemy most at aim 45, by tracing every power.
+    fn best_power(session: &Session) -> Option<u8> {
+        (0..=80)
+            .step_by(2)
+            .filter_map(|power| {
+                let trace = session
+                    .trace(&TraceRequest {
+                        shot: Shot::S1,
+                        aim: 45,
+                        power,
+                        facing: None,
+                        item: None,
+                    })
+                    .ok()?;
+                let hurt: i32 = trace.damage.iter().filter(|h| h.enemy).map(|h| h.amount).sum();
+                (hurt > 0).then_some((hurt, power))
+            })
+            .max()
+            .map(|(_, power)| power)
+    }
+
+    /// Faces the nearest enemy.
+    fn face(session: &Session) -> Facing {
+        let players = session.game().players();
+        let me = players[0];
+        let enemy = players.iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs()).unwrap();
+        if enemy.footing.x > me.footing.x { Facing::Right } else { Facing::Left }
+    }
+
+    #[test]
+    fn a_new_game_starts_on_the_agents_turn_with_what_it_needs_to_see() {
+        let mut session = Session::new(&flat(3), &maps()).unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert!(view.your_turn && !view.over, "{}", view.status);
+        assert_eq!(view.status, "Your turn.");
+        assert_eq!(view.seed, 3);
+        assert_eq!((view.players.len(), view.players[0].mobile, view.players[1].mobile), (2, "Coilback", "Sparkhorn"));
+        assert!(view.players[0].you && !view.players[1].you);
+        assert_eq!(view.map.name, "flat");
+        assert_eq!(view.map.surface[0], Some(700));
+        assert_eq!(view.map.picture.len(), usize::try_from(900_u32.div_ceil(view.map.cell[1])).unwrap());
+        assert!(view.map.picture.iter().any(|row| row.contains('0')) && view.map.picture.iter().any(|row| row.contains('1')));
+        assert!(view.map.picture.last().unwrap().chars().all(|c| c == '#'), "the ground fills the bottom");
+        let options = view.options.unwrap();
+        assert_eq!(options.shots.len(), 3);
+        assert!(options.shots[0].can_fire);
+        assert_eq!(options.items.len(), 4, "the bot loadout");
+        // Looking again tells nothing new.
+        assert_eq!(session.view(&maps()).unwrap().happened, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_trace_is_what_the_shot_then_does() {
+        let mut session = Session::new(&flat(5), &maps()).unwrap();
+        let facing = face(&session);
+        session.act(Action::Walk { facing, steps: 0 }).unwrap();
+        let power = best_power(&session).expect("a flat duel has a shot that hits");
+        let traced = session
+            .trace(&TraceRequest {
+                shot: Shot::S1,
+                aim: 45,
+                power,
+                facing: None,
+                item: None,
+            })
+            .unwrap();
+        assert!(traced.summary.starts_with("Hits the enemy for"), "{}", traced.summary);
+        let traced_hurt: i32 = traced.damage.iter().filter(|h| h.seat == 1).map(|h| h.amount).sum();
+        session.seen = session.host.log().events.len();
+        session
+            .act(Action::Shoot {
+                shot: Shot::S1,
+                aim: 45,
+                power: Power::from_twentieths(power).unwrap(),
+            })
+            .unwrap();
+        let shot = session.since_seen(&maps()).unwrap().into_iter().find(|h| matches!(h.event, Event::Shoot { seat: 0, .. })).unwrap();
+        let hurt: i32 = shot
+            .effects
+            .iter()
+            .take_while(|e| !matches!(e, Effect::TurnStarted { .. }))
+            .filter_map(|e| match *e {
+                Effect::Damaged { seat: 1, amount } | Effect::Shielded { seat: 1, amount } => Some(amount),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(hurt, traced_hurt, "the trace said what the shot would do");
+        let view = session.view(&maps()).unwrap();
+        assert!(view.happened.iter().any(|line| line.starts_with("You fired S1 at 45 degrees")), "{:?}", view.happened);
+    }
+
+    #[test]
+    fn traces_change_nothing_and_refuse_what_the_game_would() {
+        let session = Session::new(&flat(5), &maps()).unwrap();
+        let before = session.game().state_hash().unwrap();
+        session
+            .trace(&TraceRequest {
+                shot: Shot::S1,
+                aim: 45,
+                power: 40,
+                facing: Some(Facing::Left),
+                item: Some(0),
+            })
+            .unwrap();
+        assert_eq!(session.game().state_hash().unwrap(), before);
+        assert!(
+            session
+                .trace(&TraceRequest {
+                    shot: Shot::S1,
+                    aim: 120,
+                    power: 40,
+                    facing: None,
+                    item: None
+                })
+                .is_err(),
+            "out of range"
+        );
+        assert!(
+            session
+                .trace(&TraceRequest {
+                    shot: Shot::S1,
+                    aim: 45,
+                    power: 81,
+                    facing: None,
+                    item: None
+                })
+                .is_err(),
+            "above four bars"
+        );
+    }
+
+    #[test]
+    fn an_agent_plays_a_whole_game_and_a_saved_one_picks_up() {
+        let mut session = Session::new(&flat(9), &maps()).unwrap();
+        let mut view = session.view(&maps()).unwrap();
+        let mut told = view.happened.clone();
+        let mut acts = 0;
+        while !view.over {
+            acts += 1;
+            assert!(acts < 100, "the game should end");
+            let facing = face(&session);
+            session.act(Action::Walk { facing, steps: 0 }).unwrap();
+            let action = best_power(&session).map_or(Action::Pass, |power| Action::Shoot {
+                shot: Shot::S1,
+                aim: 45,
+                power: Power::from_twentieths(power).unwrap(),
+            });
+            // Saved and loaded between every move, as the CLI does.
+            let saved = serde_json::to_string(&session.save()).unwrap();
+            session = Session::load(serde_json::from_str(&saved).unwrap(), &maps()).unwrap();
+            session.act(action).unwrap();
+            view = session.view(&maps()).unwrap();
+            told.extend(view.happened.iter().cloned());
+        }
+        assert!(view.status.starts_with("Game over"), "{}", view.status);
+        assert!(told.last().unwrap().contains("Game over"), "{told:?}");
+        assert!(
+            told.iter().any(|line| line.starts_with("You fired")) && told.iter().any(|line| line.starts_with("Seat 1 (Sparkhorn, team B) fired")),
+            "{told:?}"
+        );
+        assert!(session.act(Action::Pass).is_err(), "nothing to do once it's over");
+    }
+
+    #[test]
+    fn the_game_refuses_what_a_player_couldnt_do() {
+        let mut session = Session::new(&flat(5), &maps()).unwrap();
+        let before = session.save();
+        let error = session
+            .act(Action::Shoot {
+                shot: Shot::S1,
+                aim: 120,
+                power: Power::MAX,
+            })
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("can't aim"), "{error:#}");
+        assert_eq!(session.save(), before, "a refused action changes nothing");
+    }
+
+    #[test]
+    fn agent_turns_take_the_bots_think_time() {
+        let mut session = Session::new(&flat(5), &maps()).unwrap();
+        session.act(Action::Pass).unwrap();
+        let mine = session.host.log().events.iter().find_map(|e| match *e {
+            Event::Pass { seat: 0, time } => Some(time),
+            _ => None,
+        });
+        assert_eq!(mine, Some(tuning::bot::THINK.value));
+        assert_ne!(mine, Some(Centis(0)));
+    }
+
+    #[test]
+    fn setups_are_checked() {
+        for bad in [
+            NewGame { mobile: Some("pip".into()), ..flat(1) },
+            NewGame { map: Some("nowhere".into()), ..flat(1) },
+            NewGame { team_size: Some(5), ..flat(1) },
+            NewGame { level: Some("great".into()), ..flat(1) },
+            NewGame {
+                against: vec!["coilback".into(); 2],
+                ..flat(1)
+            },
+        ] {
+            assert!(Session::new(&bad, &maps()).is_err(), "{bad:?}");
+        }
+        let four = Session::new(
+            &NewGame {
+                team_size: Some(4),
+                against: Vec::new(),
+                ..flat(1)
+            },
+            &maps(),
+        )
+        .unwrap();
+        assert_eq!(four.game().players().len(), 8);
+        assert!(serde_json::from_str::<NewGame>(r#"{"mobel": "x"}"#).is_err(), "unknown fields are refused");
+    }
+
+    #[test]
+    fn the_rules_cover_every_mobile_and_item() {
+        let rules = rules();
+        for mobile in MobileKind::ALL {
+            assert!(rules.contains(&format!("### {}", mobile.tuning().name)), "{mobile:?}");
+        }
+        for item in Item::ALL {
+            assert!(rules.contains(&format!("- {} (`{item:?}`)", item.name())), "{item:?}");
+        }
+    }
+}
