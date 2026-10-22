@@ -59,6 +59,8 @@ pub const NIRVANA_B: Tuned<Moondisk> = cited([0, 0, 4, 1, 0, 0, 3], &["GF-vgg"])
 pub const SEA_OF_HERO: Tuned<Moondisk> = cited([2, 0, 2, 1, 0, 0, 3], &["GF-vgg"]);
 /// Dragon's-back ridge (Ashspine).
 pub const DRAGON: Tuned<Moondisk> = cited([3, 0, 2, 1, 1, 0, 1], &["GF-vgg"]);
+/// Root tangle (Rootmere).
+pub const ADIUMROOT: Tuned<Moondisk> = cited([1, 3, 1, 0, 1, 1, 1], &["GF-vgg"]);
 /// Practice slope: the generated practice and test fields.
 pub const DUMMY_SLOPES: Tuned<Moondisk> = cited([2, 2, 0, 1, 1, 1, 1], &["GF-vgg"]);
 
@@ -81,6 +83,7 @@ pub fn moondisk(name: &str, variant: &str) -> Option<Moondisk> {
         ("tidewall", _) => NIRVANA_A,
         ("rimewake", _) => SEA_OF_HERO,
         ("ashspine", _) => DRAGON,
+        ("rootmere", _) => ADIUMROOT,
         _ => return None,
     };
     Some(tuned.value)
@@ -126,5 +129,6 @@ mod unit {
         assert_eq!(flat.weight(WeatherKind::Electricity), 0, "the practice slope has none");
         assert_eq!(moondisk("glintvein", "B").map(|row| row[3]), Some(0), "no Wind in Metamine B");
         assert_eq!(moondisk("nowhere", "A"), None);
+        assert_eq!(moondisk("rootmere", "B"), Some([1, 3, 1, 0, 1, 1, 1]), "Adiumroot's row: Tornado-heavy, windless");
     }
 }

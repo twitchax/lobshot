@@ -156,7 +156,7 @@ fn tools() -> Value {
                 "properties": {
                     "mobile": { "type": "string", "description": "Your mobile, e.g. coilback; random when left out." },
                     "against": { "type": "array", "items": { "type": "string" }, "description": "The other team's mobiles, one a seat; random when left out." },
-                    "map": { "type": "string", "description": "tidewall, gablewick, rimewake, glintvein, ashspine or flat; tidewall when left out." },
+                    "map": { "type": "string", "description": "tidewall, gablewick, rimewake, glintvein, ashspine, rootmere or flat; tidewall when left out." },
                     "team_size": { "type": "integer", "minimum": 1, "maximum": 4, "description": "Players a team; 1 when left out." },
                     "level": { "type": "string", "enum": ["easy", "normal", "hard"], "description": "How well the bots play; normal when left out." },
                     "seed": { "type": "integer", "minimum": 0, "description": "Replays a game: the same seed and setup play the same game." },
