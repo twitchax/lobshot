@@ -59,6 +59,8 @@ why the version moved the way it did.
 - Herdhound (M5), a sheepdog mech: each shot is a warhead that opens at the top of its arc into a
   whistle that flies on and missiles that loop, then home on it (S1 two, S2 four, SS four that
   split into eight, each with its own whistle).
+- Neonbay (M5), a harbor city at night on the city archetype: A downtown towers with rooftop neon,
+  B the docks, with container stacks and a gantry crane over the slip.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

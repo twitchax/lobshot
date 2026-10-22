@@ -63,6 +63,8 @@ pub const DRAGON: Tuned<Moondisk> = cited([3, 0, 2, 1, 1, 0, 1], &["GF-vgg"]);
 pub const COZYTOWER_A: Tuned<Moondisk> = cited([2, 1, 1, 1, 0, 1, 2], &["GF-vgg"]);
 /// Tall tower (Clockrise B).
 pub const COZYTOWER_B: Tuned<Moondisk> = cited([2, 2, 1, 1, 0, 1, 1], &["GF-vgg"]);
+/// City (Neonbay).
+pub const METROPOLIS: Tuned<Moondisk> = cited([1, 1, 3, 1, 0, 1, 1], &["GF-vgg"]);
 /// Practice slope (Tumblehill), and the generated practice and test fields.
 pub const DUMMY_SLOPES: Tuned<Moondisk> = cited([2, 2, 0, 1, 1, 1, 1], &["GF-vgg"]);
 
@@ -88,6 +90,7 @@ pub fn moondisk(name: &str, variant: &str) -> Option<Moondisk> {
         ("clockrise", "B") => COZYTOWER_B,
         ("clockrise", _) => COZYTOWER_A,
         ("tumblehill", _) => DUMMY_SLOPES,
+        ("neonbay", _) => METROPOLIS,
         _ => return None,
     };
     Some(tuned.value)
