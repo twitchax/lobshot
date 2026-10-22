@@ -1,0 +1,17 @@
+// Tumblehill: a training ground on rolling meadow hills under a summer sky. Hand-written; `cargo
+// xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 950) so neither side starts with the better
+// ground: four on the west hillside, four on the east. `cargo xtask art` refuses any spawn that
+// leaves a mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "tumblehill",
+    title: "Tumblehill",
+    variants: [
+        // Two hills: two broad hills either side of a valley, a turf clod adrift over its middle.
+        (id: "A", spawns: [120, 340, 560, 800, 1100, 1340, 1560, 1780]),
+        // Pond: past a low crest, a long slope down each side to a pond; a knoll, with no spawn,
+        // rises out of its middle.
+        (id: "B", spawns: [115, 320, 490, 630, 1270, 1410, 1580, 1785]),
+    ],
+)
