@@ -37,7 +37,17 @@ why the version moved the way it did.
 - SearchBot uses items and every shot, and its levels differ by how they misread the wind and miss.
 - The client's unit tests (`cargo make test-client`), on wasm32 in node.
 - Deployed at https://lobshot.twitchax.com: one Fly machine (`fly.toml`, `cargo make deploy`).
+- The lab (M4): `lobshot-lab balance` plays every pair of mobiles 1v1 between SearchBots on every
+  map and reports the win-rate matrix, damage per delay, turns to kill and hit rates, with a
+  35-65% gate (`cargo make balance-gate`, not yet in CI); `lobshot-lab play` and `lobshot-lab mcp`
+  let an LLM agent play a seat; `docs/playtests/` holds the report format.
 
 ### Changed
 
 - Protocol and log wire versions are 2: logs from M2 builds don't load.
+- The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
+  practice now rolls its wind up to the room's max.
+
+### Fixed
+
+- A shot's power above four bars no longer decodes, so a client can't fire one.

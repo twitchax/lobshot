@@ -63,8 +63,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 | `assets` | The generated-asset layout and manifests (rigs, maps), shared by `cargo xtask art` (writer) and the server and client (readers). |
 | `server` | axum + tokio. Serves `dist/`, the WebSocket and the room registry. One tokio task per room owns that room's `sim`; messages arrive on an mpsc, and each connection has its own outbound channel (team chat is per-recipient). |
 | `client` | Bevy, WASM first, built with trunk. Rendering, input, HUD, audio, local movement prediction. Networking via `ewebsock`. |
-| `lab` | Headless CLI: bot-vs-bot balance runs, and the JSON/MCP interface for LLM agents. |
-| `xtask` (at `xtask/`) | `cargo xtask dist` (the client bundle), `cargo xtask art`, balance runs. |
+| `lab` | Headless games on the server's referee: SearchBot balance runs (`lobshot-lab balance`, with the win-rate gate), and the JSON and MCP interface for LLM agents (`play`, `mcp`). |
+| `xtask` (at `xtask/`) | `cargo xtask dist` (the client bundle) and `cargo xtask art`. |
 
 ## Game model
 
@@ -76,6 +76,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   says when a roll is owed (`Game::pending_roll`) and refuses moves until it arrives, so every log
   has its rolls at the same points. A client's
   `sim` is a pure function of the event log, and no client can read future wind from a seed.
+- **One referee.** What each roll ranges over, how a game is seated (spawns, Random picks, turn
+  order) and how a turn's time is stamped live in `sim::referee`; every host (the server, practice
+  mode, the lab) brings its own dice to it, so a game plays by the same rules wherever it runs.
 - **A game is its event log:** room options, accepted intents and server rolls. That is the replay
   format, the golden-test format and what the server broadcasts. No replay UI in v1.
 - **Server authoritative.** The active player sends intents (move, angle, power, shot, item). The
@@ -143,11 +146,22 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   (`sim::tuning::bot`): Hard is exact, Normal hurts an enemy with about two shots in three. It
   fills seats in real rooms. Runs on `spawn_blocking` with a ~1 s budget per
   turn so a room of bots cannot starve the others.
-- **ExternalAgent:** an LLM (e.g., Claude through an MCP server or CLI) playing turn by turn over
-  the JSON protocol, for qualitative playtesting.
-- **`lab`** runs thousands of headless games per matchup and reports win-rate matrices, damage per
-  unit of delay and turns to kill. Once the roster passes ~5 mobiles, CI fails any matchup outside a
-  35–65% win-rate band.
+- **ExternalAgent:** an LLM playing one seat against SearchBot, headless in the lab, for qualitative
+  playtesting (`docs/playtests/`). It sees what a player sees (players, wind, weather, the terrain as
+  heights and a text picture), may trace where a shot would land in the wind as it is (what
+  SearchBot's search knows, nothing more), and acts with the wire's own `Action`. Its turns are
+  charged the bot think time, so a slow model plays on a bot's clock. It plays through
+  `lobshot-lab play` (a step a process over a save file) or `lobshot-lab mcp` (the same as MCP
+  tools over stdio, for any MCP client; the lab holds no API key). The MCP server is a plain
+  JSON-RPC loop: four methods, with no async runtime or SDK macros generating the dispatch.
+- **`lab`** hosts games exactly as the server does (`sim::referee`, the bot loadout, the default
+  room rules, the server's bot think time) and runs thousands of 1v1 games between SearchBots:
+  every pair of mobiles on every map variant, each seed played twice with the seats swapped. It
+  reports the win-rate matrix, damage per 1000 delay (by shot too), turns to kill, hit rates, a
+  by-arena table and the first mover's edge, as text or JSON; any game replays by its id. Results
+  depend on the bots' level (Normal misreads the wind, which costs the most wind-sensitive mobiles
+  most), so read Normal and Hard together. Once the roster passes ~5 mobiles, CI fails any matchup
+  outside a 35–65% win-rate band (`cargo make balance-gate`).
 
 ## Client
 
@@ -162,8 +176,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   item slots, weather queue, movement bar.
 - **View:** GunBound's 800×600, letterboxed to 4:3 in any window, so a "screen" stays a ruler. The
   camera follows the active mobile, and a shell in flight.
-- **Practice:** a game against SearchBot with no server, the client refereeing itself (rolls,
-  turn times, the bot's turns). Also how the client is tested without a server.
+- **Practice:** a game against SearchBot with no server, the client refereeing itself through
+  `sim::referee` (rolls, turn times, the bot's turns). Also how the client is tested without a server.
 - **Dev loop:** `cargo make dev` builds a `wasm-dev` bundle (Bevy optimized, no debug info; ~30 s
   rebuilds) and serves it. The release bundle (`cargo make dist`) takes minutes.
 - **Audio:** CC0 sound effects (Kenney, Freesound's CC0 filter) through Bevy's audio, Ogg Vorbis

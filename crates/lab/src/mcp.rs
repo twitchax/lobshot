@@ -170,14 +170,13 @@ fn tools() -> Value {
         },
         {
             "name": "trace",
-            "description": "Where a shot would land if you fired it now, and whom it would hurt, in the wind as it is. Changes nothing.",
+            "description": "Where a shot would land if you fired it now, the way you face, and whom it would hurt, in the wind as it is. Changes nothing. To shoot the other way, turn first with a Walk of 0 steps.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "shot": shot,
                     "aim": { "type": "integer", "description": "Degrees above level toward where you face; within the shot's range." },
                     "power": { "type": "integer", "minimum": 0, "maximum": 80, "description": "Twentieths of a bar: 0 to 80." },
-                    "facing": { "description": "Face this way first.", "type": "string", "enum": ["Left", "Right"] },
                     "item": { "type": "integer", "minimum": 0, "description": "Arm the item in this loadout slot first." },
                 },
                 "required": ["shot", "aim", "power"],

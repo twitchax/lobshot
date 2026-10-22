@@ -29,7 +29,6 @@ use lobshot_protocol::Action;
 use lobshot_sim::{
     base::Void,
     game::{MobileKind, Shot},
-    units::Facing,
 };
 
 /// Headless lobshot: bot-vs-bot balance runs and the interface for LLM agents.
@@ -101,7 +100,8 @@ enum PlayStep {
     },
     /// What you see now, and what happened since you last looked.
     View,
-    /// Where a shot would land if you fired it now, and whom it would hurt. Changes nothing.
+    /// Where a shot would land if you fired it now, the way you face, and whom it would hurt.
+    /// Changes nothing.
     Trace {
         /// S1, S2 or SS.
         #[arg(long, value_parser = shot)]
@@ -112,9 +112,6 @@ enum PlayStep {
         /// Twentieths of a bar, 0 to 80.
         #[arg(long)]
         power: u8,
-        /// Face this way first: left or right.
-        #[arg(long, value_parser = facing)]
-        facing: Option<Facing>,
         /// Arm the item in this loadout slot first.
         #[arg(long)]
         item: Option<u8>,
@@ -300,7 +297,7 @@ fn play(args: &PlayArgs) -> Void {
             store(&session)?;
             serde_json::to_string_pretty(&view)
         }
-        &PlayStep::Trace { shot, aim, power, facing, item } => serde_json::to_string_pretty(&load()?.trace(&TraceRequest { shot, aim, power, facing, item })?),
+        &PlayStep::Trace { shot, aim, power, item } => serde_json::to_string_pretty(&load()?.trace(&TraceRequest { shot, aim, power, item })?),
         PlayStep::Act { action } => {
             // A bare word (Pass) is the JSON string it names.
             let json = if action.trim_start().starts_with(['{', '"']) {
@@ -330,15 +327,6 @@ fn shot(name: &str) -> anyhow::Result<Shot> {
     }
 }
 
-/// A facing by name, any case.
-fn facing(name: &str) -> anyhow::Result<Facing> {
-    match name.to_lowercase().as_str() {
-        "left" => Ok(Facing::Left),
-        "right" => Ok(Facing::Right),
-        _ => anyhow::bail!("{name:?} isn't a facing: left or right"),
-    }
-}
-
 #[cfg(test)]
 mod unit {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -356,11 +344,9 @@ mod unit {
     }
 
     #[test]
-    fn shots_and_facings_parse_in_any_case() {
+    fn shots_parse_in_any_case() {
         assert_eq!(shot("ss").unwrap(), Shot::Ss);
         assert_eq!(shot("S2").unwrap(), Shot::S2);
         assert!(shot("s3").is_err());
-        assert_eq!(facing("LEFT").unwrap(), Facing::Left);
-        assert!(facing("up").is_err());
     }
 }

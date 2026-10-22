@@ -179,7 +179,8 @@ impl Session {
     }
 
     /// Where a shot would land if fired now, and whom it would hurt: the shot fired in a copy of
-    /// the game, in the wind as it is, turned to `facing` first and with the item at `item` armed.
+    /// the game, in the wind as it is, with the item at `item` armed. It fires the way the agent
+    /// faces, as `Shoot` will; an agent turns first with a `Walk` of 0 steps, which is free.
     ///
     /// # Errors
     ///
@@ -188,9 +189,6 @@ impl Session {
     pub fn trace(&self, request: &TraceRequest) -> Res<Trace> {
         let mut scratch = self.game().clone();
         let you = self.you;
-        if let Some(facing) = request.facing {
-            scratch.apply(Event::Walk { seat: you, facing, steps: 0 })?;
-        }
         if let Some(slot) = request.item {
             scratch.apply(Event::UseItem {
                 seat: you,
@@ -248,8 +246,6 @@ pub struct TraceRequest {
     pub aim: i16,
     /// Twentieths of a bar, 0 to 80.
     pub power: u8,
-    #[serde(default)]
-    pub facing: Option<Facing>,
     /// A loadout slot to arm first.
     #[serde(default)]
     pub item: Option<u8>,
@@ -258,8 +254,11 @@ pub struct TraceRequest {
 /// Where a traced shot went.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Trace {
-    /// One line for the agent: what the shot would do.
+    /// One line for the agent: what the shot would do, and where it comes down nearest the
+    /// nearest enemy.
     pub summary: String,
+    /// The way it fires: the way you face.
+    pub facing: Facing,
     /// Where each projectile's flight ended, `[x, y]`; off the map when outside it.
     pub ends: Vec<[i32; 2]>,
     /// Every blast, `[x, y]`.
@@ -278,7 +277,8 @@ pub struct Hurt {
 
 fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let players = game.players();
-    let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != players[usize::from(you)].team);
+    let me = &players[usize::from(you)];
+    let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != me.team);
     let mut damage: Vec<Hurt> = Vec::new();
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
     for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
@@ -308,18 +308,44 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     } else {
         "Hurts no enemy.".to_owned()
     };
+    // Where it comes down nearest the nearest living enemy: a blast, or a flight that ended on the
+    // map. Flights that end outside it left the map.
+    let terrain = game.terrain();
+    let on_map = |&[x, y]: &[i32; 2]| u32::try_from(x).is_ok_and(|x| x < terrain.width()) && u32::try_from(y).is_ok_and(|y| y < terrain.height());
+    let landings: Vec<[i32; 2]> = blasts.iter().chain(ends.iter().filter(|end| on_map(end))).copied().collect();
+    let target = (0_u8..)
+        .zip(players)
+        .filter(|&(seat, p)| p.alive && enemy(seat))
+        .min_by_key(|(_, p)| (p.footing.x - me.footing.x).abs());
+    let gap = |[x, y]: [i32; 2], p: &Player| -> f64 {
+        let center = p.center();
+        (f64::from(x) - center.x).hypot(f64::from(y) - center.y)
+    };
+    match (target, landings.first()) {
+        (_, None) => summary.push_str(" Leaves the map."),
+        (None, Some(&[x, y])) => {
+            let _ = write!(summary, " Comes down at x={x}, y={y}.");
+        }
+        (Some((seat, p)), Some(_)) => {
+            let nearest = landings.iter().copied().min_by(|&a, &b| gap(a, p).total_cmp(&gap(b, p))).unwrap_or_default();
+            let [x, y] = nearest;
+            let _ = write!(summary, " Comes down at x={x}, y={y}, {:.0} px from seat {seat}.", gap(nearest, p));
+        }
+    }
     if to_friends > 0 {
         let _ = write!(summary, " Costs your side {to_friends}.");
-    }
-    if let Some(&[x, y]) = blasts.first().or(ends.first()) {
-        let _ = write!(summary, " Lands near x={x}, y={y}.");
-    } else {
-        summary.push_str(" Leaves the map.");
     }
     if !deaths.is_empty() {
         let _ = write!(summary, " Kills seat {}.", deaths.iter().map(u8::to_string).collect::<Vec<_>>().join(", seat "));
     }
-    Trace { summary, ends, blasts, damage, deaths }
+    Trace {
+        summary,
+        facing: me.facing,
+        ends,
+        blasts,
+        damage,
+        deaths,
+    }
 }
 
 fn point(at: lobshot_sim::units::Vec2) -> [i32; 2] {
@@ -361,13 +387,15 @@ pub struct MapView {
     pub variant: String,
     pub width: u32,
     pub height: u32,
-    /// The ground's top every `surface_step` px from x = 0, as y (down from the top); `None` where
-    /// a column is open to the bottom (falling there is death).
-    pub surface: Vec<Option<i32>>,
+    /// Every ground top (y, down from the top) in a column, top first, every `surface_step` px from
+    /// x = 0: under an overhang, the floor comes after the roof. Empty where a column is open to the
+    /// bottom: falling there is death.
+    pub surfaces: Vec<Vec<i32>>,
     pub surface_step: u32,
-    /// The map as text, top row first: `#` ground, `.` air, a digit a living mobile's seat, `|` a
-    /// weather column. Each character is `cell[0]` px wide and `cell[1]` tall.
+    /// The map as text, top row first; `legend` says what each character is. Each character is
+    /// `cell[0]` px wide and `cell[1]` tall.
     pub picture: Vec<String>,
+    pub legend: &'static str,
     pub cell: [u32; 2],
 }
 
@@ -448,6 +476,10 @@ pub struct Options {
     pub items: Vec<SlotItem>,
     /// Pixels it may still walk this turn.
     pub moves_left: u16,
+    /// Your mobile's delay every turn, whatever it does.
+    pub base_delay: u32,
+    /// What a pass adds on top of the base delay.
+    pub pass_delay: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -536,7 +568,12 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         MapRef::Hills { .. } => ("hills".to_owned(), "A".to_owned()),
     };
     let step = 50;
-    let surface = (0..width.div_ceil(step)).map(|i| terrain.surface_at_or_below(i32::try_from(i * step).unwrap_or(i32::MAX), 0)).collect();
+    let surfaces = (0..width.div_ceil(step))
+        .map(|i| {
+            let x = i32::try_from(i * step).unwrap_or(i32::MAX);
+            (0..i32::try_from(height).unwrap_or(i32::MAX)).filter(|&y| terrain.is_surface(x, y)).collect()
+        })
+        .collect();
     let cell_w = width.div_ceil(PICTURE_COLUMNS).max(1);
     // Text characters are about twice as tall as wide.
     let cell_h = 2 * cell_w;
@@ -562,8 +599,13 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         }
     };
     for column in &game.weather().columns {
+        let glyph = match column.kind {
+            WeatherKind::Force => 'F',
+            WeatherKind::Mirror => 'M',
+            WeatherKind::Tornado | WeatherKind::Wind => 'T',
+        };
         for y in (0..height).step_by(usize::try_from(cell_h).unwrap_or(1)) {
-            mark(column.x, i32::try_from(y).unwrap_or(0), '|');
+            mark(column.x, i32::try_from(y).unwrap_or(0), glyph);
         }
     }
     for (seat, player) in (0_u8..).zip(game.players()).filter(|(_, p)| p.alive) {
@@ -576,9 +618,10 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         variant,
         width,
         height,
-        surface,
+        surfaces,
         surface_step: step,
         picture: rows.into_iter().map(|row| row.into_iter().collect()).collect(),
+        legend: "# ground, . air, 0-7 a living mobile by seat, and weather columns: F Force, M Mirror, T Tornado.",
         cell: [cell_w, cell_h],
     }
 }
@@ -639,91 +682,148 @@ fn options(game: &Game, you: u8) -> Options {
         shots,
         items: slot_items(player, |slot| game.can_use_item(you, slot)),
         moves_left: player.moves_left,
+        base_delay: player.tuning().base_delay.value,
+        pass_delay: tuning::PASS_DELAY.value,
     }
 }
 
 /// What happened, a line an event, as a player watching would put it.
 fn narrate(game: &Game, you: u8, happened: &[Happened]) -> Vec<String> {
-    let who = |seat: u8| -> String {
-        if seat == you {
-            return "You".to_owned();
-        }
-        game.players()
-            .get(usize::from(seat))
-            .map_or_else(|| format!("Seat {seat}"), |p| format!("Seat {seat} ({}, team {:?})", p.tuning().name, p.team))
-    };
-    let mut lines = Vec::new();
-    for h in happened {
-        let mut line = String::new();
-        match h.event {
-            Event::Shoot { seat, shot, aim, power, .. } => {
-                let _ = write!(line, "{} fired {shot:?} at {aim} degrees, power {} ({:.2} bars).", who(seat), power.twentieths(), power.bars());
-            }
-            Event::Pass { seat, .. } => {
-                let _ = write!(line, "{} passed.", who(seat));
-            }
-            Event::Forfeit { seat } => {
-                let _ = write!(line, "{} forfeited.", who(seat));
-            }
-            _ => {}
-        }
-        for effect in &h.effects {
-            let said = match effect {
-                Effect::Walked { seat, to, .. } => format!(" {} walked to x={}.", who(*seat), to.x),
-                Effect::Damaged { seat, amount } => format!(" {} took {amount} damage.", who(*seat)),
-                Effect::Shielded { seat, amount } => format!(" {}'s shield took {amount}.", who(*seat)),
-                Effect::Healed { seat, amount } => format!(" {} healed {amount}.", who(*seat)),
-                Effect::Died { seat, death } => format!(
-                    " {} died ({}).",
-                    who(*seat),
-                    match death {
-                        Death::Blasted => "out of HP",
-                        Death::Bunged => "fell off the map",
-                        Death::Forfeited => "forfeited",
-                    }
-                ),
-                Effect::ItemUsed { seat, item, .. } => format!(" {} used {}.", who(*seat), item.name()),
-                Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", who(*seat), to.x),
-                Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", who(*seat), who(*with)),
-                Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
-                Effect::WeatherChanged { columns, .. } => {
-                    let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
-                    if standing.is_empty() {
-                        " The weather cleared.".to_owned()
-                    } else {
-                        format!(" Weather now: {}.", standing.join(", "))
-                    }
-                }
-                Effect::Spun { seat } => format!(" {} spun the slot machine.", who(*seat)),
-                Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
-                Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
-                Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
-                Effect::GameOver { winner } => match winner {
-                    Some(team) => format!(" Game over: team {team:?} won."),
-                    None => " Game over: a draw.".to_owned(),
-                },
+    let names = Names { game, you };
+    happened
+        .iter()
+        .filter_map(|h| {
+            let mut line = match h.event {
+                Event::Shoot { .. } => shot_line(&names, h),
+                Event::Pass { seat, .. } => format!("{} passed.", names.who(seat)),
+                Event::Forfeit { seat } => format!("{} forfeited.", names.who(seat)),
                 _ => String::new(),
             };
-            line.push_str(&said);
+            for effect in &h.effects {
+                line.push_str(&effect_line(&names, effect));
+            }
+            let line = line.trim();
+            (!line.is_empty()).then(|| line.to_owned())
+        })
+        .collect()
+}
+
+/// Who's who, as the agent reads it: "You", or a seat with its mobile and team.
+struct Names<'a> {
+    game: &'a Game,
+    you: u8,
+}
+
+impl Names<'_> {
+    fn who(&self, seat: u8) -> String {
+        if seat == self.you {
+            return "You".to_owned();
         }
-        let line = line.trim().to_owned();
-        if !line.is_empty() {
-            lines.push(line);
+        self.game
+            .players()
+            .get(usize::from(seat))
+            .map_or_else(|| format!("Seat {seat}"), |p| format!("Seat {seat} ({}, team {:?})", p.tuning().name, p.team))
+    }
+
+    fn whose(&self, seat: u8) -> String {
+        if seat == self.you { "Your".to_owned() } else { format!("{}'s", self.who(seat)) }
+    }
+}
+
+/// A shot: who fired what, which way, and where it burst.
+fn shot_line(names: &Names<'_>, h: &Happened) -> String {
+    let Event::Shoot { seat, shot, aim, power, .. } = h.event else { return String::new() };
+    let mut line = String::new();
+    // Which way it went: the first projectile's start.
+    let way = h.effects.iter().find_map(|e| match e {
+        Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } => legs.first().map(|leg| if leg.flight.velocity.x < 0.0 { "left" } else { "right" }),
+        _ => None,
+    });
+    let _ = write!(
+        line,
+        "{} fired {shot:?}{} at {aim} degrees, power {} ({:.2} bars).",
+        names.who(seat),
+        way.map_or_else(String::new, |way| format!(" to the {way}")),
+        power.twentieths(),
+        power.bars()
+    );
+    let mut blasts: Vec<String> = h
+        .effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. }))
+        .filter_map(|e| match e {
+            Effect::Exploded { at, .. } => {
+                let [x, y] = point(*at);
+                Some(format!("x={x}, y={y}"))
+            }
+            _ => None,
+        })
+        .collect();
+    // A Dual's two shells often burst on the same spot.
+    blasts.dedup();
+    match blasts.as_slice() {
+        [] => line.push_str(" Nothing burst: it left the map."),
+        [one] => {
+            let _ = write!(line, " It burst at {one}.");
+        }
+        [first, second, rest @ ..] => {
+            let more = if rest.is_empty() { String::new() } else { format!(" and {} more", rest.len()) };
+            let _ = write!(line, " It burst at {first}, {second}{more}.");
         }
     }
-    lines
+    line
+}
+
+/// What one effect did, as a clause; empty for the ones a player wouldn't remark on.
+fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
+    match effect {
+        Effect::Walked { seat, to, .. } => format!(" {} walked to x={}.", names.who(*seat), to.x),
+        Effect::Damaged { seat, amount } => format!(" {} took {amount} damage.", names.who(*seat)),
+        Effect::Shielded { seat, amount } => format!(" {} shield took {amount}.", names.whose(*seat)),
+        Effect::Healed { seat, amount } => format!(" {} healed {amount}.", names.who(*seat)),
+        Effect::Died { seat, death } => format!(
+            " {} died ({}).",
+            names.who(*seat),
+            match death {
+                Death::Blasted => "out of HP",
+                Death::Bunged => "fell off the map",
+                Death::Forfeited => "forfeited",
+            }
+        ),
+        Effect::ItemUsed { seat, item, .. } => format!(" {} used {}.", names.who(*seat), item.name()),
+        Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", names.who(*seat), to.x),
+        Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", names.who(*seat), names.who(*with)),
+        Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
+        Effect::WeatherChanged { columns, .. } => {
+            let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
+            if standing.is_empty() {
+                " The weather cleared.".to_owned()
+            } else {
+                format!(" Weather now: {}.", standing.join(", "))
+            }
+        }
+        Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
+        Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
+        Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
+        Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
+        Effect::GameOver { winner } => match winner {
+            Some(team) => format!(" Game over: team {team:?} won."),
+            None => " Game over: a draw.".to_owned(),
+        },
+        _ => String::new(),
+    }
 }
 
 /// How to play, for an agent that has never seen the game.
 #[must_use]
 pub fn rules() -> String {
-    let mut text = String::from(RULES);
+    let mut text = RULES.replace("{PASS}", &tuning::PASS_DELAY.value.to_string());
     text.push_str("\n## Mobiles\n");
     for mobile in MobileKind::ALL {
         let t = mobile.tuning();
         let _ = writeln!(text, "\n### {} (`{}`)\n", t.name, mobile_slug(mobile));
         let _ = writeln!(text, "{}", about(mobile));
-        let _ = write!(text, "\nHP {}", t.hp.value);
+        let _ = write!(text, "\nHP {}, {:?} armor", t.hp.value, t.armor.value);
         if t.shield.value > 0 {
             let _ = write!(text, ", shield {} (regains {} a turn)", t.shield.value, t.shield_regen.value);
         }
@@ -744,7 +844,15 @@ pub fn rules() -> String {
     }
     text.push_str("\n## Items\n\n");
     for item in Item::ALL {
-        let _ = writeln!(text, "- {} (`{item:?}`): {} Adds {} delay.", item.name(), item_about(item), item.tuning().delay.value);
+        let _ = writeln!(
+            text,
+            "- {} (`{item:?}`): {} Fills {} slot{}; adds {} delay.",
+            item.name(),
+            item_about(item),
+            item.tuning().slots.value,
+            if item.tuning().slots.value == 1 { "" } else { "s" },
+            item.tuning().delay.value
+        );
     }
     let _ = writeln!(text, "\nBots play at {} level unless the game says otherwise.", level_name(Level::Normal));
     text
@@ -775,12 +883,14 @@ wire's own JSON actions:
 - `\"Pass\"`: end the turn without shooting.
 
 Before you shoot, `trace` tells you where a shot would land and whom it would hurt in the wind as
-it is now. It knows nothing you can't see.
+it is now. It knows nothing you can't see. It fires the way you face, as `Shoot` does: to shoot the
+other way, turn first with a `Walk` of 0 steps (turning is free). An item keeps its slot number
+after the items before it are used.
 
 ## Delay: who moves next
 
-Every turn adds to your delay: your mobile's base delay, the shot's delay (or a pass's), any
-item's, and time. The living player with the least delay moves next, so a heavy shot or an item
+Every turn adds to your delay: your mobile's base delay, the shot's delay (or a pass's, {PASS}),
+any item's, and time. The living player with the least delay moves next, so a heavy shot or an item
 makes you wait longer. Agent turns are charged a fixed time.
 
 ## Wind and weather
@@ -816,19 +926,21 @@ fn about(mobile: MobileKind) -> &'static str {
     }
 }
 
-fn item_about(item: Item) -> &'static str {
+fn item_about(item: Item) -> String {
+    use tuning::items::{BIG_HEAL_PERCENT, BIONIC_HEAL_EXTRA, DAMAGE_BOOST, DIG_CRATER, HEAL_PERCENT, SACRIFICE_PERCENT};
+    let heal = |percent: u32| format!("Heals {percent}% of your max HP at once ({}% for a Bionic mobile).", percent + BIONIC_HEAL_EXTRA.value);
     match item {
-        Item::Dual => "Your S1 or S2 fires twice.",
-        Item::DualPlus => "Your shot, then the other of S1 and S2.",
-        Item::Teleport => "The shot hurts no one and carries you to where it lands.",
-        Item::PowerUp => "This turn's shot hits harder.",
-        Item::Sacrifice => "Pay some HP for a harder-hitting shot this turn.",
-        Item::Dig => "This turn's shot carves bigger craters.",
-        Item::Heal => "A small heal, at once.",
-        Item::BigHeal => "A big heal, at once.",
-        Item::WindFlip => "The wind turns around, at once.",
-        Item::Thunder => "A bolt strikes wherever this turn's shot lands.",
-        Item::Swap => "Trade places with your weakest living teammate; it ends your turn.",
+        Item::Dual => "Your S1 or S2 fires twice.".to_owned(),
+        Item::DualPlus => "Your shot, then the other of S1 and S2.".to_owned(),
+        Item::Teleport => "The shot hurts no one and carries you to where it lands.".to_owned(),
+        Item::PowerUp => format!("This turn's shot deals {}x damage.", DAMAGE_BOOST.value),
+        Item::Sacrifice => format!("Pay {}% of your max HP for {}x damage this turn.", SACRIFICE_PERCENT.value, DAMAGE_BOOST.value),
+        Item::Dig => format!("This turn's shot carves {}x craters.", DIG_CRATER.value),
+        Item::Heal => heal(HEAL_PERCENT.value),
+        Item::BigHeal => heal(BIG_HEAL_PERCENT.value),
+        Item::WindFlip => "The wind turns around, at once.".to_owned(),
+        Item::Thunder => "A bolt strikes wherever this turn's shot lands.".to_owned(),
+        Item::Swap => "Trade places with your weakest living teammate; it ends your turn.".to_owned(),
     }
 }
 
@@ -869,7 +981,6 @@ mod unit {
                         shot: Shot::S1,
                         aim: 45,
                         power,
-                        facing: None,
                         item: None,
                     })
                     .ok()?;
@@ -898,7 +1009,7 @@ mod unit {
         assert_eq!((view.players.len(), view.players[0].mobile, view.players[1].mobile), (2, "Coilback", "Sparkhorn"));
         assert!(view.players[0].you && !view.players[1].you);
         assert_eq!(view.map.name, "flat");
-        assert_eq!(view.map.surface[0], Some(700));
+        assert_eq!(view.map.surfaces[0], [700]);
         assert_eq!(view.map.picture.len(), usize::try_from(900_u32.div_ceil(view.map.cell[1])).unwrap());
         assert!(view.map.picture.iter().any(|row| row.contains('0')) && view.map.picture.iter().any(|row| row.contains('1')));
         assert!(view.map.picture.last().unwrap().chars().all(|c| c == '#'), "the ground fills the bottom");
@@ -921,7 +1032,6 @@ mod unit {
                 shot: Shot::S1,
                 aim: 45,
                 power,
-                facing: None,
                 item: None,
             })
             .unwrap();
@@ -947,7 +1057,11 @@ mod unit {
             .sum();
         assert_eq!(hurt, traced_hurt, "the trace said what the shot would do");
         let view = session.view(&maps()).unwrap();
-        assert!(view.happened.iter().any(|line| line.starts_with("You fired S1 at 45 degrees")), "{:?}", view.happened);
+        assert!(
+            view.happened.iter().any(|line| line.starts_with("You fired S1 to the ") && line.contains(" at 45 degrees")),
+            "{:?}",
+            view.happened
+        );
     }
 
     #[test]
@@ -959,7 +1073,6 @@ mod unit {
                 shot: Shot::S1,
                 aim: 45,
                 power: 40,
-                facing: Some(Facing::Left),
                 item: Some(0),
             })
             .unwrap();
@@ -970,7 +1083,6 @@ mod unit {
                     shot: Shot::S1,
                     aim: 120,
                     power: 40,
-                    facing: None,
                     item: None
                 })
                 .is_err(),
@@ -982,7 +1094,6 @@ mod unit {
                     shot: Shot::S1,
                     aim: 45,
                     power: 81,
-                    facing: None,
                     item: None
                 })
                 .is_err(),
@@ -1077,6 +1188,68 @@ mod unit {
     }
 
     #[test]
+    fn the_view_shows_floors_under_overhangs_and_what_a_pass_costs() {
+        let root = tempfile::TempDir::new().unwrap();
+        // Ground from y = 700, and a roof slab over the middle.
+        let ledge = lobshot_sim::terrain::Terrain::from_fn(1600, 900, |x, y| y >= 700 || ((600..1000).contains(&x) && (300..340).contains(&y))).unwrap();
+        lobshot_assets::tests::write_map_variants(root.path(), "ledge", &[("A", &ledge, &[200, 1400])]).unwrap();
+        let maps = Maps::new(root.path());
+        let mut session = Session::new(&NewGame { map: Some("ledge".into()), ..flat(2) }, &maps).unwrap();
+        let view = session.view(&maps).unwrap();
+        assert_eq!(view.map.surfaces[800 / 50], [300, 700], "the roof, then the floor");
+        assert_eq!(view.map.surfaces[0], [700]);
+        assert!(view.map.legend.contains("M Mirror"));
+        let options = view.options.unwrap();
+        assert_eq!((options.base_delay, options.pass_delay), (MobileKind::Coilback.tuning().base_delay.value, tuning::PASS_DELAY.value));
+    }
+
+    #[test]
+    fn traces_fire_the_way_you_face_and_say_how_close_a_miss_came() {
+        let session = Session::new(&flat(5), &maps()).unwrap();
+        let facing = session.game().players()[0].facing;
+        let miss = session
+            .trace(&TraceRequest {
+                shot: Shot::S1,
+                aim: 50,
+                power: 8,
+                item: None,
+            })
+            .unwrap();
+        assert_eq!(miss.facing, facing);
+        assert!(miss.summary.starts_with("Hurts no enemy. Comes down at x="), "{}", miss.summary);
+        assert!(miss.summary.contains("px from seat 1."), "{}", miss.summary);
+    }
+
+    #[test]
+    fn the_story_reads_right_and_says_where_shots_burst() {
+        let shot = Happened {
+            event: Event::Shoot {
+                seat: 1,
+                shot: Shot::S1,
+                aim: 40,
+                power: Power::MAX,
+                time: Centis(0),
+            },
+            effects: vec![
+                Effect::Exploded {
+                    at: lobshot_sim::units::Vec2::new(410.4, 650.0),
+                    radius: 30.0,
+                    tick: 3,
+                    dirty: None,
+                },
+                Effect::Shielded { seat: 0, amount: 62 },
+                Effect::Damaged { seat: 0, amount: 20 },
+            ],
+        };
+        let session = Session::new(&flat(5), &maps()).unwrap();
+        let lines = narrate(session.game(), 0, &[shot]);
+        assert_eq!(
+            lines,
+            ["Seat 1 (Sparkhorn, team B) fired S1 at 40 degrees, power 80 (4.00 bars). It burst at x=410, y=650. Your shield took 62. You took 20 damage."]
+        );
+    }
+
+    #[test]
     fn the_rules_cover_every_mobile_and_item() {
         let rules = rules();
         for mobile in MobileKind::ALL {
@@ -1085,5 +1258,7 @@ mod unit {
         for item in Item::ALL {
             assert!(rules.contains(&format!("- {} (`{item:?}`)", item.name())), "{item:?}");
         }
+        assert!(rules.contains("- Big Heal (`BigHeal`): Heals 25% of your max HP at once (30% for a Bionic mobile)."), "{rules}");
+        assert!(rules.contains("Bionic armor") && rules.contains("a pass's, 200"), "{rules}");
     }
 }

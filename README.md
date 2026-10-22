@@ -34,7 +34,12 @@ cargo make dist      # the release bundle in dist/, precompressed
 cargo make ci        # fmt-check + clippy (native and wasm32) + nextest + wasm32 replays: the gate CI runs
 cargo make browser   # the browser smoke test: the release bundle in headless Chrome
 cargo make uat       # ci + the release bundle + the #[ignore]d slow suites, the browser test included
+cargo make balance   # every pair of mobiles, 1v1 between bots, on every map: the win-rate matrix
 ```
+
+LLM agents play through the lab, one seat against the bots: `lobshot-lab mcp` is an MCP server for
+any MCP client, and `lobshot-lab play` takes a turn a command. `docs/playtests/` has the how-to
+and the report format.
 
 Needs the toolchain from `rust-toolchain.toml` (rustup installs it), plus trunk and wasmtime
 (`cargo make tools`). The browser test needs Chrome or Chromium installed.

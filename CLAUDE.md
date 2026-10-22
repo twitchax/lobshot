@@ -19,7 +19,7 @@ A Cargo workspace; shared metadata, dependency versions and lints live once in t
 | `crates/assets` | `lobshot-assets` | The generated-asset layout and manifests (rigs, maps): written by xtask, read by server and client. |
 | `crates/server` | `lobshot-server` | axum. The `lobshot` binary: serves `dist/`, `/r/{code}`, `POST /api/rooms`, `/ws/{code}`; one task per room (`room/` is a plain state machine, `room/task.rs` its async shell). |
 | `crates/client` | `lobshot-client` | Bevy, **wasm32 only**, built by trunk. Outside `default-members`. Screens, the game world, HUD, input with walk prediction, and practice mode. |
-| `crates/lab` | `lobshot-lab` | Headless games for balance runs and LLM agents (M4). |
+| `crates/lab` | `lobshot-lab` | Headless games on `sim::referee`: SearchBot balance runs (`balance`, `game <id>`), and LLM agents' way in (`play`, `mcp`). |
 | `xtask/` | `xtask` | `cargo xtask art` (SVG to PNG, masks, map manifests, sounds) and `cargo xtask dist` (trunk, then `.br`/`.gz` siblings). |
 | `assets/` | | CC0 sources: art (SVG, RON) and sounds (Ogg Vorbis). `assets/gen/` is the build output (gitignored). |
 
@@ -36,6 +36,8 @@ cargo make dev          # a quick wasm-dev bundle, then the server on http://127
 cargo make browser      # the browser smoke tests: release bundle, headless Chrome, real server
 cargo make uat          # ci + the #[ignore]d slow suites: what PRD UATs point at
 cargo make codecov      # coverage.lcov
+cargo make balance      # a balance run in release: every pair of mobiles, 1v1, every map (flags pass through)
+cargo make balance-gate # the same, failing outside 35-65% per matchup (not in ci until M5)
 ```
 
 ## Conventions
@@ -54,7 +56,9 @@ cargo make codecov      # coverage.lcov
   legality, option values, SS state) lives there, with native tests. Try client changes in
   practice mode (title, "Practice vs bot"): it needs no server.
 - **`sim` stays deterministic** (`DESIGN.md`, "Game model"): f64 with `libm`, no `mul_add`, no SIMD,
-  no fast-math, no hash-order iteration, and randomness only from server-rolled events.
+  no fast-math, no hash-order iteration, and randomness only from rolled events. What a roll
+  ranges over, how a game is seated and how a turn is timed live in `sim::referee`, which every
+  host (server, practice, lab) calls with its own dice: never put such a rule in one host.
   `crates/sim/clippy.toml` enforces the bans; the golden replays and `cargo make determinism` prove
   it. A change that moves a golden hash changes how recorded games play out: re-record with
   `tool_record` only when that is intended.
