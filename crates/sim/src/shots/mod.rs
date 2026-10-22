@@ -107,9 +107,16 @@ impl Gun<'_> {
             Contact::Mobile(seat) => Some(seat),
         };
         game.explode(blast, crater * self.salvo.crater, direct, impact.tick, effects);
+        self.thunder(game, blast.center.x, impact.tick, marks, effects);
+    }
+
+    /// A projectile that landed at `tick` calls a bolt down column `x` a beat later, if Thunder is
+    /// armed or it passed through Electricity (one bolt either way: the item is the weather,
+    /// GF-tiro).
+    pub fn thunder(&self, game: &mut Game, x: f64, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
         if self.salvo.thunder || marks.charged {
-            let strike = bolt::from_sky(game, blast.center.x);
-            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, impact.tick + ticks(BOLT_DELAY_SECONDS.value), effects);
+            let strike = bolt::from_sky(game, x);
+            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick + ticks(BOLT_DELAY_SECONDS.value), effects);
             let thunder = Blast {
                 center: strike.at,
                 radius: BOLT_REACH.value,

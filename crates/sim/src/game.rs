@@ -1150,6 +1150,12 @@ impl Game {
     /// Detonates `blast` at `tick`: carves a crater of radius `crater` (the blast's reach unless an
     /// item or sudden death widens it), then damages every living mobile in reach.
     pub(crate) fn explode(&mut self, blast: &Blast, crater: f64, direct: Option<u8>, tick: u32, effects: &mut Vec<Effect>) {
+        self.explode_by(blast, crater, tick, effects, |seat, target| damage::damage(blast, target, direct == Some(seat)));
+    }
+
+    /// `explode`, with `harm` saying what the blast deals each living mobile (by seat), for a blast
+    /// that hurts by a rule of its own.
+    pub(crate) fn explode_by(&mut self, blast: &Blast, crater: f64, tick: u32, effects: &mut Vec<Effect>, harm: impl Fn(u8, &Target) -> i32) {
         let dirty = self.terrain.carve(blast.center, crater);
         effects.push(Effect::Exploded {
             at: blast.center,
@@ -1161,7 +1167,7 @@ impl Game {
             let player = self.players[seat];
             let Ok(seat) = u8::try_from(seat) else { continue };
             if player.alive {
-                self.hurt(seat, damage::damage(blast, &player.target(), direct == Some(seat)), effects);
+                self.hurt(seat, harm(seat, &player.target()), effects);
             }
         }
     }
