@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1300" viewBox="0 0 2000 1300">
+  <!-- Clockrise background: a toy town's warm afternoon, high in the mountains, its valley below in
+       a golden haze. The whole map (2000 x 1300), shared by every variant. Soft and low in contrast
+       so the terrain reads in front of it, and no per-pixel grain, which would bloat the PNG. The
+       sun is low on the left, so its light agrees with the sprites' (upper left). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#78acd9"/>
+      <stop offset="0.24" stop-color="#9ac6e6"/>
+      <stop offset="0.46" stop-color="#cfdfe0"/>
+      <stop offset="0.6" stop-color="#f1dfbc"/>
+      <stop offset="0.78" stop-color="#f7d3a0"/>
+      <stop offset="1" stop-color="#f2c28c"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="380" cy="330" r="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6dc" stop-opacity="0.95"/>
+      <stop offset="0.12" stop-color="#ffefc8" stop-opacity="0.6"/>
+      <stop offset="0.45" stop-color="#ffe4b8" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ffe4b8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbe6c4" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#fbe6c4" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#fbe6c4" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="valleyHaze" x1="0" y1="1080" x2="0" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fae2bc" stop-opacity="0"/>
+      <stop offset="1" stop-color="#fae2bc" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="river" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#cfe4e4"/>
+      <stop offset="0.3" stop-color="#fff2d4"/>
+      <stop offset="1" stop-color="#c4dcdc"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff6dc" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff6dc" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#fff6dc" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.3"/></filter>
+    <filter id="cloudSoft" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    <!-- a gentle brush wobble on organic edges only (hills, trees), never on buildings -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.05" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="0.9"/>
+    </filter>
+    <!-- an afternoon cumulus: flat-bottomed, cel shaded, lit warm from the upper left, its belly
+         rosy where the valley's glow comes up under it -->
+    <g id="cumulus">
+      <path d="M -120,0 C -124,-16 -104,-26 -88,-18 C -86,-40 -58,-50 -40,-34 C -32,-60 4,-64 16,-42 C 28,-58 60,-52 64,-30 C 82,-38 106,-28 104,-10 C 120,-10 130,-2 128,0 Z" fill="#e9dcd8"/>
+      <path d="M -120,0 C -124,-16 -104,-26 -88,-18 C -86,-40 -58,-50 -40,-34 C -32,-60 4,-64 16,-42 C 6,-50 -22,-48 -32,-28 C -46,-38 -72,-30 -74,-12 C -90,-16 -106,-10 -106,0 Z" fill="#fffaf0"/>
+      <path d="M -110,-8 C -108,-16 -98,-20 -90,-16 M -80,-24 C -76,-36 -60,-42 -46,-34 M -28,-42 C -22,-54 -2,-56 8,-46" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+      <path d="M -60,0 C -40,-6 -10,-8 20,-6 C 50,-4 80,-6 110,-2 L 128,0 Z" fill="#e2c4c4"/>
+    </g>
+    <!-- far chalets and a steeple, for the villages on the slopes (origin at the foot, middle) -->
+    <path id="farChalet" d="M -16,0 V -16 L -22,-16 L 0,-30 L 22,-16 L 16,-16 V 0 Z"/>
+    <path id="farChaletWide" d="M -24,0 V -14 L -30,-14 L 0,-30 L 30,-14 L 24,-14 V 0 Z"/>
+    <path id="farSteeple" d="M -7,0 V -40 L -9,-40 L 0,-66 L 9,-40 L 7,-40 V 0 Z"/>
+    <!-- a fir and a round tree -->
+    <path id="fir" d="M 0,-62 L 9,-44 L 5,-44 L 13,-28 L 7,-28 L 16,-10 L 2,-10 V 0 H -2 V -10 L -16,-10 L -7,-28 L -13,-28 L -5,-44 L -9,-44 Z"/>
+    <path id="roundTree" d="M -2,0 V -8 C -16,-8 -20,-22 -12,-30 C -12,-42 6,-46 12,-34 C 22,-30 20,-12 4,-8 V 0 Z"/>
+    <!-- one arch of the viaduct (origin at the deck's west end, 60 wide) -->
+    <path id="viaductArch" d="M 0,0 H 60 V 70 H 54 C 54,40 46,24 30,24 C 14,24 6,40 6,70 H 0 Z"/>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="2000" height="1300" fill="url(#sky)"/>
+    <rect width="2000" height="1300" fill="url(#sunGlow)"/>
+    <g opacity="0.45">
+      <path d="M 380,330 L 760,1300 L 980,1300 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 380,330 L 1220,1300 L 1400,1300 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 380,330 L 1700,1040 L 1780,900 Z" fill="url(#ray)" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <g id="layer-high-clouds" filter="url(#softer)" opacity="0.7">
+    <ellipse cx="820" cy="110" rx="340" ry="14" fill="#f6f8fc"/>
+    <ellipse cx="1500" cy="170" rx="320" ry="16" fill="#f2f6fb"/>
+    <ellipse cx="1240" cy="70" rx="230" ry="10" fill="#fafbff"/>
+    <ellipse cx="300" cy="140" rx="210" ry="10" fill="#f8faff"/>
+    <ellipse cx="1760" cy="420" rx="200" ry="10" fill="#fdf3e6"/>
+  </g>
+
+  <g id="layer-sun">
+    <circle cx="380" cy="330" r="70" fill="#fff6dc" filter="url(#soft)" opacity="0.9"/>
+    <circle cx="380" cy="330" r="46" fill="#fffcf0"/>
+  </g>
+
+  <g id="layer-clouds" filter="url(#cloudSoft)">
+    <use href="#cumulus" transform="translate(1600,300)"/>
+    <use href="#cumulus" transform="translate(1780,340) scale(0.6)"/>
+    <use href="#cumulus" transform="translate(700,250) scale(0.85)"/>
+    <use href="#cumulus" transform="translate(1180,440) scale(0.55 0.5)"/>
+    <use href="#cumulus" transform="translate(150,520) scale(0.7)"/>
+    <use href="#cumulus" transform="translate(940,560) scale(0.45)"/>
+    <use href="#cumulus" transform="translate(1420,620) scale(0.5 0.45)"/>
+  </g>
+
+  <g id="layer-peaks" filter="url(#hazy)">
+    <!-- the high range: lilac peaks, their snow lit on the sun's side -->
+    <path d="M -10,860 L 90,760 L 150,790 L 260,660 L 330,720 L 400,690 L 520,560 L 610,660 L 680,640 L 760,720 L 860,640 L 960,700 L 1060,600 L 1150,520 L 1240,610 L 1320,590 L 1420,680 L 1520,600 L 1600,640 L 1700,540 L 1790,620 L 1860,600 L 2010,720 V 900 H -10 Z" fill="#c4bfd8"/>
+    <path d="M 260,660 L 330,720 L 300,724 L 286,700 L 262,716 L 240,690 Z M 520,560 L 610,660 L 580,650 L 560,672 L 536,640 L 506,668 L 484,600 Z M 1150,520 L 1240,610 L 1210,604 L 1188,628 L 1166,596 L 1136,620 L 1110,566 Z M 1700,540 L 1790,620 L 1762,616 L 1742,640 L 1720,604 L 1690,628 L 1664,580 Z M 1060,600 L 1100,566 L 1086,606 L 1066,626 L 1044,612 Z" fill="#f6eef2"/>
+    <path d="M 520,560 L 484,600 L 506,668 L 536,640 L 520,600 Z M 1150,520 L 1110,566 L 1136,620 L 1160,590 Z M 1700,540 L 1664,580 L 1690,628 L 1714,600 Z M 260,660 L 240,690 L 262,716 L 272,690 Z" fill="#fffaf2"/>
+    <!-- the shade side of each peak -->
+    <path d="M 520,560 L 610,660 L 680,640 L 760,720 L 860,640 L 960,700 L 900,760 L 640,760 Z M 1150,520 L 1240,610 L 1320,590 L 1420,680 L 1300,760 L 1180,700 Z M 1700,540 L 1790,620 L 1860,600 L 2010,720 L 1900,780 L 1740,700 Z M 260,660 L 330,720 L 400,690 L 380,780 L 280,760 Z" fill="#b1aecb" opacity="0.7"/>
+  </g>
+  <rect y="620" width="2000" height="300" fill="url(#haze)"/>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- the far pastures, a village and its steeple on the eastern shoulder -->
+    <path filter="url(#brush)" d="M -10,860 C 140,820 300,800 460,812 C 600,822 700,850 840,846 C 980,842 1080,810 1220,786 C 1340,766 1460,754 1580,770 C 1720,788 1860,820 2010,830 L 2010,1020 L -10,1020 Z" fill="#b7d2bc"/>
+    <g fill="#a3c3ad">
+      <use href="#farChalet" transform="translate(1380,768) scale(0.8)"/>
+      <use href="#farChaletWide" transform="translate(1420,764) scale(0.8)"/>
+      <use href="#farSteeple" transform="translate(1462,762) scale(0.9)"/>
+      <use href="#farChalet" transform="translate(1500,766) scale(0.75)"/>
+      <use href="#farChaletWide" transform="translate(1540,770) scale(0.7)"/>
+      <use href="#farChalet" transform="translate(1340,776) scale(0.6)"/>
+      <use href="#farChalet" transform="translate(360,816) scale(0.6)"/>
+      <use href="#farChaletWide" transform="translate(396,814) scale(0.6)"/>
+    </g>
+    <g fill="#9fbfaa" filter="url(#brush)">
+      <use href="#fir" transform="translate(560,830) scale(0.5)"/><use href="#fir" transform="translate(580,834) scale(0.42)"/><use href="#fir" transform="translate(600,832) scale(0.55)"/>
+      <use href="#fir" transform="translate(1120,812) scale(0.5)"/><use href="#fir" transform="translate(1138,808) scale(0.44)"/>
+      <use href="#fir" transform="translate(1660,784) scale(0.5)"/><use href="#fir" transform="translate(1680,790) scale(0.42)"/>
+    </g>
+    <!-- the sun's rim on their west faces -->
+    <g fill="none" stroke="#f6f2dc" stroke-width="1.6" stroke-linecap="round" opacity="0.8">
+      <path d="M 1452,724 L 1458,742 M 1372,752 L 1384,744 M 1410,752 L 1418,748"/>
+      <path d="M 100,836 C 200,812 320,800 460,812"/>
+    </g>
+  </g>
+
+  <g id="layer-viaduct" filter="url(#hazy)">
+    <!-- a stone viaduct over the near dale, and a toy train crossing it -->
+    <g fill="#b3c2b4">
+      <rect x="560" y="920" width="900" height="12"/>
+      <use href="#viaductArch" transform="translate(560,932)"/><use href="#viaductArch" transform="translate(620,932)"/>
+      <use href="#viaductArch" transform="translate(680,932)"/><use href="#viaductArch" transform="translate(740,932)"/>
+      <use href="#viaductArch" transform="translate(800,932)"/><use href="#viaductArch" transform="translate(860,932)"/>
+      <use href="#viaductArch" transform="translate(920,932)"/><use href="#viaductArch" transform="translate(980,932)"/>
+      <use href="#viaductArch" transform="translate(1040,932)"/><use href="#viaductArch" transform="translate(1100,932)"/>
+      <use href="#viaductArch" transform="translate(1160,932)"/><use href="#viaductArch" transform="translate(1220,932)"/>
+      <use href="#viaductArch" transform="translate(1280,932)"/><use href="#viaductArch" transform="translate(1340,932)"/>
+      <use href="#viaductArch" transform="translate(1400,932)"/>
+    </g>
+    <rect x="560" y="918" width="900" height="3" fill="#d6dcc8"/>
+    <!-- the train: an engine with its smoke, then three carriages -->
+    <g transform="translate(1180,918)">
+      <path d="M 0,0 V -16 H 22 V -26 H 34 V -16 H 44 C 50,-16 52,-12 52,-6 V 0 Z" fill="#d7a3a0"/>
+      <rect x="26" y="-34" width="6" height="8" fill="#c99694"/>
+      <rect x="-66" y="-18" width="62" height="18" rx="2" fill="#c7b2a0"/>
+      <rect x="-134" y="-18" width="62" height="18" rx="2" fill="#a9bfc6"/>
+      <rect x="-202" y="-18" width="62" height="18" rx="2" fill="#cdbf98"/>
+      <g fill="#eae4d4"><rect x="-60" y="-14" width="10" height="7"/><rect x="-44" y="-14" width="10" height="7"/><rect x="-28" y="-14" width="10" height="7"/><rect x="-128" y="-14" width="10" height="7"/><rect x="-112" y="-14" width="10" height="7"/><rect x="-96" y="-14" width="10" height="7"/><rect x="-196" y="-14" width="10" height="7"/><rect x="-180" y="-14" width="10" height="7"/><rect x="-164" y="-14" width="10" height="7"/></g>
+      <g fill="#ffffff" opacity="0.55"><circle cx="30" cy="-42" r="6"/><circle cx="20" cy="-54" r="8" opacity="0.8"/><circle cx="4" cy="-64" r="10" opacity="0.6"/><circle cx="-18" cy="-70" r="12" opacity="0.4"/></g>
+    </g>
+  </g>
+
+  <g id="layer-mid" filter="url(#hazy)">
+    <!-- the nearer meadows, with orchards and firs, falling away toward the valley -->
+    <path filter="url(#brush)" d="M -10,980 C 100,950 220,936 340,944 C 460,952 540,984 660,980 C 780,976 880,948 1000,946 C 1120,944 1220,976 1340,976 C 1460,976 1540,948 1660,940 C 1780,932 1880,950 2010,960 L 2010,1180 L -10,1180 Z" fill="#a9cba6"/>
+    <g fill="#98bf98" filter="url(#brush)">
+      <use href="#fir" transform="translate(150,960) scale(0.8)"/><use href="#fir" transform="translate(176,964) scale(0.62)"/><use href="#fir" transform="translate(200,958) scale(0.72)"/>
+      <use href="#roundTree" transform="translate(560,986) scale(0.9)"/><use href="#roundTree" transform="translate(600,988) scale(0.7)"/>
+      <use href="#fir" transform="translate(1100,960) scale(0.76)"/><use href="#fir" transform="translate(1124,964) scale(0.6)"/>
+      <use href="#roundTree" transform="translate(1500,962) scale(0.8)"/><use href="#roundTree" transform="translate(1540,956)"/><use href="#roundTree" transform="translate(1580,952) scale(0.75)"/>
+      <use href="#fir" transform="translate(1840,950) scale(0.8)"/><use href="#fir" transform="translate(1864,954) scale(0.6)"/>
+    </g>
+    <!-- hedgerows tracing the fields -->
+    <g fill="none" stroke="#9cc49c" stroke-width="2.4" stroke-linecap="round" opacity="0.8">
+      <path d="M 20,1030 C 160,1014 280,1010 400,1018 M 700,1018 C 820,1006 900,1000 1000,1002 M 1180,1018 C 1300,1010 1420,1002 1560,1000 M 1640,1010 C 1760,1004 1860,1008 1990,1014"/>
+      <path d="M 120,1080 C 300,1064 480,1066 620,1074 M 900,1068 C 1060,1056 1220,1060 1380,1070 M 1500,1080 C 1640,1070 1780,1072 1960,1078"/>
+    </g>
+  </g>
+
+  <g id="layer-valley" filter="url(#hazy)">
+    <!-- the valley floor far below, a river catching the sun -->
+    <path d="M -10,1170 C 200,1150 420,1146 640,1158 C 860,1170 1060,1150 1280,1140 C 1500,1130 1760,1144 2010,1156 V 1310 H -10 Z" fill="#b9d2ae"/>
+    <path d="M -10,1238 C 160,1226 300,1220 440,1228 C 600,1238 700,1256 860,1252 C 1040,1246 1120,1222 1300,1218 C 1480,1214 1600,1232 1760,1236 C 1860,1238 1940,1232 2010,1228 V 1252 C 1940,1256 1860,1262 1760,1260 C 1600,1256 1480,1238 1300,1242 C 1120,1246 1040,1270 860,1276 C 700,1280 600,1262 440,1252 C 300,1244 160,1250 -10,1262 Z" fill="url(#river)" opacity="0.85"/>
+  </g>
+  <rect y="1080" width="2000" height="220" fill="url(#valleyHaze)"/>
+
+  <!-- two kites over the meadows, hazed by distance -->
+  <g id="layer-kites" filter="url(#hazy)" opacity="0.7" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(1660,500) rotate(12)">
+      <path d="M 0,-26 L 18,0 L 0,30 L -18,0 Z" fill="#e6b4b0"/>
+      <path d="M 0,-26 L 18,0 L 0,0 Z M 0,0 L -18,0 L 0,30 Z" fill="#f2d6be"/>
+      <path d="M 0,30 C 6,44 -6,56 2,70 C 8,82 -2,94 4,106" fill="none" stroke="#c9a6ae" stroke-width="1.6"/>
+      <path d="M -3,52 l 6,-3 M -2,76 l 6,-3 M 0,98 l 6,-3" stroke="#e6b4b0" stroke-width="3"/>
+    </g>
+    <g transform="translate(560,640) rotate(-8) scale(0.6)">
+      <path d="M 0,-26 L 18,0 L 0,30 L -18,0 Z" fill="#b4ccd8"/>
+      <path d="M 0,-26 L 18,0 L 0,0 Z M 0,0 L -18,0 L 0,30 Z" fill="#e2e6d4"/>
+      <path d="M 0,30 C 6,44 -6,56 2,70 C 8,82 -2,94 4,106" fill="none" stroke="#9fb4c0" stroke-width="2"/>
+      <path d="M -3,52 l 6,-3 M -2,76 l 6,-3 M 0,98 l 6,-3" stroke="#b4ccd8" stroke-width="4"/>
+    </g>
+  </g>
+
+  <g id="layer-birds" fill="none" stroke="#7a8fa8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55">
+    <path d="M 560,380 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 592,396 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 1300,220 q 5,-5 9,0 q 4,-5 9,0"/>
+    <path d="M 1330,240 q 4,-4 7,0 q 3,-4 7,0"/>
+    <path d="M 240,700 q 4,-4 7,0 q 3,-4 7,0"/>
+  </g>
+</svg>

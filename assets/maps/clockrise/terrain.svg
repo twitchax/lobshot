@@ -1,0 +1,597 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1300" viewBox="0 0 2000 1300">
+  <!-- Clockrise terrain, shared by every variant: a toy clocktower town of painted clapboard chalets
+       under teal fish-scale shingles, and a clocktower built like a giant cuckoo clock, its storeys
+       floating over open works. Light from the upper left. A template: `cargo xtask art` fills the
+       land slot with the path built from the variant's land.ron (the same path the collision mask
+       is drawn from) and every other slot with the <use>s its dress rules in land.ron place.
+       Everything else here is drawn by hand. Opaque = ground.
+
+       What is solid is drawn bold: saturated paint, a heavy outline. What stands behind (the
+       tower's posts, works and bell, the gears' columns, chimneys, bunting) is drawn thin and
+       muted, and a shot passes it by. -->
+  <defs>
+    <path id="land" d="{{land}}"/>
+    <clipPath id="landClip"><use href="#land"/></clipPath>
+
+    <filter id="feather" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="featherWide" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="40"/></filter>
+    <filter id="soften" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="2"/></filter>
+
+    <!-- fish-scale shingles: staggered courses of round-footed scales, teal with a mint scale here
+         and there, each lit along its top -->
+    <pattern id="shingles" width="32" height="22" patternUnits="userSpaceOnUse">
+      <rect width="32" height="22" fill="#22706e"/>
+      <path d="M 0,0 H 16 V 4 C 16,12.5 0,12.5 0,4 Z" fill="#2f9488"/>
+      <path d="M 16,0 H 32 V 4 C 32,12.5 16,12.5 16,4 Z" fill="#3aa894"/>
+      <path d="M -8,11 H 8 V 15 C 8,23.5 -8,23.5 -8,15 Z M 24,11 H 40 V 15 C 40,23.5 24,23.5 24,15 Z" fill="#2f9488"/>
+      <path d="M 8,11 H 24 V 15 C 24,23.5 8,23.5 8,15 Z" fill="#6cc9b0"/>
+      <path d="M 3,1.8 C 6,1 10,1 13,1.8 M 19,1.8 C 22,1 26,1 29,1.8 M -5,12.8 C -2,12 2,12 5,12.8 M 11,12.8 C 14,12 18,12 21,12.8 M 27,12.8 C 30,12 34,12 37,12.8" fill="none" stroke="#a6ecd6" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M 0,4 C 0,12.5 16,12.5 16,4 C 16,12.5 32,12.5 32,4 M -8,15 C -8,23.5 8,23.5 8,15 C 8,23.5 24,23.5 24,15 C 24,23.5 40,23.5 40,15" fill="none" stroke="#174c4e" stroke-width="1.2"/>
+    </pattern>
+    <!-- the spire's shingles: the same scales, in the tower's midnight blue -->
+    <pattern id="spireScales" width="20" height="13" patternUnits="userSpaceOnUse">
+      <rect width="20" height="13" fill="#233f78"/>
+      <path d="M 0,0 H 10 V 2 C 10,7 0,7 0,2 Z M 10,0 H 20 V 2 C 20,7 10,7 10,2 Z" fill="#33589c"/>
+      <path d="M -5,6.5 H 5 V 8.5 C 5,13.5 -5,13.5 -5,8.5 Z M 5,6.5 H 15 V 8.5 C 15,13.5 5,13.5 5,8.5 Z M 15,6.5 H 25 V 8.5 C 25,13.5 15,13.5 15,8.5 Z" fill="#33589c"/>
+      <path d="M 1.8,1 C 3.6,0.6 6.4,0.6 8.2,1 M 11.8,1 C 13.6,0.6 16.4,0.6 18.2,1 M 6.8,7.5 C 8.6,7.1 11.4,7.1 13.2,7.5" fill="none" stroke="#8fb4ec" stroke-width="1.1" stroke-linecap="round"/>
+      <path d="M 0,2 C 0,7 10,7 10,2 C 10,7 20,7 20,2 M -5,8.5 C -5,13.5 5,13.5 5,8.5 C 5,13.5 15,13.5 15,8.5 C 15,13.5 25,13.5 25,8.5" fill="none" stroke="#16264e" stroke-width="0.9"/>
+    </pattern>
+    <!-- clapboard: a lit edge along the top of every board and a shadow under its lap, level across
+         the whole town -->
+    <pattern id="boards" x="0" y="0" width="2000" height="16" patternUnits="userSpaceOnUse">
+      <rect y="0" width="2000" height="1.4" fill="#ffffff" opacity="0.4"/>
+      <rect y="13.6" width="2000" height="2.4" fill="#3a2030" opacity="0.14"/>
+    </pattern>
+    <!-- the foundations' rough stone, courses from the plinth's top -->
+    <pattern id="stones" x="0" y="1238" width="52" height="24" patternUnits="userSpaceOnUse">
+      <rect width="52" height="24" fill="#a59e98"/>
+      <path d="M 1,1 H 25 V 11 H 1 Z M 27,1 H 51 V 11 H 27 Z M -12,13 H 12 V 23 H -12 Z M 14,13 H 38 V 23 H 14 Z M 40,13 H 64 V 23 H 40 Z" fill="#bab3ab" stroke="#6f6670" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M 2.4,2.6 H 23 M 28.4,2.6 H 49 M 15.4,14.6 H 36 M 41.4,14.6 H 51 M 0,14.6 H 10" stroke="#e2ddd4" stroke-width="1.2"/>
+    </pattern>
+    <!-- planks for the tower's galleries and the bridge -->
+    <pattern id="planks" width="48" height="12" patternUnits="userSpaceOnUse">
+      <rect width="48" height="12" fill="#b9733c"/>
+      <rect width="48" height="1.8" fill="#f2c07a"/>
+      <path d="M 23.5,0 V 12 M 47.5,0 V 12" stroke="#6a3a22" stroke-width="1.4"/>
+      <path d="M 6,6 h 9 M 30,8 h 11" stroke="#8a5230" stroke-width="1" stroke-linecap="round"/>
+    </pattern>
+
+    <!-- the roof cap: land minus land shifted down; a darker eave course at its foot; the lit ridge -->
+    <mask id="tileMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <rect width="2000" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,26)" fill="#000"/>
+    </mask>
+    <mask id="eaveCourseMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <use href="#land" transform="translate(0,20)" fill="#fff"/>
+      <use href="#land" transform="translate(0,26)" fill="#000"/>
+    </mask>
+    <mask id="ridgeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <rect width="2000" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,3.5)" fill="#000"/>
+    </mask>
+    <!-- the eaves' shadow on the boards just under the roof -->
+    <mask id="eaveShadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <use href="#land" transform="translate(0,25)" fill="#fff"/>
+      <use href="#land" transform="translate(0,42)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <!-- form light: the top storey of every house catches the afternoon -->
+    <mask id="topLightMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <rect width="2000" height="1300" fill="#fff"/>
+      <use href="#land" transform="translate(0,120)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <!-- depth: the lower storeys sink into the lane's cool shade -->
+    <mask id="deepMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1300">
+      <use href="#land" transform="translate(0,300)" fill="#fff" filter="url(#featherWide)"/>
+    </mask>
+    <radialGradient id="brassShine" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ffe9a0"/>
+      <stop offset="0.45" stop-color="#e8b444"/>
+      <stop offset="1" stop-color="#b67c22"/>
+    </radialGradient>
+
+    <!-- house paints: origin at the top middle, 100 wide (scaled to the house) -->
+    <g id="paintButter"><rect x="-50" y="0" width="100" height="2000" fill="#f7d77c"/></g>
+    <g id="paintRose"><rect x="-50" y="0" width="100" height="2000" fill="#f4a9a0"/></g>
+    <g id="paintMint"><rect x="-50" y="0" width="100" height="2000" fill="#a8dcb6"/></g>
+    <g id="paintSky"><rect x="-50" y="0" width="100" height="2000" fill="#a8d0ec"/></g>
+    <g id="paintLilac"><rect x="-50" y="0" width="100" height="2000" fill="#d4bfe6"/></g>
+    <g id="paintApricot"><rect x="-50" y="0" width="100" height="2000" fill="#f7b984"/></g>
+    <g id="paintWalnut"><rect x="-50" y="0" width="100" height="2000" fill="#c27a4a"/></g>
+    <!-- the shadow a jetty throws on the wall under it (origin at the top middle, 100 wide) -->
+    <g id="jettyShade">
+      <rect x="-50" y="0" width="100" height="5" fill="#3a2030" opacity="0.32"/>
+      <rect x="-50" y="5" width="100" height="3" fill="#3a2030" opacity="0.14"/>
+    </g>
+
+    <!-- wood knots, scattered over the boards -->
+    <g id="knot">
+      <ellipse rx="5" ry="2.6" fill="#3a2030" opacity="0.16"/>
+      <ellipse rx="2" ry="1" fill="#3a2030" opacity="0.22"/>
+    </g>
+
+    <!-- shutters with a heart cut in them; the shutters take currentColor -->
+    <g id="shutter">
+      <rect x="-6.5" y="-21" width="13" height="42" rx="1" fill="currentColor" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -4,-15 h 8 M -4,-9 h 8 M -4,9 h 8 M -4,15 h 8" stroke="#3a2030" stroke-width="1" opacity="0.4"/>
+      <path d="M 0,4 C -5,0 -4.6,-4.4 -2.2,-4.4 C -1,-4.4 0,-3.4 0,-2.4 C 0,-3.4 1,-4.4 2.2,-4.4 C 4.6,-4.4 5,0 0,4 Z" fill="#3a2030"/>
+      <path d="M -5,-19.4 V 19" stroke="#ffffff" stroke-width="1.1" opacity="0.5"/>
+    </g>
+    <!-- a chalet window (origin at the middle of the glass): white frame, shutters, a box of
+         geraniums on the sill -->
+    <g id="winCore">
+      <rect x="-14" y="-17" width="34" height="42" fill="#3a2030" opacity="0.16"/>
+      <use href="#shutter" transform="translate(-23,0)"/>
+      <use href="#shutter" transform="translate(23,0)"/>
+      <rect x="-15" y="-21" width="30" height="42" fill="#fffaf0" stroke="#3a2030" stroke-width="1.6"/>
+      <rect x="-11" y="-17" width="22" height="34" fill="#2d4c6c"/>
+      <path d="M -11,-17 H 11 V -11 C 4,-13 -4,-13 -11,-9 Z" fill="#4a76a2"/>
+      <path d="M -8.5,-4 L -3,-12.5 M -8.5,6 L 1,-6" stroke="#b5e2ee" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+      <path d="M 0,-17 V 17 M -11,0 H 11" stroke="#fffaf0" stroke-width="2.4"/>
+      <!-- a carved pelmet over it -->
+      <path d="M -19,-27 H 19 V -23 C 15,-19 11,-19 9.5,-22 C 7,-18.5 3,-18.5 0,-22 C -3,-18.5 -7,-18.5 -9.5,-22 C -11,-19 -15,-19 -19,-23 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.3" stroke-linejoin="round"/>
+      <rect x="-19" y="21" width="38" height="8" rx="1" fill="#9a5a2e" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -17.6,22.6 H 17" stroke="#d09058" stroke-width="1"/>
+      <path d="M -17,21.4 q 3,-6 6,0 M -5,21.4 q 3,-7 7,0 M 7,21.4 q 3,-6 7,0" fill="#4a9a3a" stroke="#3a2030" stroke-width="0.8"/>
+      <g stroke="#3a2030" stroke-width="0.8">
+        <circle cx="-13" cy="18.4" r="3.4" fill="#e8384a"/><circle cx="-5" cy="17" r="3" fill="#ff6f7a"/>
+        <circle cx="3.4" cy="18" r="3.4" fill="#e8384a"/><circle cx="12" cy="17.4" r="3" fill="#ff6f7a"/>
+      </g>
+    </g>
+    <g id="win" color="#3f9a62"><use href="#winCore"/></g>
+    <g id="winRed" color="#d65448"><use href="#winCore"/></g>
+    <g id="winBlue" color="#3d79b8"><use href="#winCore"/></g>
+    <!-- a little gable window under the ridge (origin at its middle) -->
+    <g id="winGable">
+      <path d="M -13,16 V -4 L 0,-15 L 13,-4 V 16 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M -9,13 V -2.4 L 0,-10 L 9,-2.4 V 13 Z" fill="#2d4c6c"/>
+      <path d="M -6,6 L -1,-4" stroke="#b5e2ee" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M 0,-10 V 13 M -9,3 H 9" stroke="#fffaf0" stroke-width="2"/>
+    </g>
+    <!-- a carved balcony across a storey (origin at the middle of its floor, 120 wide) -->
+    <g id="balcony">
+      <path d="M -62,0 H 62 V 6 H -62 Z" fill="#9a5a2e" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -52,6 L -48,14 L -44,6 M 44,6 L 48,14 L 52,6" fill="#9a5a2e" stroke="#3a2030" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M -60,-22 H 60 V 0 H -60 Z" fill="#c98a52" stroke="#3a2030" stroke-width="1.5"/>
+      <path d="M -59,-20.4 H 59" stroke="#f0c07a" stroke-width="1.2"/>
+      <!-- the cut-outs: hearts and tulips between the balusters -->
+      <g fill="#3a2030" opacity="0.85">
+        <path d="M -48,-6 C -53,-10 -52.4,-15 -50,-15 C -49,-15 -48,-14 -48,-13 C -48,-14 -47,-15 -46,-15 C -43.6,-15 -43,-10 -48,-6 Z"/>
+        <path d="M -24,-6 C -29,-10 -28.4,-15 -26,-15 C -25,-15 -24,-14 -24,-13 C -24,-14 -23,-15 -22,-15 C -19.6,-15 -19,-10 -24,-6 Z"/>
+        <path d="M 0,-6 C -5,-10 -4.4,-15 -2,-15 C -1,-15 0,-14 0,-13 C 0,-14 1,-15 2,-15 C 4.4,-15 5,-10 0,-6 Z"/>
+        <path d="M 24,-6 C 19,-10 19.6,-15 22,-15 C 23,-15 24,-14 24,-13 C 24,-14 25,-15 26,-15 C 28.4,-15 29,-10 24,-6 Z"/>
+        <path d="M 48,-6 C 43,-10 43.6,-15 46,-15 C 47,-15 48,-14 48,-13 C 48,-14 49,-15 50,-15 C 52.4,-15 53,-10 48,-6 Z"/>
+        <path d="M -36,-4 V -12 L -34,-15 L -32,-12 V -4 Z M -12,-4 V -12 L -10,-15 L -8,-12 V -4 Z M 10,-4 V -12 L 12,-15 L 14,-12 V -4 Z M 34,-4 V -12 L 36,-15 L 38,-12 V -4 Z"/>
+      </g>
+      <path d="M -58,-22 C -60,-30 -52,-32 -51,-26 C -48,-33 -41,-30 -43,-22 Z M 42,-22 C 40,-30 48,-33 50,-27 C 52,-33 60,-30 57,-22 Z" fill="#4a9a3a" stroke="#3a2030" stroke-width="0.8"/>
+      <circle cx="-52" cy="-29" r="3" fill="#e8384a" stroke="#3a2030" stroke-width="0.7"/><circle cx="-45" cy="-27" r="2.6" fill="#fff6f0" stroke="#3a2030" stroke-width="0.7"/>
+      <circle cx="49" cy="-30" r="3" fill="#ff6f7a" stroke="#3a2030" stroke-width="0.7"/><circle cx="55" cy="-26" r="2.4" fill="#e8384a" stroke="#3a2030" stroke-width="0.7"/>
+    </g>
+    <!-- a chalet door (origin at the middle of the opening; its step at +34) -->
+    <g id="door">
+      <path d="M -19,30 V -8 A 19 19 0 0 1 19,-8 V 30 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M -14,30 V -8 A 14 14 0 0 1 14,-8 V 30 Z" fill="#3f9a62" stroke="#3a2030" stroke-width="1.5"/>
+      <path d="M -7,-6 V 30 M 0,-7 V 30 M 7,-6 V 30" stroke="#2c6e46" stroke-width="1.3"/>
+      <path d="M -12.4,-6 V 28" stroke="#7fd0a0" stroke-width="1.3"/>
+      <path d="M 0,-4 C -6,-8 -5.4,-14 -2.6,-14 C -1.2,-14 0,-13 0,-11.6 C 0,-13 1.2,-14 2.6,-14 C 5.4,-14 6,-8 0,-4 Z" fill="#fff2a8" stroke="#3a2030" stroke-width="1"/>
+      <circle cx="9" cy="12" r="1.8" fill="#e9b949" stroke="#3a2030" stroke-width="0.8"/>
+      <rect x="-25" y="30" width="50" height="6" fill="#bab3ab" stroke="#3a2030" stroke-width="1.3"/>
+      <path d="M -24,31.4 H 24" stroke="#e2ddd4" stroke-width="1"/>
+    </g>
+    <!-- a toyshop front under a striped awning (origin at the middle of the window; its step at
+         +34): a teddy, a drum and a wooden horse in the window -->
+    <g id="shopToy">
+      <rect x="-34" y="-14" width="68" height="48" fill="#c44a5a" stroke="#3a2030" stroke-width="1.6"/>
+      <rect x="-29" y="-9" width="58" height="34" fill="#2d4c6c" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -29,-9 H 29 V -3 C 12,-6 -12,-6 -29,0 Z" fill="#4a76a2"/>
+      <g stroke="#3a2030" stroke-width="1" stroke-linejoin="round">
+        <circle cx="-17" cy="10" r="6" fill="#c98a52"/><circle cx="-17" cy="2" r="4.6" fill="#c98a52"/>
+        <circle cx="-20.4" cy="-1.2" r="1.8" fill="#c98a52"/><circle cx="-13.6" cy="-1.2" r="1.8" fill="#c98a52"/>
+        <rect x="-4" y="8" width="12" height="14" rx="1" fill="#e8384a"/>
+        <path d="M -4,12 L 8,18 M 8,12 L -4,18" stroke="#fff2a8" stroke-width="1"/>
+        <path d="M 13,22 C 13,18 17,18 18,14 L 20,6 C 22,4 26,4 26,8 L 24,14 C 26,16 26,22 24,22 Z" fill="#f2d07a"/>
+        <path d="M 11,24 C 16,26 24,26 29,22" fill="none" stroke="#9a5a2e" stroke-width="2"/>
+      </g>
+      <path d="M -25,4 L -20,-3 M -25,14 L -14,1" stroke="#b5e2ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      <rect x="-31" y="25" width="62" height="9" fill="#9a3a48" stroke="#3a2030" stroke-width="1.2"/>
+      <rect x="-37" y="34" width="74" height="6" fill="#bab3ab" stroke="#3a2030" stroke-width="1.3"/>
+      <!-- awning: berry and cream stripes, a scalloped hem -->
+      <path d="M -38,-32 H 38 L 42,-17 H -42 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M -31,-32 L -33,-17 H -24 L -22.4,-32 Z M -12.6,-32 L -13,-17 H -4.4 L -4.2,-32 Z M 5.4,-32 L 6,-17 H 14.8 L 13.6,-32 Z M 23.4,-32 L 25.4,-17 H 34 L 31.6,-32 Z" fill="#d6455a"/>
+      <path d="M -42,-17 C -42,-12 -33,-12 -33,-17 C -33,-12 -24,-12 -24,-17 C -24,-12 -15,-12 -15,-17 C -15,-12 -6,-12 -6,-17 C -6,-12 3,-12 3,-17 C 3,-12 12,-12 12,-17 C 12,-12 21,-12 21,-17 C 21,-12 30,-12 30,-17 C 30,-12 39,-12 39,-17 C 39,-12 42,-13 42,-17 Z" fill="#d6455a" stroke="#3a2030" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M -38,-32 H 38 L 42,-17 H -42 Z" fill="none" stroke="#3a2030" stroke-width="1.5" stroke-linejoin="round"/>
+    </g>
+    <!-- a bakery front (origin at the middle of the window; its step at +34): loaves and a cake -->
+    <g id="shopBread">
+      <rect x="-34" y="-14" width="68" height="48" fill="#3d79b8" stroke="#3a2030" stroke-width="1.6"/>
+      <rect x="-29" y="-9" width="58" height="34" fill="#2d4c6c" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -29,-9 H 29 V -3 C 12,-6 -12,-6 -29,0 Z" fill="#4a76a2"/>
+      <g stroke="#3a2030" stroke-width="1" stroke-linejoin="round">
+        <path d="M -24,22 C -24,12 -10,12 -10,22 Z M -7,22 C -7,15 5,15 5,22 Z" fill="#e4a35a"/>
+        <path d="M -21,17 l 3,-2 M -16,16 l 3,-2 M -3,18 l 3,-2" stroke="#9a5a2e"/>
+        <path d="M 9,22 V 11 H 23 V 22 Z" fill="#fff0e6"/>
+        <path d="M 9,15 H 23" stroke="#ff6f91" stroke-width="2"/>
+        <circle cx="16" cy="8.6" r="2" fill="#e8384a"/>
+      </g>
+      <path d="M -25,4 L -20,-3 M -25,14 L -14,1" stroke="#b5e2ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      <rect x="-31" y="25" width="62" height="9" fill="#2a5a8e" stroke="#3a2030" stroke-width="1.2"/>
+      <rect x="-37" y="34" width="74" height="6" fill="#bab3ab" stroke="#3a2030" stroke-width="1.3"/>
+      <path d="M -38,-32 H 38 L 42,-17 H -42 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M -31,-32 L -33,-17 H -24 L -22.4,-32 Z M -12.6,-32 L -13,-17 H -4.4 L -4.2,-32 Z M 5.4,-32 L 6,-17 H 14.8 L 13.6,-32 Z M 23.4,-32 L 25.4,-17 H 34 L 31.6,-32 Z" fill="#e9b949"/>
+      <path d="M -42,-17 C -42,-12 -33,-12 -33,-17 C -33,-12 -24,-12 -24,-17 C -24,-12 -15,-12 -15,-17 C -15,-12 -6,-12 -6,-17 C -6,-12 3,-12 3,-17 C 3,-12 12,-12 12,-17 C 12,-12 21,-12 21,-17 C 21,-12 30,-12 30,-17 C 30,-12 39,-12 39,-17 C 39,-12 42,-13 42,-17 Z" fill="#e9b949" stroke="#3a2030" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M -38,-32 H 38 L 42,-17 H -42 Z" fill="none" stroke="#3a2030" stroke-width="1.5" stroke-linejoin="round"/>
+    </g>
+
+    <!-- the tower: an arched window in a gilt frame (origin at the middle of the glass) -->
+    <g id="winArch">
+      <path d="M -13,24 V -4 A 15 15 0 0 1 17,-4 V 24 Z" fill="#3a2030" opacity="0.16"/>
+      <path d="M -15,21 V -6 A 15 15 0 0 1 15,-6 V 21 Z" fill="#e9b949" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M -10.5,18 V -6 A 10.5 10.5 0 0 1 10.5,-6 V 18 Z" fill="#2d4c6c"/>
+      <path d="M -10.5,-6 A 10.5 10.5 0 0 1 10.5,-6 V -2 C 4,-5 -4,-5 -10.5,-1 Z" fill="#4a76a2"/>
+      <path d="M -7.5,6 L -1.6,-7 M -7.5,15 L 2,-1" stroke="#b5e2ee" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+      <path d="M 0,-16.5 V 18 M -10.5,4 H 10.5" stroke="#e9b949" stroke-width="2"/>
+      <path d="M -12.6,-6 A 12.6 12.6 0 0 1 -6,-16.4" fill="none" stroke="#fff1a8" stroke-width="1.4" stroke-linecap="round"/>
+      <rect x="-19" y="20" width="38" height="5" fill="#fffaf0" stroke="#3a2030" stroke-width="1.2"/>
+    </g>
+    <g id="winRound">
+      <circle r="15" fill="#3a2030" opacity="0.16" transform="translate(2,2)"/>
+      <circle r="15" fill="#e9b949" stroke="#3a2030" stroke-width="1.6"/>
+      <circle r="10" fill="#2d4c6c" stroke="#3a2030" stroke-width="1.1"/>
+      <path d="M -10,0 A 10 10 0 0 1 10,0 C 4,-3 -4,-3 -10,2 Z" fill="#4a76a2"/>
+      <path d="M 0,-10 V 10 M -10,0 H 10" stroke="#e9b949" stroke-width="1.8"/>
+      <path d="M -6,4 L -2,-5" stroke="#b5e2ee" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M -12,-7 A 13 13 0 0 1 -5,-12.6" fill="none" stroke="#fff1a8" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <!-- the tower's door: an arched double door studded with brass (origin at the middle of the
+         opening; its step at +52) -->
+    <g id="towerDoor">
+      <path d="M -36,48 V -6 A 36 36 0 0 1 36,-6 V 48 Z" fill="#e9b949" stroke="#3a2030" stroke-width="1.8"/>
+      <path d="M -28,48 V -6 A 28 28 0 0 1 28,-6 V 48 Z" fill="#9a3a48" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M 0,-34 V 48" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M -14,-30 V 48 M 14,-30 V 48" stroke="#7a2a38" stroke-width="1.4"/>
+      <path d="M -26,-4 V 46" stroke="#d07080" stroke-width="1.4"/>
+      <g fill="#e9b949" stroke="#3a2030" stroke-width="0.8">
+        <circle cx="-21" cy="4" r="2"/><circle cx="-7" cy="4" r="2"/><circle cx="7" cy="4" r="2"/><circle cx="21" cy="4" r="2"/>
+        <circle cx="-21" cy="30" r="2"/><circle cx="-7" cy="30" r="2"/><circle cx="7" cy="30" r="2"/><circle cx="21" cy="30" r="2"/>
+      </g>
+      <circle cx="-5" cy="18" r="2.6" fill="#e9b949" stroke="#3a2030" stroke-width="1"/><circle cx="5" cy="18" r="2.6" fill="#e9b949" stroke="#3a2030" stroke-width="1"/>
+      <path d="M -32,-6 A 32 32 0 0 1 -14,-35" fill="none" stroke="#fff1a8" stroke-width="2" stroke-linecap="round"/>
+      <rect x="-44" y="48" width="88" height="7" fill="#bab3ab" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -43,49.6 H 43" stroke="#e2ddd4" stroke-width="1"/>
+    </g>
+    <!-- a gilt band across the tower, with its studs (origin at the band's west end, 48 a tile) -->
+    <g id="giltBand">
+      <rect y="0" width="48" height="8" fill="#e9b949"/>
+      <rect y="0" width="48" height="1.6" fill="#fff1a8"/>
+      <rect y="6.6" width="48" height="1.4" fill="#9a6a1e"/>
+      <circle cx="12" cy="4" r="1.6" fill="#fff1a8" stroke="#9a6a1e" stroke-width="0.8"/>
+      <circle cx="36" cy="4" r="1.6" fill="#fff1a8" stroke="#9a6a1e" stroke-width="0.8"/>
+      <rect y="8" width="48" height="3" fill="#3a2030" opacity="0.2"/>
+    </g>
+    <!-- the clock: a cuckoo clock's face on a midnight board carved with leaves, gilt bezel and
+         hands at twenty to four (origin at the middle; the board is 116 square) -->
+    <g id="clockFace">
+      <rect x="-58" y="-58" width="116" height="116" rx="10" fill="#233f78" stroke="#3a2030" stroke-width="2"/>
+      <rect x="-52" y="-52" width="104" height="104" rx="7" fill="none" stroke="#e9b949" stroke-width="2.4"/>
+      <g fill="#33589c" stroke="#16264e" stroke-width="0.9">
+        <path d="M -50,-50 C -40,-48 -36,-40 -38,-32 C -46,-34 -50,-40 -50,-50 Z"/>
+        <path d="M 50,-50 C 40,-48 36,-40 38,-32 C 46,-34 50,-40 50,-50 Z"/>
+        <path d="M -50,50 C -40,48 -36,40 -38,32 C -46,34 -50,40 -50,50 Z"/>
+        <path d="M 50,50 C 40,48 36,40 38,32 C 46,34 50,40 50,50 Z"/>
+      </g>
+      <circle r="47" fill="#3a2030" opacity="0.25" transform="translate(2.5,2.5)"/>
+      <circle r="47" fill="url(#brassShine)" stroke="#3a2030" stroke-width="2"/>
+      <circle r="40" fill="#fffaf0" stroke="#3a2030" stroke-width="1.6"/>
+      <circle r="34" fill="none" stroke="#e8dcc0" stroke-width="1.2"/>
+      <g stroke="#233f78" stroke-linecap="round">
+        <path d="M 0,-36 V -29 M 0,36 V 29 M -36,0 H -29 M 36,0 H 29" stroke-width="3"/>
+        <path d="M 18,-31.2 L 15,-26 M 31.2,-18 L 26,-15 M 31.2,18 L 26,15 M 18,31.2 L 15,26 M -18,31.2 L -15,26 M -31.2,18 L -26,15 M -31.2,-18 L -26,-15 M -18,-31.2 L -15,-26" stroke-width="2"/>
+      </g>
+      <g stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 0,0 L 13,8" stroke="#233f78" stroke-width="4.4"/>
+        <path d="M 0,0 L -15,-25" stroke="#233f78" stroke-width="3"/>
+        <path d="M -15,-25 L -18,-30" stroke="#233f78" stroke-width="1.6"/>
+      </g>
+      <circle r="3.6" fill="#e9b949" stroke="#3a2030" stroke-width="1.2"/>
+      <path d="M -34,-20 A 40 40 0 0 1 -16,-37" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+      <path d="M -43,-14 A 46 46 0 0 1 -22,-41" fill="none" stroke="#fff6c0" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <!-- a medallion each side of the clock: the sun and the moon -->
+    <g id="sunMedal">
+      <circle r="17" fill="#233f78" stroke="#3a2030" stroke-width="1.6"/>
+      <g fill="#e9b949" stroke="#3a2030" stroke-width="0.9" stroke-linejoin="round">
+        <path d="M 0,-15 L 3,-8 L 0,-6 L -3,-8 Z M 0,15 L 3,8 L 0,6 L -3,8 Z M -15,0 L -8,3 L -6,0 L -8,-3 Z M 15,0 L 8,3 L 6,0 L 8,-3 Z M 10.6,-10.6 L 4.6,-6.6 L 6.6,-4.6 Z M -10.6,10.6 L -4.6,6.6 L -6.6,4.6 Z M -10.6,-10.6 L -6.6,-4.6 L -4.6,-6.6 Z M 10.6,10.6 L 6.6,4.6 L 4.6,6.6 Z"/>
+        <circle r="6.4"/>
+      </g>
+      <path d="M -3,-2 a 3 3 0 0 1 3,-2" fill="none" stroke="#fff6c0" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <g id="moonMedal">
+      <circle r="17" fill="#233f78" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M 4,-11 A 11 11 0 1 0 4,11 A 8.4 8.4 0 1 1 4,-11 Z" fill="#e9b949" stroke="#3a2030" stroke-width="0.9"/>
+      <g fill="#fff1a8"><circle cx="8" cy="-6" r="1.4"/><circle cx="10" cy="4" r="1"/><circle cx="4" cy="9" r="0.9"/></g>
+    </g>
+
+    <!-- caps that are not a course of shingles (origin at the cap's west end, on the land's top):
+         the tower's galleries, the bridge's deck, the gears' brass plates -->
+    <g id="gallery">
+      <rect y="-2" width="48" height="12" fill="url(#planks)"/>
+      <rect y="10" width="48" height="3" fill="#4a2a1c"/>
+      <use href="#giltBand" y="13"/>
+      <rect y="24" width="48" height="4" fill="#cdb894"/>
+    </g>
+    <g id="bridgeDeck">
+      <rect y="-2" width="50" height="12" fill="url(#planks)"/>
+      <rect y="10" width="50" height="3" fill="#4a2a1c"/>
+      <rect y="13" width="50" height="20" fill="#e2a83a"/>
+      <rect y="13" width="50" height="2" fill="#fff1a8"/>
+      <path d="M 0,15 L 25,31 L 50,15 M 25,15 V 31" fill="none" stroke="#9a6a1e" stroke-width="2.4"/>
+      <path d="M 0,15 L 25,31 L 50,15" fill="none" stroke="#f6d27a" stroke-width="0.9" transform="translate(0,-1.6)"/>
+      <rect y="30" width="50" height="3" fill="#9a6a1e"/>
+      <g fill="#fff1a8" stroke="#9a6a1e" stroke-width="0.8"><circle cx="4" cy="17" r="1.5"/><circle cx="46" cy="17" r="1.5"/><circle cx="25" cy="28" r="1.5"/></g>
+    </g>
+    <g id="brassDeck">
+      <rect y="-2" width="48" height="10" fill="#e2a83a"/>
+      <rect y="-2" width="48" height="3.2" fill="#fff1a8"/>
+      <rect y="8" width="48" height="2.4" fill="#9a6a1e"/>
+      <g fill="#fff1a8" stroke="#9a6a1e" stroke-width="0.8"><circle cx="8" cy="4" r="1.6"/><circle cx="32" cy="4" r="1.6"/></g>
+      <path d="M 23.5,-2 V 8" stroke="#9a6a1e" stroke-width="1.2"/>
+    </g>
+    <!-- a gear platform's face (origin at its hub; land.ron cuts the teeth, radius 70 at scale 1) -->
+    <g id="gearFace">
+      <circle r="76" fill="url(#brassShine)"/>
+      <circle r="50" fill="none" stroke="#9a6a1e" stroke-width="3"/>
+      <circle r="47" fill="none" stroke="#fff1a8" stroke-width="1.4" opacity="0.8"/>
+      <g fill="#c48a2a" stroke="#9a6a1e" stroke-width="1.4">
+        <path d="M -6,8 L -8,46 H 8 L 6,8 Z"/>
+        <path d="M -6,8 L -8,46 H 8 L 6,8 Z" transform="rotate(60)"/>
+        <path d="M -6,8 L -8,46 H 8 L 6,8 Z" transform="rotate(-60)"/>
+      </g>
+      <circle r="16" fill="#e9b949" stroke="#3a2030" stroke-width="2"/>
+      <circle r="6" fill="#3a2030"/>
+      <path d="M -11,-8 A 13 13 0 0 1 -2,-13" fill="none" stroke="#fff6c0" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M -66,-2 A 66 66 0 0 0 -30,58" fill="none" stroke="#fff6c0" stroke-width="2.4" stroke-linecap="round" opacity="0.7"/>
+      <path d="M 64,6 A 66 66 0 0 1 20,63" fill="none" stroke="#8a5a16" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+    </g>
+    <!-- the spire: its scales down to the eaves, a lit west face, a gilt finial and a cuckoo for a
+         weathervane (origin at the tip, scaled with the land: land.ron draws its eaves 158 out and
+         207 down at scale 1) -->
+    <g id="spire">
+      <path d="M 0,-4 L 136,192 L 166,216 H -166 L -136,192 Z" fill="url(#spireScales)"/>
+      <path d="M 0,-4 L 136,192 L 166,216 H 0 Z" fill="#0e1a3a" opacity="0.28"/>
+      <path d="M -6,8 L -126,184" stroke="#a8c8ff" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      <path d="M 0,-4 V 216" stroke="#16264e" stroke-width="1.6" opacity="0.5"/>
+      <!-- the eaves: a gilt course, then a carved cream valance -->
+      <rect x="-170" y="188" width="340" height="7" fill="#e9b949"/>
+      <rect x="-170" y="188" width="340" height="1.6" fill="#fff1a8"/>
+      <path d="M -170,195 H 170 V 207 H -170 Z" fill="#fffaf0"/>
+      <path d="M -170,207 C -166,215 -160,215 -156,207 C -152,215 -146,215 -142,207 C -138,215 -132,215 -128,207 C -124,215 -118,215 -114,207 C -110,215 -104,215 -100,207 C -96,215 -90,215 -86,207 C -82,215 -76,215 -72,207 C -68,215 -62,215 -58,207 C -54,215 -48,215 -44,207 C -40,215 -34,215 -30,207 C -26,215 -20,215 -16,207 C -12,215 -6,215 -2,207 C 2,215 8,215 12,207 C 16,215 22,215 26,207 C 30,215 36,215 40,207 C 44,215 50,215 54,207 C 58,215 64,215 68,207 C 72,215 78,215 82,207 C 86,215 92,215 96,207 C 100,215 106,215 110,207 C 114,215 120,215 124,207 C 128,215 134,215 138,207 C 142,215 148,215 152,207 C 156,215 162,215 166,207 L 170,207 V 220 H -170 Z" fill="#fffaf0"/>
+      <path d="M -170,195 H 170" stroke="#3a2030" stroke-width="1.2" opacity="0.5"/>
+      <!-- a dormer with a round window, halfway up -->
+      <path d="M -20,150 V 124 L 0,106 L 20,124 V 150 Z" fill="#fffaf0" stroke="#3a2030" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M -26,128 L 0,102 L 26,128" fill="none" stroke="#233f78" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M -26,128 L 0,102 L 26,128" fill="none" stroke="#3a2030" stroke-width="1.4" stroke-linejoin="round" transform="translate(0,4)" opacity="0.6"/>
+      <circle cx="0" cy="134" r="9" fill="#2d4c6c" stroke="#e9b949" stroke-width="2.4"/>
+      <path d="M -4,138 L 1,129" stroke="#b5e2ee" stroke-width="1.3" stroke-linecap="round"/>
+    </g>
+    <g id="finial" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,2 V -58" stroke="#3a2030" stroke-width="4.4"/>
+      <path d="M 0,2 V -58" stroke="#e9b949" stroke-width="2"/>
+      <circle cy="-8" r="7" fill="url(#brassShine)" stroke="#3a2030" stroke-width="1.6"/>
+      <circle cy="-26" r="4.4" fill="url(#brassShine)" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M -12,-38 H 12" stroke="#3a2030" stroke-width="3.6"/>
+      <path d="M -12,-38 H 12" stroke="#e9b949" stroke-width="1.6"/>
+      <!-- the cuckoo -->
+      <path d="M -14,-60 C -12,-68 -4,-72 4,-68 C 8,-74 15,-74 17,-68 L 23,-67 L 17,-64 C 16,-58 10,-54 2,-56 C -4,-52 -12,-54 -14,-60 Z" fill="#e9b949" stroke="#3a2030" stroke-width="1.5"/>
+      <path d="M -22,-62 L -14,-60 L -18,-56 Z" fill="#c48a2a" stroke="#3a2030" stroke-width="1.2"/>
+      <path d="M -6,-62 C -2,-66 4,-66 8,-62" fill="none" stroke="#9a6a1e" stroke-width="1.4"/>
+      <circle cx="12" cy="-68" r="1.3" fill="#3a2030"/>
+      <path d="M -8,-66 C -4,-70 2,-70 6,-68" fill="none" stroke="#fff6c0" stroke-width="1.2"/>
+    </g>
+    <!-- a carved bracket under a jetty (origin where the underside meets the wall below; this one
+         reaches out to the east) -->
+    <g id="bracketR" stroke="#3a2030" stroke-linejoin="round">
+      <path d="M 0,0 H 30 C 30,6 26,8 22,8 C 18,8 14,12 14,18 C 10,18 6,22 6,28 H 0 Z" fill="#c98a52" stroke-width="1.6"/>
+      <path d="M 2,2 H 26" stroke="#f0c07a" stroke-width="1.2"/>
+      <circle cx="9" cy="10" r="2" fill="#e9b949" stroke-width="0.8"/>
+    </g>
+    <use id="bracketL" href="#bracketR" transform="scale(-1 1)"/>
+    <!-- on the walls: origin at the attach point -->
+    <g id="lanternR" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,0 H 14 C 18,0 20,3 20,7" fill="none" stroke="#3a2030" stroke-width="3.6"/>
+      <path d="M 0,0 H 14 C 18,0 20,3 20,7" fill="none" stroke="#9a6a1e" stroke-width="1.6"/>
+      <path d="M 0,6 L 8,0" stroke="#3a2030" stroke-width="2"/>
+      <circle cx="20" cy="18" r="14" fill="#ffd36b" opacity="0.25"/>
+      <path d="M 14,9 H 26 L 24,7 H 16 Z" fill="#233f78" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M 15,9 H 25 L 24,24 H 16 Z" fill="#ffd36b" stroke="#3a2030" stroke-width="1.4"/>
+      <path d="M 17.5,11 H 22.5 V 21 H 17.5 Z" fill="#fff6c0"/>
+      <path d="M 15,25 H 25 L 22,29 H 18 Z" fill="#233f78" stroke="#3a2030" stroke-width="1.4"/>
+    </g>
+    <use id="lanternL" href="#lanternR" transform="scale(-1 1)"/>
+    <g id="signBracket" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M 0,0 H 34 M 0,8 L 10,0" fill="none" stroke="#3a2030" stroke-width="3.4"/>
+      <path d="M 0,0 H 34 M 0,8 L 10,0" fill="none" stroke="#9a6a1e" stroke-width="1.5"/>
+      <path d="M 30,-4 C 34,-8 38,-4 34,0" fill="none" stroke="#3a2030" stroke-width="1.6"/>
+      <path d="M 12,0 V 6 M 28,0 V 6" stroke="#3a2030" stroke-width="1.4"/>
+    </g>
+    <!-- the toyshop's sign: a rocking horse -->
+    <g id="signToyR" stroke="#3a2030" stroke-linejoin="round" stroke-linecap="round">
+      <use href="#signBracket"/>
+      <path d="M 8,30 C 14,34 30,34 36,30" fill="none" stroke-width="4.4"/>
+      <path d="M 8,30 C 14,34 30,34 36,30" fill="none" stroke="#c44a5a" stroke-width="2.4"/>
+      <path d="M 12,30 L 14,22 M 30,30 L 28,22" stroke-width="2.4"/>
+      <path d="M 12,22 H 28 C 30,22 31,18 30,16 L 33,8 C 34,6 30,5 28,7 L 25,12 H 13 C 10,12 9,16 10,20 Z" fill="#fffaf0" stroke-width="1.5"/>
+      <path d="M 28,7 C 26,9 26,13 25,14" fill="none" stroke="#c44a5a" stroke-width="2"/>
+      <path d="M 10,14 C 7,14 6,18 7,21" fill="none" stroke="#c44a5a" stroke-width="2"/>
+      <circle cx="30.4" cy="10" r="1" fill="#3a2030" stroke="none"/>
+    </g>
+    <!-- the bakery's sign: a gilt pretzel -->
+    <g id="signBreadR" stroke="#3a2030" stroke-linejoin="round" stroke-linecap="round">
+      <use href="#signBracket"/>
+      <path d="M 20,30 C 8,30 6,16 13,12 C 18,9 22,14 20,20 C 18,14 22,9 27,12 C 34,16 32,30 20,30 Z M 15,26 L 25,18 M 25,26 L 15,18" fill="none" stroke-width="5"/>
+      <path d="M 20,30 C 8,30 6,16 13,12 C 18,9 22,14 20,20 C 18,14 22,9 27,12 C 34,16 32,30 20,30 Z M 15,26 L 25,18 M 25,26 L 15,18" fill="none" stroke="#e9b949" stroke-width="2.6"/>
+      <path d="M 10,18 C 10,15 12,13 14,13" fill="none" stroke="#fff1a8" stroke-width="1.2"/>
+    </g>
+    <use id="signBreadL" href="#signBreadR" transform="scale(-1 1)"/>
+    <!-- on the roofs (up = out of the roof): little birds and moss -->
+    <g id="birdR" stroke="#3a2030" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -7,0 C -9,-5 -5,-9 0,-8 C 2,-11 6,-11 7.6,-8 L 10.6,-7 L 7.6,-5.6 C 7,-2 4,0 0,0 Z" fill="#ffd34e"/>
+      <path d="M -6,-2.6 C -4,-6 0,-6.4 3,-4.4" fill="none" stroke="#d69a2a" stroke-width="1.1"/>
+      <circle cx="5.6" cy="-8.4" r="0.9" fill="#3a2030" stroke="none"/>
+      <path d="M -7,-1.6 L -12,-1 L -7,0" fill="#d69a2a"/>
+    </g>
+    <use id="birdL" href="#birdR" transform="scale(-1 1)"/>
+    <g id="birdBlueR" stroke="#3a2030" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -7,0 C -9,-5 -5,-9 0,-8 C 2,-11 6,-11 7.6,-8 L 10.6,-7 L 7.6,-5.6 C 7,-2 4,0 0,0 Z" fill="#8ec2ec"/>
+      <path d="M 1,-2 C 3,-3.4 5,-4 7,-5" fill="none" stroke="#ff8a6a" stroke-width="1.6"/>
+      <path d="M -6,-2.6 C -4,-6 0,-6.4 3,-4.4" fill="none" stroke="#3d79b8" stroke-width="1.1"/>
+      <circle cx="5.6" cy="-8.4" r="0.9" fill="#3a2030" stroke="none"/>
+      <path d="M -7,-1.6 L -12,-1 L -7,0" fill="#3d79b8"/>
+    </g>
+    <g id="moss" stroke="#2a3a24" stroke-width="0.7" stroke-linejoin="round">
+      <path d="M -7,1 C -7,-3 -3,-5 0,-3 C 2,-6 7,-4 7,1 Z" fill="#7aa64a"/>
+      <path d="M -4,-2 C -3,-3.6 -1,-3.8 0,-2.6" fill="none" stroke="#b6d870" stroke-width="1"/>
+    </g>
+    <g id="mossSmall" stroke="#2a3a24" stroke-width="0.7"><path d="M -4,1 C -4,-2 -1,-3 0,-1.5 C 1,-3 4,-2 4,1 Z" fill="#8ab656"/></g>
+
+    <!-- behind, and not solid (origin at the top, hidden behind the storey it hangs from or
+         stands under) -->
+    <!-- a slender carved post of the tower's frame, 14 wide -->
+    <g id="post">
+      <rect x="-7" y="0" width="14" height="180" fill="#a8744e"/>
+      <rect x="-7" y="0" width="4" height="180" fill="#cf9e70"/>
+      <rect x="3" y="0" width="4" height="180" fill="#8a5a3e"/>
+      <g fill="#e2b85a"><rect x="-8" y="40" width="16" height="5"/><rect x="-8" y="90" width="16" height="5"/><rect x="-8" y="140" width="16" height="5"/></g>
+      <rect x="-7" y="0" width="14" height="180" fill="none" stroke="#6a4a44" stroke-width="1.2"/>
+    </g>
+    <!-- the pendulum, its rod 110 long, its bob a gilt sun -->
+    <g id="pendulum">
+      <rect x="-2.4" y="0" width="4.8" height="112" fill="#c8a058" stroke="#7a6048" stroke-width="1"/>
+      <circle cy="114" r="20" fill="#d6b066" stroke="#7a6048" stroke-width="1.4"/>
+      <circle cy="114" r="12" fill="#e6c886" stroke="#9a7a50" stroke-width="1"/>
+      <path d="M -12,106 A 14 14 0 0 1 -4,100" fill="none" stroke="#fff2c8" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+    <!-- a pine-cone weight on its chain, the chain 74 long -->
+    <g id="weight">
+      <path d="M 0,0 V 74" stroke="#8a7a6a" stroke-width="3" stroke-dasharray="4 2.4"/>
+      <path d="M -10,76 C -12,92 -8,104 0,110 C 8,104 12,92 10,76 Z" fill="#a8744e" stroke="#6a4a44" stroke-width="1.2"/>
+      <path d="M -9,82 L 0,88 L 9,82 M -10,92 L 0,98 L 10,92 M -7,102 L 0,106 L 7,102" fill="none" stroke="#6a4a44" stroke-width="1.1"/>
+      <path d="M -7,80 C -8,90 -6,98 -2,104" fill="none" stroke="#d6a87a" stroke-width="1.2"/>
+      <rect x="-11" y="73" width="22" height="4" rx="1" fill="#c8a058" stroke="#6a4a44" stroke-width="1"/>
+    </g>
+    <!-- the works' gears, set back on the tower's rear wall (origin at the hub) -->
+    <g id="worksGear">
+      <circle r="44" fill="#c8a058" stroke="#7a6048" stroke-width="1.4" stroke-dasharray="9 5"/>
+      <circle r="40" fill="#d6b066" stroke="#7a6048" stroke-width="1.2"/>
+      <circle r="28" fill="none" stroke="#9a7a50" stroke-width="2"/>
+      <g stroke="#9a7a50" stroke-width="5" stroke-linecap="round"><path d="M 0,-26 V 26 M -26,0 H 26"/></g>
+      <circle r="9" fill="#e6c886" stroke="#7a6048" stroke-width="1.2"/>
+      <circle r="3" fill="#7a6048"/>
+    </g>
+    <g id="worksGearSmall">
+      <circle r="24" fill="#c8a058" stroke="#7a6048" stroke-width="1.3" stroke-dasharray="6 4"/>
+      <circle r="21" fill="#d6b066" stroke="#7a6048" stroke-width="1.1"/>
+      <g stroke="#9a7a50" stroke-width="3.4" stroke-linecap="round"><path d="M -12,-12 L 12,12 M -12,12 L 12,-12"/></g>
+      <circle r="6" fill="#e6c886" stroke="#7a6048" stroke-width="1"/>
+    </g>
+    <!-- the belfry's bell on its yoke (origin at the yoke's top) -->
+    <g id="bell" stroke-linejoin="round">
+      <rect x="-30" y="0" width="60" height="7" fill="#a8744e" stroke="#6a4a44" stroke-width="1.2"/>
+      <path d="M -4,7 V 14 M 4,7 V 14" stroke="#7a6048" stroke-width="2.4"/>
+      <path d="M -10,14 C -10,10 10,10 10,14 C 13,26 14,38 22,48 H -22 C -14,38 -13,26 -10,14 Z" fill="#d6b066" stroke="#7a6048" stroke-width="1.4"/>
+      <path d="M 4,14 C 7,26 8,38 14,48 H 22 C 14,38 13,26 10,14 Z" fill="#b8924e"/>
+      <path d="M -6,16 C -7.6,26 -9.6,36 -14,44" fill="none" stroke="#fff2c8" stroke-width="1.6" stroke-linecap="round"/>
+      <rect x="-24" y="47" width="48" height="4" rx="1.5" fill="#c8a058" stroke="#7a6048" stroke-width="1.1"/>
+      <circle cy="54" r="4" fill="#b8924e" stroke="#7a6048" stroke-width="1"/>
+    </g>
+    <!-- a brass column carrying a gear (origin at the gear's hub; it runs down past the roof
+         under it) -->
+    <g id="gearColumn">
+      <rect x="-8" y="0" width="16" height="560" fill="#c8a058"/>
+      <rect x="-8" y="0" width="5" height="560" fill="#e6c886"/>
+      <rect x="3" y="0" width="5" height="560" fill="#9a7a50"/>
+      <rect x="-8" y="0" width="16" height="560" fill="none" stroke="#7a6048" stroke-width="1.2"/>
+      <g fill="#d6b066" stroke="#7a6048" stroke-width="1"><rect x="-11" y="120" width="22" height="7" rx="2"/><rect x="-11" y="260" width="22" height="7" rx="2"/><rect x="-11" y="400" width="22" height="7" rx="2"/></g>
+    </g>
+    <!-- a chimney (origin at its base, hidden by the roof) -->
+    <g id="chimney" stroke-linejoin="round">
+      <rect x="-12" y="-58" width="24" height="58" fill="#c07a5a" stroke="#6a4a44" stroke-width="1.4"/>
+      <path d="M -12,-48 H 12 M -12,-38 H 12 M -12,-28 H 12 M -12,-18 H 12 M -4,-58 V -48 M 4,-48 V -38 M -4,-38 V -28 M 4,-28 V -18" stroke="#9a5a44" stroke-width="1"/>
+      <path d="M -9.6,-56 V -4" stroke="#e4a888" stroke-width="2"/>
+      <path d="M -16,-58 H 16 L 12,-66 H -12 Z" fill="#33589c" stroke="#6a4a44" stroke-width="1.4"/>
+      <g fill="#ffffff">
+        <circle cx="-4" cy="-78" r="6" opacity="0.55"/><circle cx="2" cy="-92" r="8" opacity="0.4"/><circle cx="12" cy="-108" r="10" opacity="0.28"/>
+      </g>
+    </g>
+    <!-- bunting across a lane (origin at the west end, 140 wide) -->
+    <g id="bunting" stroke-linejoin="round">
+      <path d="M 0,0 C 40,18 100,18 140,0" fill="none" stroke="#6a4a44" stroke-width="1.4"/>
+      <g stroke="#6a4a44" stroke-width="0.9">
+        <path d="M 10,4 L 22,8.6 L 14,20 Z" fill="#e8384a"/>
+        <path d="M 30,10 L 43,12.8 L 35,25 Z" fill="#e9b949"/>
+        <path d="M 52,13.4 L 65,14.4 L 58,27 Z" fill="#3aa894"/>
+        <path d="M 75,14.4 L 88,13.8 L 82,27 Z" fill="#fffaf0"/>
+        <path d="M 98,12.6 L 110,9.6 L 106,22.6 Z" fill="#3d79b8"/>
+        <path d="M 119,7.6 L 130,3.2 L 128,16 Z" fill="#ff8aa8"/>
+      </g>
+    </g>
+    <!-- the bridge's arched truss and the hanging clock's chains (origin at the middle of the
+         bridge's underside, 700 wide) -->
+    <g id="truss" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -350,0 C -200,64 200,64 350,0" fill="none" stroke="#7a6048" stroke-width="9"/>
+      <path d="M -350,0 C -200,64 200,64 350,0" fill="none" stroke="#d6b066" stroke-width="5"/>
+      <path d="M -300,0 V 18 M -250,0 V 32 M -200,0 V 40 M -150,0 V 44 M -100,0 V 47 M 100,0 V 47 M 150,0 V 44 M 200,0 V 40 M 250,0 V 32 M 300,0 V 18" stroke="#9a7a50" stroke-width="3"/>
+      <path d="M -24,0 L -18,54 M 24,0 L 18,54" stroke="#8a7a6a" stroke-width="3.4" stroke-dasharray="5 2.6"/>
+    </g>
+  </defs>
+
+  <!-- behind the town: the tower's frame and works, the gears' columns, chimneys and bunting -->
+  <g>
+{{behind}}
+  </g>
+
+  <g clip-path="url(#landClip)">
+    <rect width="2000" height="1300" fill="#f8ebd0"/>
+    <g>
+{{paint}}
+    </g>
+    <rect width="2000" height="1300" fill="url(#boards)"/>
+    <rect width="2000" height="1300" fill="#fff6dc" opacity="0.34" mask="url(#topLightMask)"/>
+    <rect width="2000" height="1300" fill="#5a4878" opacity="0.2" mask="url(#deepMask)"/>
+    <g>
+{{knots}}
+    </g>
+    <!-- trim: the land shifted down and stroked gives a cream fascia under every eave, with a
+         scalloped hem, and a corner board up every wall -->
+    <use href="#land" transform="translate(0,32)" fill="none" stroke="#6a4a44" stroke-width="13" stroke-linejoin="round" opacity="0.6"/>
+    <use href="#land" transform="translate(0,32)" fill="none" stroke="#fffaf0" stroke-width="10" stroke-linejoin="round"/>
+    <use href="#land" transform="translate(0,38)" fill="none" stroke="#fffaf0" stroke-width="9" stroke-dasharray="0 13" stroke-linecap="round"/>
+    <use href="#land" transform="translate(0,28)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" opacity="0.9"/>
+    <!-- the foundations' stone, level across the town -->
+    <rect y="1238" width="2000" height="62" fill="url(#stones)"/>
+    <rect y="1230" width="2000" height="8" fill="#d8d2c8"/>
+    <rect y="1230" width="2000" height="1.6" fill="#f6f2ea"/>
+    <rect y="1238" width="2000" height="4" fill="#3a2030" opacity="0.28"/>
+    <g>
+{{windows}}
+    </g>
+    <use href="#land" fill="none" stroke="#3a2030" stroke-width="14" opacity="0.16"/>
+    <!-- the roofs: eave shadow, shingles, the eave course, the lit ridge -->
+    <rect width="2000" height="1300" fill="#3a2030" opacity="0.36" mask="url(#eaveShadeMask)"/>
+    <rect width="2000" height="1300" fill="url(#shingles)" mask="url(#tileMask)"/>
+    <rect width="2000" height="1300" fill="#123c40" opacity="0.5" mask="url(#eaveCourseMask)"/>
+    <rect width="2000" height="1300" fill="#bff6e2" opacity="0.85" mask="url(#ridgeMask)"/>
+    <g>
+{{caps}}
+    </g>
+  </g>
+
+  <!-- silhouette outline -->
+  <use href="#land" fill="none" stroke="#3a2030" stroke-width="4.6" stroke-linejoin="round"/>
+
+  <!-- on the walls and roofs: brackets, lanterns and signs, the finials, birds and flowers -->
+  <g>
+{{hung}}
+  </g>
+  <g>
+{{roofs}}
+  </g>
+</svg>

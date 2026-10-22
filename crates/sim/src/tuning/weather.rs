@@ -59,6 +59,10 @@ pub const NIRVANA_B: Tuned<Moondisk> = cited([0, 0, 4, 1, 0, 0, 3], &["GF-vgg"])
 pub const SEA_OF_HERO: Tuned<Moondisk> = cited([2, 0, 2, 1, 0, 0, 3], &["GF-vgg"]);
 /// Dragon's-back ridge (Ashspine).
 pub const DRAGON: Tuned<Moondisk> = cited([3, 0, 2, 1, 1, 0, 1], &["GF-vgg"]);
+/// Tall tower (Clockrise A).
+pub const COZYTOWER_A: Tuned<Moondisk> = cited([2, 1, 1, 1, 0, 1, 2], &["GF-vgg"]);
+/// Tall tower (Clockrise B).
+pub const COZYTOWER_B: Tuned<Moondisk> = cited([2, 2, 1, 1, 0, 1, 1], &["GF-vgg"]);
 /// Practice slope: the generated practice and test fields.
 pub const DUMMY_SLOPES: Tuned<Moondisk> = cited([2, 2, 0, 1, 1, 1, 1], &["GF-vgg"]);
 
@@ -81,6 +85,8 @@ pub fn moondisk(name: &str, variant: &str) -> Option<Moondisk> {
         ("tidewall", _) => NIRVANA_A,
         ("rimewake", _) => SEA_OF_HERO,
         ("ashspine", _) => DRAGON,
+        ("clockrise", "B") => COZYTOWER_B,
+        ("clockrise", _) => COZYTOWER_A,
         _ => return None,
     };
     Some(tuned.value)
@@ -125,6 +131,8 @@ mod unit {
         let flat = odds(&MapRef::Flat { width: 800, height: 600, ground: 500 });
         assert_eq!(flat.weight(WeatherKind::Electricity), 0, "the practice slope has none");
         assert_eq!(moondisk("glintvein", "B").map(|row| row[3]), Some(0), "no Wind in Metamine B");
+        assert_eq!(moondisk("clockrise", "A").map(|row| (row[1], row[6])), Some((1, 2)), "Cozytower A: Thor over Tornado");
+        assert_eq!(moondisk("clockrise", "B").map(|row| (row[1], row[6])), Some((2, 1)), "Cozytower B: Tornado over Thor");
         assert_eq!(moondisk("nowhere", "A"), None);
     }
 }

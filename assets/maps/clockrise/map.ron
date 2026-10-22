@@ -1,0 +1,18 @@
+// Clockrise: a toy clocktower town high in the mountains on a warm afternoon. Hand-written;
+// `cargo xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 1000) so neither side starts with the better
+// height: four on the west roofs, gear and tower, four on the east. `cargo xtask art` refuses any
+// spawn that leaves a mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "clockrise",
+    title: "Clockrise",
+    variants: [
+        // The clocktower: a tall chalet at each edge, a low one by the tower, a gear on a column
+        // at belfry height, and the tower's gallery either side of its clock storey.
+        (id: "A", spawns: [110, 400, 600, 775, 1225, 1400, 1600, 1890]),
+        // Twin towers: a chalet at each edge, a gear, each tower's gallery on its outer end, and
+        // the high bridge between the clock storeys.
+        (id: "B", spawns: [100, 245, 420, 880, 1120, 1580, 1755, 1900]),
+    ],
+)
