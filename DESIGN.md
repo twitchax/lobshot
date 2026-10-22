@@ -104,7 +104,10 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   (`docs/research/weather.md`). Lock and Balm (GunBound's Item Lock and Moon) clear the columns
   and hold over the whole map until the next weather: under Lock no one may use an item, shields
   stop regenerating and the SS lock counts down twice a turn (WP06); under Balm each player heals
-  3% of max HP as their turn starts, Bionic mobiles 6% (NAMU, WP06).
+  3% of max HP as their turn starts, Bionic mobiles 6% (NAMU, WP06). A Random column (80 px, OB)
+  hides one of the five column weathers, rolled with its forecast: a shot passing through meets
+  what it hides, and the column shows it from then on. SearchBot and the lab's trace plan as if a
+  hidden column weren't there (`Game::as_seen`).
 - **Turn order** is GunBound's delay system: base + shot + item + 10 per second of turn time
   (Turtle 12). The lowest accumulated delay moves next.
 

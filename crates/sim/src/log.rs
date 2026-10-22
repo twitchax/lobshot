@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Bumped whenever an encoded log from an older build would decode differently.
-pub const WIRE_VERSION: u8 = 2;
+pub const WIRE_VERSION: u8 = 3;
 
 /// A whole game, replayable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -116,7 +116,7 @@ mod unit {
                 wind: Wind::new(7, 135).unwrap(),
                 sudden_death: None,
             },
-            events: [Event::Weather(Forecast { kind: WeatherKind::Wind, x: 0 }); 5]
+            events: [Event::Weather(Forecast::new(WeatherKind::Wind, 0)); 5]
                 .into_iter()
                 .chain([
                     Event::Walk { seat: 1, facing: Facing::Left, steps: 12 },
@@ -130,7 +130,7 @@ mod unit {
                     Event::Pass { seat: 0, time: Centis(2000) },
                     // The round of two turns is up: the Wind weather came up and owes new wind.
                     Event::Wind(Wind::new(20, 270).unwrap()),
-                    Event::Weather(Forecast { kind: WeatherKind::Mirror, x: 900 }),
+                    Event::Weather(Forecast::new(WeatherKind::Mirror, 900)),
                 ])
                 .collect(),
         }

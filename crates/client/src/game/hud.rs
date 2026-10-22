@@ -399,6 +399,7 @@ fn weather_look(kind: WeatherKind) -> (&'static str, Color) {
         WeatherKind::Drain => ("D", Color::srgb_u8(0x7a, 0x5c, 0x9e)),
         WeatherKind::Lock => ("L", Color::srgb_u8(0x8a, 0x8f, 0x98)),
         WeatherKind::Balm => ("B", Color::srgb_u8(0xb8, 0xe6, 0xc9)),
+        WeatherKind::Random => ("?", Color::srgb_u8(0xe0, 0xe0, 0xe0)),
     }
 }
 

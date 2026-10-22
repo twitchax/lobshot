@@ -29,28 +29,62 @@ pub enum WeatherKind {
     Lock,
     /// Each player heals a little as their turn starts, Bionic mobiles double (GunBound's Moon).
     Balm,
+    /// A column hiding one of `HIDDEN`: a shot passing through meets what it hides, and the column
+    /// shows it from then on (DB-play, OB).
+    Random,
 }
 
 impl WeatherKind {
     /// Every kind the server may roll, in a fixed order.
-    pub const ALL: [Self; 8] = [Self::Wind, Self::Force, Self::Mirror, Self::Tornado, Self::Electricity, Self::Drain, Self::Lock, Self::Balm];
+    pub const ALL: [Self; 9] = [
+        Self::Wind,
+        Self::Force,
+        Self::Mirror,
+        Self::Tornado,
+        Self::Electricity,
+        Self::Drain,
+        Self::Lock,
+        Self::Balm,
+        Self::Random,
+    ];
+    /// What a Random column may hide: the column weathers, never Wind, Lock or Balm (OB).
+    pub const HIDDEN: [Self; 5] = [Self::Force, Self::Tornado, Self::Electricity, Self::Drain, Self::Mirror];
 
     /// Whether it stands on the map as a column.
     #[must_use]
     pub fn is_column(self) -> bool {
         match self {
-            Self::Force | Self::Mirror | Self::Tornado | Self::Electricity | Self::Drain => true,
+            Self::Force | Self::Mirror | Self::Tornado | Self::Electricity | Self::Drain | Self::Random => true,
             Self::Wind | Self::Lock | Self::Balm => false,
         }
     }
 }
 
-/// A queued weather: its kind, and where its column will stand.
+/// A queued weather: its kind, where its column will stand, and what a Random one hides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Forecast {
     pub kind: WeatherKind,
-    /// The column's center (ignored for Wind).
+    /// The column's center (ignored for Wind, Lock and Balm).
     pub x: i32,
+    /// What a Random column hides, one of `WeatherKind::HIDDEN`; `None` for every other kind.
+    pub hides: Option<WeatherKind>,
+}
+
+impl Forecast {
+    /// A forecast of any kind but Random, which also says what it hides.
+    #[must_use]
+    pub fn new(kind: WeatherKind, x: i32) -> Self {
+        Self { kind, x, hides: None }
+    }
+
+    /// Whether `hides` fits `kind`: what a Random column hides, and nothing for any other.
+    #[must_use]
+    pub fn is_whole(&self) -> bool {
+        match self.hides {
+            Some(hidden) => self.kind == WeatherKind::Random && WeatherKind::HIDDEN.contains(&hidden),
+            None => self.kind != WeatherKind::Random,
+        }
+    }
 }
 
 /// A weather column on the map, full height.
@@ -58,14 +92,39 @@ pub struct Forecast {
 pub struct Column {
     pub kind: WeatherKind,
     pub x: i32,
+    /// What a Random column hides, until a shot passes through it.
+    pub hides: Option<WeatherKind>,
 }
 
 impl Column {
+    #[must_use]
+    pub fn new(kind: WeatherKind, x: i32) -> Self {
+        Self { kind, x, hides: None }
+    }
+
     /// Whether world x lies inside the column.
     #[must_use]
     pub fn contains(&self, x: f64) -> bool {
         let half = column_width(self.kind) / 2.0;
         (f64::from(self.x) - half..f64::from(self.x) + half).contains(&x)
+    }
+
+    /// What it does to a shot: a Random column acts as what it hides.
+    #[must_use]
+    pub fn acts_as(&self) -> WeatherKind {
+        self.hides.unwrap_or(self.kind)
+    }
+
+    /// Whether it still hides what it is (a Random column no shot has passed through).
+    #[must_use]
+    pub fn is_hidden(&self) -> bool {
+        self.hides.is_some()
+    }
+
+    /// The column showing what it hid, where it stood.
+    #[must_use]
+    pub fn revealed(self) -> Self {
+        Self::new(self.acts_as(), self.x)
     }
 }
 
@@ -110,7 +169,11 @@ impl Weather {
             if self.columns.first().is_some_and(|c| c.kind != next.kind) {
                 self.columns.clear();
             }
-            self.columns.push(Column { kind: next.kind, x: next.x });
+            self.columns.push(Column {
+                kind: next.kind,
+                x: next.x,
+                hides: next.hides,
+            });
         } else {
             self.columns.clear();
             self.wind_owed |= next.kind == WeatherKind::Wind;
@@ -144,7 +207,7 @@ impl Marks {
             WeatherKind::Force => self.forced = true,
             WeatherKind::Drain => self.drained = true,
             WeatherKind::Electricity => self.charged = true,
-            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado | WeatherKind::Lock | WeatherKind::Balm => return false,
+            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random => return false,
         }
         true
     }
@@ -186,7 +249,7 @@ mod unit {
     use super::*;
 
     fn forecast(kind: WeatherKind, x: i32) -> Forecast {
-        Forecast { kind, x }
+        Forecast::new(kind, x)
     }
 
     #[test]
@@ -196,14 +259,14 @@ mod unit {
         weather.tick(2);
         assert!(weather.columns.is_empty(), "one turn into a two-turn round");
         weather.tick(2);
-        assert_eq!(weather.columns, [Column { kind: WeatherKind::Force, x: 100 }]);
+        assert_eq!(weather.columns, [Column::new(WeatherKind::Force, 100)]);
         assert!(weather.short());
         weather.tick(2);
         weather.tick(2);
         assert_eq!(weather.columns.len(), 2, "a repeat of the same kind stacks");
         weather.tick(2);
         weather.tick(2);
-        assert_eq!(weather.columns, [Column { kind: WeatherKind::Mirror, x: 500 }], "a different kind clears");
+        assert_eq!(weather.columns, [Column::new(WeatherKind::Mirror, 500)], "a different kind clears");
     }
 
     #[test]
@@ -250,7 +313,7 @@ mod unit {
 
     #[test]
     fn columns_have_width() {
-        let column = Column { kind: WeatherKind::Tornado, x: 500 };
+        let column = Column::new(WeatherKind::Tornado, 500);
         assert!(column.contains(500.0) && column.contains(466.0) && !column.contains(536.0));
     }
 }

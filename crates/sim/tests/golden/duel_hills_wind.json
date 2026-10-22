@@ -39,31 +39,36 @@
     {
       "Weather": {
         "kind": "Force",
-        "x": 389
+        "x": 389,
+        "hides": null
       }
     },
     {
       "Weather": {
         "kind": "Mirror",
-        "x": 778
+        "x": 778,
+        "hides": null
       }
     },
     {
       "Weather": {
         "kind": "Tornado",
-        "x": 1167
+        "x": 1167,
+        "hides": null
       }
     },
     {
       "Weather": {
         "kind": "Electricity",
-        "x": 1556
+        "x": 1556,
+        "hides": null
       }
     },
     {
       "Weather": {
         "kind": "Drain",
-        "x": 1945
+        "x": 1945,
+        "hides": null
       }
     },
     {
@@ -101,7 +106,8 @@
     {
       "Weather": {
         "kind": "Lock",
-        "x": 334
+        "x": 334,
+        "hides": null
       }
     },
     {
@@ -139,7 +145,8 @@
     {
       "Weather": {
         "kind": "Balm",
-        "x": 723
+        "x": 723,
+        "hides": null
       }
     },
     {
@@ -176,8 +183,9 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
-        "x": 1112
+        "kind": "Random",
+        "x": 1112,
+        "hides": "Drain"
       }
     },
     {
@@ -211,8 +219,9 @@
     },
     {
       "Weather": {
-        "kind": "Force",
-        "x": 1501
+        "kind": "Wind",
+        "x": 1501,
+        "hides": null
       }
     },
     {
@@ -249,8 +258,9 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
-        "x": 1890
+        "kind": "Force",
+        "x": 1890,
+        "hides": null
       }
     },
     {
@@ -287,8 +297,9 @@
     },
     {
       "Weather": {
-        "kind": "Tornado",
-        "x": 279
+        "kind": "Mirror",
+        "x": 279,
+        "hides": null
       }
     },
     {
@@ -322,8 +333,9 @@
     },
     {
       "Weather": {
-        "kind": "Electricity",
-        "x": 668
+        "kind": "Tornado",
+        "x": 668,
+        "hides": null
       }
     },
     {

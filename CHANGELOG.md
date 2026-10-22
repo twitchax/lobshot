@@ -41,10 +41,14 @@ why the version moved the way it did.
   map and reports the win-rate matrix, damage per delay, turns to kill and hit rates, with a
   35-65% gate (`cargo make balance-gate`, not yet in CI); `lobshot-lab play` and `lobshot-lab mcp`
   let an LLM agent play a seat; `docs/playtests/` holds the report format.
+- Five more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
+  Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
+  up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column
+  weathers until a shot passes through it. GunBound Classic's Meteor is Wind, which lobshot has.
 
 ### Changed
 
-- Protocol and log wire versions are 2: logs from M2 builds don't load.
+- Protocol and log wire versions are 3: logs from M2 and M3 builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
   practice now rolls its wind up to the room's max.
 - SearchBot walks: when it has no good shot from where it stands, it tries a few spots within its

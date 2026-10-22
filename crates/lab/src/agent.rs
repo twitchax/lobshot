@@ -179,7 +179,8 @@ impl Session {
     }
 
     /// Where a shot would land if fired now, and whom it would hurt: the shot fired in a copy of
-    /// the game, in the wind as it is, with the item at `item` armed. It fires the way the agent
+    /// the game, in the wind as it is, with the item at `item` armed. A Random column that still
+    /// hides its kind isn't in the copy: the trace knows only what the agent can see. It fires the way the agent
     /// faces, as `Shoot` will; an agent turns first with a `Walk` of 0 steps, which is free.
     ///
     /// # Errors
@@ -187,7 +188,7 @@ impl Session {
     /// Fails when the shot couldn't be fired now: not your turn, an aim out of range, an SS that
     /// is locked, an item you can't use.
     pub fn trace(&self, request: &TraceRequest) -> Res<Trace> {
-        let mut scratch = self.game().clone();
+        let mut scratch = self.game().as_seen();
         let you = self.you;
         if let Some(slot) = request.item {
             scratch.apply(Event::UseItem {
@@ -609,6 +610,7 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
             WeatherKind::Tornado | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => 'T',
             WeatherKind::Electricity => 'E',
             WeatherKind::Drain => 'D',
+            WeatherKind::Random => '?',
         };
         for y in (0..height).step_by(usize::try_from(cell_h).unwrap_or(1)) {
             mark(column.x, i32::try_from(y).unwrap_or(0), glyph);
@@ -627,7 +629,7 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         surfaces,
         surface_step: step,
         picture: rows.into_iter().map(|row| row.into_iter().collect()).collect(),
-        legend: "# ground, . air, 0-7 a living mobile by seat, and weather columns: F Force, M Mirror, T Tornado, E Electricity, D Drain.",
+        legend: "# ground, . air, 0-7 a living mobile by seat, and weather columns: F Force, M Mirror, T Tornado, E Electricity, D Drain, ? Random.",
         cell: [cell_w, cell_h],
     }
 }
@@ -809,6 +811,7 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
                 format!(" Weather now: {}.", standing.join(", "))
             }
         },
+        Effect::Revealed { kind, x } => format!(" The Random column at x={x} was {kind:?}."),
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
@@ -907,7 +910,9 @@ makes you wait longer. Agent turns are charged a fixed time.
 The wind pushes every shot; `wind.across` and `wind.up` give its push right and up. Weather
 columns stand on the map: Force boosts shots through it, Drain halves them, Electricity calls a
 bolt down wherever a shot through it lands, Mirror sends them back the way they came, Tornado
-flings them back up. A Wind weather rerolls the wind. Lock and Balm cover the whole map while
+flings them back up. A Random column hides one of those five: a shot through it meets what it
+hides, and it shows that from then on (`trace` can't see what it hides). A Wind weather rerolls
+the wind. Lock and Balm cover the whole map while
 they last (`weather.now`): under Lock no one may use an item, shields stop regenerating and SS
 comes back twice as fast; under Balm each player heals {BALM}% of max HP as their turn starts
 (Bionic mobiles double). The view lists what is coming.

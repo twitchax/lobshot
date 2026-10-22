@@ -1,6 +1,7 @@
 //! SearchBot: picks a shot by searching aim, power, shot and item in the sim, the way a player
 //! who has done their homework would. It sees only what a player sees (the game state, including
-//! wind and the weather on the map) and nothing the server hasn't rolled yet. It plays every
+//! wind and the weather on the map): nothing the server hasn't rolled yet, nor what a Random
+//! column hides. It plays every
 //! mobile, since every mobile's shots are the sim's.
 //!
 //! Search, in three passes:
@@ -84,7 +85,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     let target = *game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs())?;
 
     let mut events = Vec::new();
-    let mut scratch = game.clone();
+    let mut scratch = game.as_seen();
     if let Some(heal) = heal(&scratch, seat) {
         scratch.apply(heal).ok()?;
         events.push(heal);

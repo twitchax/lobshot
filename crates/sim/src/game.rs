@@ -451,6 +451,12 @@ pub enum Effect {
         drop: Drop,
         legs: Vec<Leg>,
     },
+    /// A projectile passed through the Random column at `x`: it shows `kind`, what it hid, from now
+    /// on.
+    Revealed {
+        kind: WeatherKind,
+        x: i32,
+    },
     /// Sudden death began: `kind` applies from the next turn on, and items are off for good.
     SuddenDeath {
         kind: SuddenDeathKind,
@@ -785,6 +791,7 @@ impl Game {
             Event::Weather(forecast) => {
                 ensure!(matches!(self.pending_roll(), Some(Roll::Weather { .. })), "no forecast is owed");
                 ensure!(self.on_map(forecast.x), "forecast x {} is off the map", forecast.x);
+                ensure!(forecast.is_whole(), "a Random forecast, and only one, hides a column weather: {forecast:?}");
                 self.weather.queue.push(forecast);
                 effects.push(Effect::Forecast(forecast));
             }
@@ -819,7 +826,9 @@ impl Game {
                 let range = shot.tuning(player.tuning()).aim.value;
                 ensure!(range.contains(aim), "{} can't aim its {shot:?} at {aim} degrees ({}..={})", player.tuning().name, range.min, range.max);
                 self.check_shot(seat, shot)?;
+                let fired = effects.len();
                 self.shoot(seat, shot, aim, power, &mut effects);
+                self.reveal_passed(&mut effects, fired);
                 let delay = shot.tuning(self.player(seat)?.tuning()).delay.value;
                 self.end_turn(seat, Ending::Shot(delay), time, &mut effects);
             }
@@ -1089,12 +1098,14 @@ impl Game {
                     last_tick: impact.tick,
                 };
             };
-            if marks.mark(column.kind) {
+            // A Random column acts as what it hides.
+            let kind = column.acts_as();
+            if marks.mark(kind) {
                 cursor = impact.tick + 1;
                 continue;
             }
             let velocity = leg.flight.velocity_at(impact.tick);
-            let next = match column.kind {
+            let next = match kind {
                 WeatherKind::Mirror => Some((
                     Flight {
                         origin: impact.at,
@@ -1111,9 +1122,9 @@ impl Game {
                     },
                     ticks(TORNADO_HOLD_SECONDS.value),
                 )),
-                // Marked above. Wind, Lock and Balm never stand as columns; were one there, it would
-                // do nothing.
-                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => {
+                // Marked above. Wind, Lock and Balm never stand as columns, and a Random one always
+                // hides another kind; were one there, it would do nothing.
+                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random => {
                     cursor = impact.tick + 1;
                     continue;
                 }
@@ -1232,7 +1243,9 @@ impl Game {
                 now: self.weather.now,
             });
         }
+        let dropped = effects.len();
         drops::land_due(self, effects);
+        self.reveal_passed(effects, dropped);
         // A game that just ended doesn't announce sudden death on its way out.
         if let Some(sudden_death) = self.sudden_death
             && self.turns == i64::from(sudden_death.turn)
@@ -1241,6 +1254,30 @@ impl Game {
             effects.push(Effect::SuddenDeath { kind: sudden_death.kind });
         }
         self.start_next_turn(effects);
+    }
+
+    /// Shows what each Random column hides once a projectile's path among `effects[from..]` has
+    /// passed through it. Only paths drawn while the column stood count, so `from` is where they
+    /// start.
+    fn reveal_passed(&mut self, effects: &mut Vec<Effect>, from: usize) {
+        if !self.weather.columns.iter().any(Column::is_hidden) {
+            return;
+        }
+        let paths: Vec<&Leg> = effects[from..]
+            .iter()
+            .flat_map(|effect| match effect {
+                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } => legs.as_slice(),
+                _ => &[],
+            })
+            .collect();
+        let mut revealed = Vec::new();
+        for column in self.weather.columns.iter_mut().filter(|c| c.is_hidden()) {
+            if paths.iter().any(|leg| (leg.from..=leg.to).any(|tick| column.contains(leg.flight.at(tick).x))) {
+                *column = column.revealed();
+                revealed.push(Effect::Revealed { kind: column.kind, x: column.x });
+            }
+        }
+        effects.extend(revealed);
     }
 
     /// Whether fewer than two teams have anyone standing.
@@ -1293,6 +1330,15 @@ impl Game {
             let bionic = tuning.armor.value == ArmorClass::Bionic;
             self.heal(seat, BALM_HEAL_PERCENT.value * if bionic { BALM_BIONIC_FACTOR.value } else { 1 }, effects);
         }
+    }
+
+    /// The game as a player sees it, for searching shots ahead (SearchBot, the lab's trace): a
+    /// Random column no shot has passed through is left out, since no one knows what it hides.
+    #[must_use]
+    pub fn as_seen(&self) -> Self {
+        let mut seen = self.clone();
+        seen.weather.columns.retain(|column| !column.is_hidden());
+        seen
     }
 
     /// Stands `columns` on the map directly, for tests of weather on shots.
@@ -1349,7 +1395,7 @@ pub(crate) mod testing {
     pub fn answer_rolls(game: &mut Game) {
         while let Some(roll) = game.pending_roll() {
             let event = match roll {
-                Roll::Weather { .. } => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
+                Roll::Weather { .. } => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
                 Roll::Wind => Event::Wind(Wind::default()),
                 Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
             };
@@ -1513,10 +1559,10 @@ mod unit {
         assert!(game.apply(Event::Pass { seat: 0, time: Centis(0) }).is_err(), "no moves while a roll is owed");
         assert!(game.apply(Event::Wind(Wind::default())).is_err(), "no wind is owed");
         for _ in 0..5 {
-            game.apply(Event::Weather(Forecast { kind: WeatherKind::Mirror, x: 100 })).unwrap();
+            game.apply(Event::Weather(Forecast::new(WeatherKind::Mirror, 100))).unwrap();
         }
         assert_eq!(game.pending_roll(), None);
-        assert!(game.apply(Event::Weather(Forecast { kind: WeatherKind::Mirror, x: 100 })).is_err(), "no sixth");
+        assert!(game.apply(Event::Weather(Forecast::new(WeatherKind::Mirror, 100))).is_err(), "no sixth");
         assert!(game.apply(Event::Pass { seat: 0, time: Centis(0) }).is_ok());
     }
 
@@ -1524,21 +1570,21 @@ mod unit {
     fn weather_comes_up_every_round_and_the_wind_weather_owes_wind() {
         let mut game = Game::new(&duel_setup(800), &NoAssets).unwrap();
         for kind in [WeatherKind::Tornado, WeatherKind::Wind, WeatherKind::Force, WeatherKind::Force, WeatherKind::Force] {
-            game.apply(Event::Weather(Forecast { kind, x: 900 })).unwrap();
+            game.apply(Event::Weather(Forecast::new(kind, 900))).unwrap();
         }
         // A round is two turns in a duel.
         game.apply(Event::Pass { seat: 0, time: Centis(0) }).unwrap();
         let effects = game.apply(Event::Pass { seat: 1, time: Centis(0) }).unwrap();
         assert!(
             effects.contains(&Effect::WeatherChanged {
-                columns: vec![Column { kind: WeatherKind::Tornado, x: 900 }],
+                columns: vec![Column::new(WeatherKind::Tornado, 900)],
                 wind_owed: false,
                 now: Some(WeatherKind::Tornado),
             }),
             "{effects:?}"
         );
         assert_eq!(game.pending_roll(), Some(Roll::Weather { width: 2400 }), "the queue needs refilling");
-        game.apply(Event::Weather(Forecast { kind: WeatherKind::Force, x: 5 })).unwrap();
+        game.apply(Event::Weather(Forecast::new(WeatherKind::Force, 5))).unwrap();
         game.apply(Event::Pass { seat: 0, time: Centis(0) }).unwrap();
         game.apply(Event::Pass { seat: 1, time: Centis(0) }).unwrap();
         assert_eq!(game.pending_roll(), Some(Roll::Wind), "wind before the forecast");
@@ -1639,7 +1685,7 @@ mod unit {
 
     fn with_column(kind: WeatherKind, x: i32) -> Game {
         let mut game = duel(800);
-        game.weather.columns = vec![Column { kind, x }];
+        game.weather.columns = vec![Column::new(kind, x)];
         game
     }
 
@@ -1673,6 +1719,48 @@ mod unit {
         let coilback = game.players[0].tuning().hp.value;
         pass_until(&mut game, 0);
         assert_eq!(game.players[0].hp, 500 + coilback * 3 / 100, "healed once, as its turn started");
+    }
+
+    fn random_hiding(hides: WeatherKind, x: i32) -> Column {
+        Column {
+            kind: WeatherKind::Random,
+            x,
+            hides: Some(hides),
+        }
+    }
+
+    #[test]
+    fn a_forecast_says_what_it_hides_only_when_random() {
+        let mut game = Game::new(&duel_setup(800), &NoAssets).unwrap();
+        let bare = Forecast::new(WeatherKind::Random, 900);
+        assert!(game.apply(Event::Weather(bare)).is_err());
+        let odd = Forecast { hides: Some(WeatherKind::Lock), ..bare };
+        assert!(game.apply(Event::Weather(odd)).is_err(), "Lock is no column to hide");
+        let extra = Forecast {
+            hides: Some(WeatherKind::Mirror),
+            ..Forecast::new(WeatherKind::Force, 900)
+        };
+        assert!(game.apply(Event::Weather(extra)).is_err());
+        assert!(game.apply(Event::Weather(Forecast { hides: Some(WeatherKind::Mirror), ..bare })).is_ok());
+    }
+
+    #[test]
+    fn a_random_column_acts_as_what_it_hides_and_shows_it_once_passed() {
+        let mut game = duel(800);
+        game.weather.columns = vec![random_hiding(WeatherKind::Mirror, 600), random_hiding(WeatherKind::Force, 2000)];
+        let effects = shoot(&mut game, 0, Shot::S1, 45, Power::nearest(2.4));
+        assert!(effects.contains(&Effect::Revealed { kind: WeatherKind::Mirror, x: 600 }), "{effects:?}");
+        let fired = effects.iter().find_map(|e| if let Effect::Fired { legs, .. } = e { Some(legs.len()) } else { None });
+        assert_eq!(fired, Some(2), "sent back, as by a Mirror");
+        assert_eq!(game.weather.columns[0], Column::new(WeatherKind::Mirror, 600));
+        assert!(game.weather.columns[1].is_hidden(), "nothing passed the far one");
+    }
+
+    #[test]
+    fn as_a_player_sees_it_a_hidden_column_is_not_there() {
+        let mut game = duel(800);
+        game.weather.columns = vec![random_hiding(WeatherKind::Mirror, 600), Column::new(WeatherKind::Force, 900)];
+        assert_eq!(game.as_seen().weather().columns, [Column::new(WeatherKind::Force, 900)]);
     }
 
     #[test]

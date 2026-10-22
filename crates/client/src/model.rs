@@ -416,7 +416,7 @@ mod unit {
     fn answer_rolls(game: &mut Match) {
         while let Some(roll) = game.confirmed.pending_roll() {
             let event = match roll {
-                Roll::Weather { .. } => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
+                Roll::Weather { .. } => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
                 Roll::Wind => Event::Wind(Wind::default()),
                 Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
             };

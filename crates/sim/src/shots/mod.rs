@@ -250,7 +250,7 @@ mod unit {
         let power = direct_hit_power(&calm, 35);
         let mut forced = calm.clone();
         let midway = forced.players()[0].footing.x + 400;
-        forced.set_columns(vec![Column { kind: WeatherKind::Force, x: midway }]);
+        forced.set_columns(vec![Column::new(WeatherKind::Force, midway)]);
         let calm_damage = damage_to(&shoot(&mut calm, 0, Shot::S1, 35, power), 1);
         let forced_effects = shoot(&mut forced, 0, Shot::S1, 35, power);
         assert!(damage_to(&forced_effects, 1) > calm_damage, "{forced_effects:?}");
@@ -260,7 +260,7 @@ mod unit {
     fn midway(game: &crate::game::Game, kind: WeatherKind) -> crate::game::Game {
         let mut game = game.clone();
         let x = game.players()[0].footing.x + 400;
-        game.set_columns(vec![Column { kind, x }]);
+        game.set_columns(vec![Column::new(kind, x)]);
         game
     }
 

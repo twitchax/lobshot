@@ -375,7 +375,7 @@ mod unit {
         let power = direct_hit_power(&game, 35);
         assert_eq!(tricks_of(&game, 35, power), [], "a plain hit");
         for (kind, bonus) in [(WeatherKind::Tornado, Bonus::Twister), (WeatherKind::Mirror, Bonus::BankShot)] {
-            game.set_columns(vec![Column { kind, x: 700 }]);
+            game.set_columns(vec![Column::new(kind, 700)]);
             assert_eq!(tricks_of(&game, 35, power), [bonus], "{kind:?}");
         }
     }
@@ -462,7 +462,7 @@ mod unit {
         match game.pending_roll() {
             Some(crate::game::Roll::Wind) => Event::Wind(Wind::default()),
             Some(crate::game::Roll::Drop { .. }) => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
-            _ => Event::Weather(crate::weather::Forecast { kind: WeatherKind::Force, x: 1 }),
+            _ => Event::Weather(crate::weather::Forecast::new(WeatherKind::Force, 1)),
         }
     }
 }

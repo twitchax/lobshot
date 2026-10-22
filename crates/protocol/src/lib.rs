@@ -24,7 +24,7 @@ use lobshot_sim::{
 };
 
 /// Bumped whenever a message from an older build would decode differently.
-pub const PROTOCOL_VERSION: u8 = 2;
+pub const PROTOCOL_VERSION: u8 = 3;
 
 /// The longest a player name may be, in characters.
 pub const MAX_NAME: usize = 16;

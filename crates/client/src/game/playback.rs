@@ -366,6 +366,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::WindChanged(_)
         | Effect::Forecast(_)
         | Effect::WeatherChanged { .. }
+        | Effect::Revealed { .. }
         | Effect::Spun { .. }
         | Effect::DropRolled { .. } => {}
     }

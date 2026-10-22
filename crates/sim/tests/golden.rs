@@ -22,29 +22,29 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xfd13_af09_cfe6_736f),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xe6aa_9f32_68b6_236f),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0x31a7_85a8_647a_4522,
+        0xf523_c08c_114c_03dd,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 184, 0x719c_05ab_de32_47a2),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x3cf6_aa14_cbe2_1fbc),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 183, 0xd1a9_b649_0539_8f52),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x5796_0d79_ab7f_d9ad),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
-        71,
-        0x72a3_404e_81ad_9d98,
+        73,
+        0x20d9_5eac_d262_e943,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0x4be2_70c5_5692_3a56,
+        0x6feb_f297_6157_beaf,
     ),
 ];
 
@@ -298,11 +298,12 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             let Some(roll) = game.pending_roll() else { break };
             rolls += 1;
             let event = match roll {
-                Roll::Weather { .. } if winds.is_empty() => Event::Weather(Forecast { kind: WeatherKind::Force, x: 1 }),
+                Roll::Weather { .. } if winds.is_empty() => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
                 Roll::Weather { width } => {
                     let kind = WeatherKind::ALL[rolls % WeatherKind::ALL.len()];
                     let x = i32::try_from((rolls * 389) % usize::try_from(width).unwrap()).unwrap();
-                    Event::Weather(Forecast { kind, x })
+                    let hides = (kind == WeatherKind::Random).then_some(WeatherKind::HIDDEN[rolls % WeatherKind::HIDDEN.len()]);
+                    Event::Weather(Forecast { kind, x, hides })
                 }
                 Roll::Wind => Event::Wind(winds.get(rolls % winds.len().max(1)).copied().unwrap_or_default()),
                 Roll::Drop { width } => {

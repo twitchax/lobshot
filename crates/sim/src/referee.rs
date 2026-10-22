@@ -144,10 +144,12 @@ pub fn wind(max: u8, dice: &mut impl Dice) -> Wind {
 /// `max_wind`.
 pub fn answer(roll: Roll, max_wind: u8, dice: &mut impl Dice) -> Event {
     match roll {
-        Roll::Weather { width } => Event::Weather(Forecast {
-            kind: WeatherKind::ALL[roll_index(WeatherKind::ALL.len(), dice)],
-            x: column(width, dice),
-        }),
+        Roll::Weather { width } => {
+            let kind = WeatherKind::ALL[roll_index(WeatherKind::ALL.len(), dice)];
+            let x = column(width, dice);
+            let hides = (kind == WeatherKind::Random).then(|| WeatherKind::HIDDEN[roll_index(WeatherKind::HIDDEN.len(), dice)]);
+            Event::Weather(Forecast { kind, x, hides })
+        }
         Roll::Wind => Event::Wind(wind(max_wind, dice)),
         Roll::Drop { width } => Event::Drop(Drop {
             kind: DropKind::ALL[roll_index(DropKind::ALL.len(), dice)],
@@ -289,11 +291,13 @@ mod unit {
     #[test]
     fn rolls_range_over_every_kind_and_the_whole_map() {
         let mut dice = XorShift::new(3);
-        let (mut weathers, mut drops) = (BTreeSet::new(), BTreeSet::new());
+        let (mut weathers, mut drops, mut hidden) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
         for _ in 0..400 {
             let Event::Weather(forecast) = answer(Roll::Weather { width: 50 }, 26, &mut dice) else { panic!() };
             assert!((0..50).contains(&forecast.x));
+            assert!(forecast.is_whole(), "a Random forecast says what it hides: {forecast:?}");
             weathers.insert(format!("{:?}", forecast.kind));
+            hidden.extend(forecast.hides.map(|kind| format!("{kind:?}")));
             let Event::Drop(drop) = answer(Roll::Drop { width: 50 }, 26, &mut dice) else { panic!() };
             assert!((0..50).contains(&drop.x));
             drops.insert(format!("{:?}", drop.kind));
@@ -301,6 +305,7 @@ mod unit {
             assert!(wind.strength <= 5 && wind.direction < 360);
         }
         assert_eq!((weathers.len(), drops.len()), (WeatherKind::ALL.len(), DropKind::ALL.len()));
+        assert_eq!(hidden.len(), WeatherKind::HIDDEN.len(), "{hidden:?}");
     }
 
     #[test]

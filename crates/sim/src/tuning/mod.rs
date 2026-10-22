@@ -153,6 +153,7 @@ pub fn column_width(kind: crate::weather::WeatherKind) -> f64 {
     use crate::weather::WeatherKind;
     match kind {
         WeatherKind::Tornado => TORNADO_WIDTH.value,
+        WeatherKind::Random => RANDOM_WIDTH.value,
         // Wind, Lock and Balm never stand as columns.
         WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => BEAM_WIDTH.value,
     }
@@ -175,6 +176,9 @@ pub const BALM_BIONIC_FACTOR: Tuned<u32> = cited(2, &["WP06", "NAMU"]);
 /// What a Drain column (GunBound's Weakness) leaves of a shot's damage. OB divides by 1.2 and
 /// subtracts 10 (CONTRADICTION).
 pub const DRAIN_DAMAGE: Tuned<f64> = cited(0.5, &["WP08"]);
+
+/// A Random column, until a shot reveals it; then it takes its own kind's width.
+pub const RANDOM_WIDTH: Tuned<f64> = cited(80.0, &["OB"]);
 
 /// Tornado columns.
 pub const TORNADO_WIDTH: Tuned<f64> = cited(70.0, &["OB"]);

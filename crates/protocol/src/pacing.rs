@@ -119,9 +119,14 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 finale.push(i);
                 0.0
             }
-            Effect::Walked { .. } | Effect::Forecast(_) | Effect::WeatherChanged { .. } | Effect::ItemUsed { .. } | Effect::SsLocked { .. } | Effect::Spun { .. } | Effect::DropRolled { .. } => {
-                stage.base
-            }
+            Effect::Walked { .. }
+            | Effect::Forecast(_)
+            | Effect::WeatherChanged { .. }
+            | Effect::Revealed { .. }
+            | Effect::ItemUsed { .. }
+            | Effect::SsLocked { .. }
+            | Effect::Spun { .. }
+            | Effect::DropRolled { .. } => stage.base,
         };
         busy = busy.max(time);
         at.push(time);
@@ -194,10 +199,7 @@ mod unit {
         while let Some(roll) = game.pending_roll() {
             let event = match roll {
                 lobshot_sim::game::Roll::Wind => Event::Wind(Wind::new(0, 0).unwrap()),
-                lobshot_sim::game::Roll::Weather { .. } => Event::Weather(lobshot_sim::weather::Forecast {
-                    kind: lobshot_sim::weather::WeatherKind::Wind,
-                    x: 0,
-                }),
+                lobshot_sim::game::Roll::Weather { .. } => Event::Weather(lobshot_sim::weather::Forecast::new(lobshot_sim::weather::WeatherKind::Wind, 0)),
                 lobshot_sim::game::Roll::Drop { .. } => Event::Drop(lobshot_sim::drops::Drop {
                     kind: lobshot_sim::drops::DropKind::Calm,
                     x: 0,
