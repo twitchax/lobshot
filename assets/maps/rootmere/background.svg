@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1100" viewBox="0 0 2000 1100">
+  <!-- Rootmere background: a cypress marsh at dusk, seen from among the roots of one enormous
+       tree whose canopy hangs over the top of the map. The whole map (2000 x 1100), shared by every
+       variant. Soft and low in contrast so the bark and moss read in front of it, and no per-pixel
+       grain, which would bloat the PNG. The sun sets on the left, so its light agrees with the
+       sprites' (upper left). The water's surface is y = 960, the same line terrain.svg sinks the
+       roots below. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b3a6e"/>
+      <stop offset="0.28" stop-color="#5f4f86"/>
+      <stop offset="0.55" stop-color="#9a6a92"/>
+      <stop offset="0.75" stop-color="#d48a86"/>
+      <stop offset="0.9" stop-color="#f0ac7c"/>
+      <stop offset="1" stop-color="#f6c48a"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="430" cy="820" r="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe6b0" stop-opacity="0.9"/>
+      <stop offset="0.12" stop-color="#ffc98e" stop-opacity="0.55"/>
+      <stop offset="0.4" stop-color="#f4a080" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#f4a080" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffe2b0" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffe2b0" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#ffe2b0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mist" x1="0" y1="820" x2="0" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2c6b0" stop-opacity="0"/>
+      <stop offset="0.65" stop-color="#f2c6b0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f2c6b0" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="960" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7a7480"/>
+      <stop offset="0.12" stop-color="#5a6470"/>
+      <stop offset="0.5" stop-color="#3c4c56"/>
+      <stop offset="1" stop-color="#26343e"/>
+    </linearGradient>
+    <linearGradient id="sunPath" x1="0" y1="960" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd8a0" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#ffd8a0" stop-opacity="0"/>
+    </linearGradient>
+    <!-- the canopy's shade, deepest at the top edge -->
+    <linearGradient id="canopyShade" x1="0" y1="0" x2="0" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a2550" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#2a2550" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="softer" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="hazy" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.3"/></filter>
+    <filter id="glow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="4"/></filter>
+    <!-- a gentle brush wobble on organic edges -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.05" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="0.9"/>
+    </filter>
+    <!-- a bald cypress (origin = its foot at the waterline, middle): a fluted, flared base, a
+         tapering trunk, a few branches and a flat, ragged crown hung with moss -->
+    <g id="cypress">
+      <path d="M -34,0 C -22,-4 -16,-14 -13,-32 C -10,-70 -8,-140 -6,-206 L 6,-206 C 8,-140 10,-70 13,-32 C 16,-14 22,-4 34,0 L 18,0 C 12,-6 8,-10 4,-12 L 2,0 Z"/>
+      <path d="M -5,-150 C -20,-166 -34,-176 -50,-184 L -47,-189 C -30,-182 -16,-172 -4,-160 Z M 4,-170 C 18,-184 34,-192 52,-198 L 54,-193 C 36,-186 22,-178 6,-162 Z"/>
+      <path d="M -78,-190 C -88,-202 -74,-216 -58,-212 C -56,-230 -34,-238 -20,-228 C -10,-246 18,-250 28,-234 C 44,-244 70,-236 72,-218 C 90,-216 96,-198 82,-190 C 78,-180 62,-178 54,-186 C 46,-176 30,-176 24,-186 C 14,-178 -2,-178 -8,-188 C -18,-180 -34,-180 -40,-190 C -50,-180 -70,-180 -78,-190 Z"/>
+      <path d="M -60,-190 C -62,-176 -58,-166 -60,-150 C -58,-164 -54,-176 -54,-188 Z M -30,-188 C -32,-168 -28,-156 -31,-136 C -26,-154 -24,-170 -24,-186 Z M 2,-186 C 0,-172 4,-162 2,-148 C 6,-162 8,-174 8,-184 Z M 34,-184 C 32,-164 36,-150 33,-128 C 39,-148 40,-166 40,-182 Z M 64,-186 C 62,-174 66,-166 64,-154 C 68,-166 70,-176 70,-184 Z"/>
+    </g>
+    <!-- a knee: a cone of root standing out of the water -->
+    <path id="knee" d="M -8,0 C -7,-8 -4,-16 -1,-20 C 2,-16 6,-8 8,0 Z"/>
+    <!-- a lily pad, seen nearly edge on, its notch toward the viewer -->
+    <path id="pad" d="M -18,0 C -18,-4 -8,-6 0,-6 C 8,-6 18,-4 18,0 C 18,4 8,6 0,6 L 2,0 L -4,6 C -10,6 -18,4 -18,0 Z"/>
+    <!-- a cattail clump at the waterline -->
+    <g id="reeds" fill="none" stroke-linecap="round">
+      <path d="M -6,0 C -7,-20 -9,-36 -12,-50 M 0,0 C 0,-24 1,-44 2,-60 M 6,0 C 8,-18 12,-30 16,-40 M -2,0 C -4,-14 -10,-24 -18,-30" stroke-width="2"/>
+      <path d="M -12,-50 L -13.4,-62 M 2,-60 L 2.4,-74" stroke-width="5"/>
+    </g>
+    <!-- a firefly: a warm point in its own glow -->
+    <g id="fly">
+      <circle r="7" fill="#ffe27a" opacity="0.5" filter="url(#glow)"/>
+      <circle r="1.8" fill="#fff6c4"/>
+    </g>
+    <!-- a cluster of the great tree's leaves, for the canopy overhead -->
+    <path id="leaves" d="M -90,0 C -100,-20 -80,-40 -56,-34 C -50,-58 -18,-64 -2,-46 C 12,-66 50,-62 56,-38 C 80,-44 100,-22 90,0 C 96,20 74,36 54,28 C 46,48 14,52 0,36 C -16,52 -50,48 -56,28 C -78,36 -98,18 -90,0 Z"/>
+  </defs>
+
+  <g id="layer-sky">
+    <rect width="2000" height="960" fill="url(#sky)"/>
+    <rect width="2000" height="960" fill="url(#sunGlow)"/>
+    <g opacity="0.5">
+      <path d="M 430,820 L 760,0 L 960,0 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 430,820 L 1260,0 L 1440,0 Z" fill="url(#ray)" filter="url(#soft)"/>
+      <path d="M 430,820 L 2000,160 L 2000,330 Z" fill="url(#ray)" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <g id="layer-stars" fill="#f4eeff">
+    <g opacity="0.7">
+      <circle cx="1180" cy="210" r="1.4"/><circle cx="1460" cy="160" r="1.2"/><circle cx="1720" cy="250" r="1.5"/>
+      <circle cx="1900" cy="190" r="1.2"/><circle cx="1600" cy="320" r="1"/><circle cx="1320" cy="300" r="1"/>
+      <circle cx="980" cy="260" r="1.1"/><circle cx="1820" cy="340" r="1"/>
+    </g>
+    <g opacity="0.85">
+      <circle cx="1540" cy="230" r="4" filter="url(#soft)"/><circle cx="1540" cy="230" r="1.7"/>
+    </g>
+  </g>
+
+  <!-- long dusk clouds, their undersides lit by the low sun -->
+  <g id="layer-clouds" filter="url(#softer)">
+    <ellipse cx="760" cy="440" rx="380" ry="16" fill="#e8a4a0" opacity="0.6"/>
+    <ellipse cx="1500" cy="520" rx="420" ry="18" fill="#d898a2" opacity="0.5"/>
+    <ellipse cx="300" cy="580" rx="260" ry="12" fill="#f6b89a" opacity="0.55"/>
+    <ellipse cx="1180" cy="640" rx="320" ry="12" fill="#f4b49a" opacity="0.45"/>
+    <ellipse cx="1840" cy="400" rx="200" ry="10" fill="#c89aae" opacity="0.5"/>
+  </g>
+
+  <g id="layer-sun">
+    <circle cx="430" cy="820" r="92" fill="#ffe2a8" filter="url(#soft)" opacity="0.85"/>
+    <circle cx="430" cy="820" r="62" fill="#fff0c8"/>
+  </g>
+
+  <g id="layer-far" filter="url(#hazy)">
+    <!-- the far side of the marsh: a low treeline of cypress, nearly lost in the haze -->
+    <path filter="url(#brush)" d="M -10,900 C 60,880 120,876 180,882 C 240,860 300,858 340,872 C 420,866 520,870 600,880 C 680,862 760,858 820,868 C 900,872 980,876 1060,866 C 1140,852 1220,856 1280,870 C 1360,874 1440,868 1520,858 C 1600,852 1680,860 1740,874 C 1820,878 1900,872 2010,866 L 2010,962 L -10,962 Z" fill="#c890a0"/>
+    <g fill="#bc8698">
+      <use href="#cypress" transform="translate(150,906) scale(0.42)"/>
+      <use href="#cypress" transform="translate(620,904) scale(0.36)"/>
+      <use href="#cypress" transform="translate(690,908) scale(0.3)"/>
+      <use href="#cypress" transform="translate(1110,902) scale(0.44)"/>
+      <use href="#cypress" transform="translate(1560,900) scale(0.38)"/>
+      <use href="#cypress" transform="translate(1620,904) scale(0.3)"/>
+      <use href="#cypress" transform="translate(1930,904) scale(0.4)"/>
+    </g>
+  </g>
+
+  <g id="layer-mid" filter="url(#hazy)">
+    <!-- nearer cypress, standing in the water, their moss in the sun's rim -->
+    <g fill="#9e7290">
+      <use href="#cypress" transform="translate(300,962) scale(0.95 0.9)"/>
+      <use href="#cypress" transform="translate(860,962) scale(0.7)"/>
+      <use href="#cypress" transform="translate(1360,962) scale(1.05 1)"/>
+      <use href="#cypress" transform="translate(1760,962) scale(0.8 0.75)"/>
+    </g>
+    <!-- knees standing out of the water around them -->
+    <g fill="#8e6884">
+      <use href="#knee" transform="translate(250,962)"/><use href="#knee" transform="translate(268,962) scale(0.7)"/><use href="#knee" transform="translate(346,962) scale(0.8)"/>
+      <use href="#knee" transform="translate(900,962) scale(0.7)"/><use href="#knee" transform="translate(1310,962)"/><use href="#knee" transform="translate(1418,962) scale(0.8)"/>
+      <use href="#knee" transform="translate(1436,962) scale(0.6)"/><use href="#knee" transform="translate(1800,962) scale(0.7)"/>
+    </g>
+  </g>
+  <rect y="820" width="2000" height="150" fill="url(#mist)"/>
+
+  <!-- the great tree's canopy overhead: soft leaf masses along the top -->
+  <g id="layer-canopy">
+    <rect width="2000" height="260" fill="url(#canopyShade)"/>
+    <g fill="#3a3264" opacity="0.7" filter="url(#hazy)">
+      <use href="#leaves" transform="translate(60,-10) scale(1.3 0.9)"/>
+      <use href="#leaves" transform="translate(250,10) scale(1.1 0.8)"/>
+      <use href="#leaves" transform="translate(470,-14) scale(1.4 0.9)"/>
+      <use href="#leaves" transform="translate(700,6) scale(1 0.75)"/>
+      <use href="#leaves" transform="translate(920,-18) scale(1.3 0.85)"/>
+      <use href="#leaves" transform="translate(1130,-4) scale(1.2 0.8)"/>
+      <use href="#leaves" transform="translate(1340,12) scale(1.1 0.8)"/>
+      <use href="#leaves" transform="translate(1560,-16) scale(1.4 0.9)"/>
+      <use href="#leaves" transform="translate(1780,4) scale(1.1 0.8)"/>
+      <use href="#leaves" transform="translate(1960,-12) scale(1.3 0.9)"/>
+    </g>
+    <g fill="#4c4078" opacity="0.6" filter="url(#hazy)">
+      <use href="#leaves" transform="translate(150,-34) scale(1.2 0.7)"/>
+      <use href="#leaves" transform="translate(600,-30) scale(1.3 0.7)"/>
+      <use href="#leaves" transform="translate(1030,-36) scale(1.2 0.7)"/>
+      <use href="#leaves" transform="translate(1450,-30) scale(1.3 0.7)"/>
+      <use href="#leaves" transform="translate(1880,-34) scale(1.2 0.7)"/>
+    </g>
+  </g>
+
+  <g id="layer-water">
+    <rect y="960" width="2000" height="140" fill="url(#water)"/>
+    <!-- the sky's glow just under the line, the sun's path, then calm ripples -->
+    <rect y="960" width="2000" height="12" fill="#e8a890" opacity="0.4"/>
+    <path d="M 370,962 L 490,962 L 560,1100 L 300,1100 Z" fill="url(#sunPath)" filter="url(#soft)"/>
+    <g fill="#ffe0b0" opacity="0.7">
+      <rect x="380" y="968" width="100" height="2.4" rx="1.2"/><rect x="396" y="978" width="70" height="2" rx="1"/>
+      <rect x="370" y="990" width="56" height="2" rx="1"/><rect x="430" y="1002" width="64" height="2" rx="1"/>
+      <rect x="400" y="1016" width="40" height="1.6" rx="0.8"/>
+    </g>
+    <g stroke="#a8a0b0" stroke-width="1.6" stroke-linecap="round" opacity="0.45">
+      <path d="M 660,974 h 60 M 980,986 h 44 M 1240,972 h 70 M 1540,990 h 50 M 1820,978 h 60 M 140,996 h 40 M 780,1010 h 50 M 1400,1020 h 40"/>
+    </g>
+    <!-- the far cypress, reflected and broken -->
+    <g fill="#5a5466" opacity="0.5" filter="url(#hazy)">
+      <path d="M 290,964 h 20 l -4,60 h -12 Z M 852,964 h 16 l -3,40 h -10 Z M 1350,964 h 22 l -4,66 h -14 Z M 1752,964 h 16 l -3,46 h -10 Z"/>
+    </g>
+    <!-- lily pads and a few reeds at the near bank -->
+    <g fill="#5e7656" stroke="#3a4a3a" stroke-width="1" opacity="0.85">
+      <use href="#pad" transform="translate(580,972)"/><use href="#pad" transform="translate(616,978) scale(0.7)"/>
+      <use href="#pad" transform="translate(1100,984) scale(0.9)"/><use href="#pad" transform="translate(1140,976) scale(0.6)"/>
+      <use href="#pad" transform="translate(1660,980)"/><use href="#pad" transform="translate(220,1000) scale(1.1)"/>
+    </g>
+    <g fill="#f4a8b8" stroke="#6a4a5a" stroke-width="0.8">
+      <path d="M 1100,980 l -3,-6 l 3,2 l 3,-2 Z"/><path d="M 584,968 l -3,-6 l 3,2 l 3,-2 Z"/>
+    </g>
+    <g stroke="#7a6a70" opacity="0.8">
+      <use href="#reeds" transform="translate(520,962)"/>
+      <use href="#reeds" transform="translate(1480,962) scale(-1 1)"/>
+      <use href="#reeds" transform="translate(960,962) scale(0.8)"/>
+    </g>
+    <!-- the surface itself: a bright line, as the roots have -->
+    <rect y="958" width="2000" height="3" fill="#f4d0b8" opacity="0.75"/>
+  </g>
+
+  <!-- fireflies coming out over the water -->
+  <g id="layer-fireflies">
+    <use href="#fly" transform="translate(520,700)"/><use href="#fly" transform="translate(610,760) scale(0.8)"/>
+    <use href="#fly" transform="translate(760,620) scale(0.9)"/><use href="#fly" transform="translate(940,820) scale(0.7)"/>
+    <use href="#fly" transform="translate(1060,700)"/><use href="#fly" transform="translate(1180,780) scale(0.8)"/>
+    <use href="#fly" transform="translate(1300,640) scale(0.9)"/><use href="#fly" transform="translate(1460,740) scale(0.7)"/>
+    <use href="#fly" transform="translate(1620,660)"/><use href="#fly" transform="translate(1760,800) scale(0.8)"/>
+    <use href="#fly" transform="translate(300,640) scale(0.7)"/><use href="#fly" transform="translate(180,780) scale(0.9)"/>
+    <use href="#fly" transform="translate(860,540) scale(0.6)"/><use href="#fly" transform="translate(1540,560) scale(0.6)"/>
+  </g>
+
+  <g id="layer-birds" fill="none" stroke="#5a4a7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55">
+    <path d="M 1080,420 q 6,-6 11,0 q 5,-6 11,0"/>
+    <path d="M 1110,438 q 5,-5 8,0 q 4,-5 8,0"/>
+    <path d="M 1660,470 q 5,-5 9,0 q 4,-5 9,0"/>
+  </g>
+</svg>

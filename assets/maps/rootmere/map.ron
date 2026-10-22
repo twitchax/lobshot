@@ -1,0 +1,20 @@
+// Rootmere: the roots of one enormous tree spreading over a marsh at dusk. Hand-written;
+// `cargo xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 1000) so neither side starts with the better
+// root. Every gap between roots runs down into the water and off the bottom of the map, so a mobile
+// that walks or is knocked off a root is lost. `cargo xtask art` refuses any spawn that leaves a
+// mobile hanging off an edge or under an overhang.
+MapInfo(
+    name: "rootmere",
+    title: "Rootmere",
+    variants: [
+        // Low arches: the trunk at the west edge, a buttress and a long root out from it with a
+        // wide hollow between them, the long root rearing into a bridge over the middle and
+        // surfacing again at the east edge as a knee.
+        (id: "A", spawns: [150, 385, 615, 850, 1150, 1385, 1615, 1850]),
+        // A higher lattice: the trunk at the east edge, two tiers of roots on stilts and a bridge
+        // between their knots, with more open water under them.
+        (id: "B", spawns: [130, 355, 595, 745, 1255, 1405, 1645, 1870]),
+    ],
+)

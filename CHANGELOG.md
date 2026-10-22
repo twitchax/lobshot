@@ -61,6 +61,8 @@ why the version moved the way it did.
   split into eight, each with its own whistle).
 - Neonbay (M5), a harbor city at night on the city archetype: A downtown towers with rooftop neon,
   B the docks, with container stacks and a gantry crane over the slip.
+- Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
+  arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

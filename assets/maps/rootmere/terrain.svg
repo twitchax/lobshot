@@ -1,0 +1,356 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1100" viewBox="0 0 2000 1100">
+  <!-- Rootmere terrain, shared by every variant: the roots of one enormous tree, warm bark under a
+       cap of moss, light from the setting sun on the upper left, their feet sunk in a marsh whose
+       surface is y = 960. A template: `cargo xtask art` fills the land slot with the path built
+       from the variant's land.ron (the same path the collision mask is drawn from) and every other
+       slot with the <use>s its dress rules in land.ron place. Everything else here is drawn by
+       hand. Opaque = ground. Bark grain rides the outline (edge rules turned to the surface), so
+       it runs along every root however it bends. Below the waterline the roots, and whatever hangs
+       from them, are tinted and their outline softened. -->
+  <defs>
+    <path id="land" d="{{land}}"/>
+    <clipPath id="landClip"><use href="#land"/></clipPath>
+    <clipPath id="above"><rect width="2000" height="960"/></clipPath>
+    <clipPath id="below"><rect y="960" width="2000" height="140"/></clipPath>
+
+    <!-- seen through the marsh water: darker, greener, a little transparent -->
+    <filter id="underwater" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.3 0.1 0.04 0 0.06  0.1 0.36 0.1 0 0.1  0.06 0.12 0.3 0 0.12  0 0 0 0.8 0"/>
+    </filter>
+    <!-- bark mottle in three flat tones: posterized so it costs the PNG little -->
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="2" seed="17" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.09  0 0 0 0 0.06  0 0 0 2.4 -1.15" result="m"/>
+      <feComponentTransfer in="m"><feFuncA type="discrete" tableValues="0 0 0.45 0.8"/></feComponentTransfer>
+    </filter>
+    <!-- the moss's lower edge: vertical-only displacement, then blur and threshold into lobes -->
+    <filter id="drip" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.07 0.014" numOctaves="2" seed="9" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.5  0 1.8 0 0 -0.4  0 0 0 0 0  0 0 0 0 1" result="ny"/>
+      <feDisplacementMap in="SourceGraphic" in2="ny" scale="7" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1.4" result="b"/>
+      <feComponentTransfer in="b"><feFuncA type="linear" slope="8" intercept="-3.5"/></feComponentTransfer>
+    </filter>
+    <filter id="feather" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="featherWide" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="soften" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="1.5"/></filter>
+    <filter id="glow" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="4"/></filter>
+
+    <!-- moss cap = land minus land shifted down -->
+    <mask id="capMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,10)" fill="#000"/>
+    </mask>
+    <mask id="fringeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,13)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <mask id="capLitMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,4)" fill="#000"/>
+    </mask>
+    <mask id="capShadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,21)" fill="#000" filter="url(#drip)"/>
+    </mask>
+    <!-- form light: the top ~30 px of every root catches the dusk -->
+    <mask id="topLightMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,30)" fill="#000" filter="url(#feather)"/>
+    </mask>
+    <!-- roots are round: below ~46 px each one turns into its own shadow, following the surface -->
+    <mask id="deepMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <use href="#land" transform="translate(0,46)" fill="#fff" filter="url(#featherWide)"/>
+    </mask>
+    <!-- the sun side: land minus land shifted east and down is a band on every face that looks up
+         and west; the other way round for the faces that look down and east -->
+    <mask id="sunMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(11,5)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <mask id="shadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(-14,-8)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <!-- bounce light: undersides catch the glow off the water -->
+    <mask id="bounceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="1100">
+      <rect width="2000" height="1100" fill="#fff"/>
+      <use href="#land" transform="translate(0,-7)" fill="#000" filter="url(#soften)"/>
+    </mask>
+    <linearGradient id="marsh" gradientUnits="userSpaceOnUse" x1="0" y1="960" x2="0" y2="1100">
+      <stop offset="0" stop-color="#4a5a56" stop-opacity="0.4"/>
+      <stop offset="0.4" stop-color="#2e3e40" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#1a262c" stop-opacity="0.82"/>
+    </linearGradient>
+
+    <!-- bark grain along the tops: furrows parallel to the surface, inside the land (+y), each
+         with a lit ridge on its upper side; never mirrored, so the light stays put -->
+    <g id="grainT1" fill="none" stroke-linecap="round">
+      <path d="M -22,16 C -10,14 4,18 22,15" stroke="#3a261d" stroke-width="2.2" opacity="0.55"/>
+      <path d="M -19,13 C -8,11 4,15 19,12" stroke="#b4875c" stroke-width="1.1" opacity="0.4"/>
+    </g>
+    <g id="grainT2" fill="none" stroke-linecap="round">
+      <path d="M -26,30 C -12,28 6,32 26,29" stroke="#33211a" stroke-width="2.2" opacity="0.5"/>
+      <path d="M -23,27 C -10,25 6,29 23,26" stroke="#a87c54" stroke-width="1" opacity="0.35"/>
+    </g>
+    <g id="grainT3" fill="none" stroke-linecap="round">
+      <path d="M -20,46 C -6,44 6,48 20,46" stroke="#2c1c16" stroke-width="2" opacity="0.45"/>
+    </g>
+    <!-- along the undersides and cliffs: furrows only, in the shade -->
+    <g id="grainU1" fill="none" stroke-linecap="round">
+      <path d="M -24,12 C -10,10 4,13 24,11" stroke="#2a1913" stroke-width="2.2" opacity="0.5"/>
+    </g>
+    <g id="grainU2" fill="none" stroke-linecap="round">
+      <path d="M -26,26 C -12,24 6,28 26,25" stroke="#2a1913" stroke-width="2" opacity="0.45"/>
+    </g>
+
+    <!-- knots in the bark: an eye with a lit lower lip, centered -->
+    <g id="knotA" stroke-linejoin="round">
+      <path d="M -15,0 C -10,-7 10,-7 15,0 C 10,7 -10,7 -15,0 Z" fill="#5a3c2a" stroke="#24150f" stroke-width="1.6"/>
+      <path d="M -7,0 C -4,-3 4,-3 7,0 C 4,3 -4,3 -7,0 Z" fill="#1c100b"/>
+      <path d="M -11,3 C -5,6 5,6 11,3" fill="none" stroke="#b88a5c" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <g id="knotB" stroke-linejoin="round">
+      <path d="M -10,0 C -8,-6 8,-6 10,0 C 8,5 -8,5 -10,0 Z" fill="#4e3424" stroke="#24150f" stroke-width="1.4"/>
+      <ellipse rx="3.6" ry="1.8" fill="#1c100b"/>
+    </g>
+    <!-- a burl: rings of swollen grain -->
+    <g id="burl" fill="none" stroke-linecap="round">
+      <ellipse rx="20" ry="13" fill="#6c4a34" stroke="#2a1913" stroke-width="1.8" opacity="0.8"/>
+      <ellipse rx="13" ry="8" stroke="#2a1913" stroke-width="1.4" opacity="0.6"/>
+      <ellipse rx="6" ry="3.6" stroke="#2a1913" stroke-width="1.2" opacity="0.6"/>
+      <path d="M -16,-6 C -10,-11 4,-12 12,-9" stroke="#c09468" stroke-width="1.4" opacity="0.6"/>
+    </g>
+    <!-- on the tops: moss mounds, ferns, grass and mushrooms; origin = attach point, up = -y -->
+    <g id="mossA" stroke="#1f2a14" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -13,1 C -14,-4 -9,-8 -5,-6 C -3,-11 4,-11 6,-6 C 10,-8 14,-4 13,1 Z" fill="#6e9c36"/>
+      <path d="M -8,-5 C -6,-8 -3,-8 -2,-6 M 2,-8 C 3,-9 5,-9 6,-7" fill="none" stroke="#b6dc62" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+    <g id="mossB" stroke="#1f2a14" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -8,1 C -9,-3 -5,-6 -2,-5 C 0,-8 5,-7 6,-4 C 9,-4 10,-1 9,1 Z" fill="#5f8c2e"/>
+      <path d="M -4,-4 C -2,-6 1,-6 2,-5" fill="none" stroke="#a8d058" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="fern" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,1 C -2,-8 -8,-15 -16,-18 M 0,1 C 2,-9 8,-16 16,-20 M 0,1 C 0,-8 1,-15 2,-22" fill="none" stroke="#1f2a14" stroke-width="3"/>
+      <path d="M 0,1 C -2,-8 -8,-15 -16,-18 M 0,1 C 2,-9 8,-16 16,-20 M 0,1 C 0,-8 1,-15 2,-22" fill="none" stroke="#6fa03a" stroke-width="1.6"/>
+      <g fill="#7cb042" stroke="#1f2a14" stroke-width="0.6">
+        <path d="M -5,-8 l -4,-1 l 2,-3 Z M -10,-13 l -4,0 l 2,-3 Z M 5,-9 l 4,-2 l -1,-3 Z M 10,-14 l 4,-1 l -2,-3 Z M 1,-12 l -3,-2 l 3,-2 Z M 1,-17 l 3,-2 l -2,-2 Z"/>
+      </g>
+    </g>
+    <g id="grass" stroke="#1f2a14" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -6,1 C -6,-4 -8,-8 -11,-11 C -6,-9 -3,-6 -2,-2 C -2,-8 0,-12 2,-15 C 2,-10 3,-6 2,-1 C 5,-6 8,-8 11,-10 C 9,-6 6,-2 6,1 Z" fill="#84b040"/>
+      <path d="M -2,-2 C -2,-8 0,-12 2,-15 C 1.4,-10 1.4,-6 1,-1.5 Z" fill="#c4e070" stroke="none"/>
+    </g>
+    <g id="shroom" stroke="#24150f" stroke-width="0.9" stroke-linejoin="round">
+      <path d="M -1.6,1 L -1.2,-6 L 1.2,-6 L 1.6,1 Z" fill="#f2e2c4"/>
+      <path d="M -6,-5.4 C -6,-10 -2,-12 0,-12 C 2,-12 6,-10 6,-5.4 Z" fill="#e8703a"/>
+      <circle cx="-2.4" cy="-8.6" r="0.9" fill="#fff4e0" stroke="none"/><circle cx="2" cy="-9.6" r="0.7" fill="#fff4e0" stroke="none"/>
+      <path d="M 3.4,1 L 3.6,-3 L 5,-3 L 5.2,1 Z M 1.8,-2.6 C 2,-5 3.4,-6 4.3,-6 C 5.4,-6 6.6,-5 6.8,-2.6 Z" fill="#d85e30"/>
+    </g>
+    <!-- glowcaps: tiny pale mushrooms that light up at dusk -->
+    <g id="glowcap">
+      <ellipse cy="-6" rx="9" ry="6" fill="#9ff2d8" opacity="0.4" filter="url(#glow)"/>
+      <g stroke="#1a3a34" stroke-width="0.8" stroke-linejoin="round">
+        <path d="M -3.6,1 L -3.3,-4 L -2.1,-4 L -1.8,1 Z M 1.6,1 L 1.9,-6 L 3.1,-6 L 3.4,1 Z" fill="#d8f6ea"/>
+        <path d="M -5.6,-3.6 C -5.4,-6.4 -4,-7.4 -2.7,-7.4 C -1.4,-7.4 0,-6.4 0.2,-3.6 Z" fill="#8ef0d0"/>
+        <path d="M -0.4,-5.6 C -0.2,-9 1.2,-10.4 2.5,-10.4 C 3.8,-10.4 5.2,-9 5.4,-5.6 Z" fill="#b0f8e0"/>
+      </g>
+    </g>
+
+    <!-- on the cliffs: shelf fungus grown out from the bark (outward = -y) -->
+    <g id="bracket" stroke="#24150f" stroke-width="1.2" stroke-linejoin="round">
+      <path d="M -11,1 C -11,-7 -6,-12 0,-12 C 6,-12 11,-7 11,1 Z" fill="#e2b06a"/>
+      <path d="M -8,-2 C -7,-7 -4,-9 0,-9 C 4,-9 7,-7 8,-2" fill="none" stroke="#b07a3e" stroke-width="1.1"/>
+      <path d="M -9,-6 C -7,-10 -3,-11 0,-11" fill="none" stroke="#fff0c8" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="bracketPair" stroke="#24150f" stroke-width="1.1" stroke-linejoin="round">
+      <path d="M -12,1 C -12,-5 -8,-9 -3,-9 C 2,-9 5,-5 5,1 Z" fill="#d89e5a"/>
+      <path d="M 1,1 C 1,-4 4,-7 8,-7 C 12,-7 14,-4 14,1 Z" fill="#e8bc78"/>
+      <path d="M -9,-5 C -7,-7 -5,-8 -3,-8" fill="none" stroke="#fff0c8" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+
+    <!-- hanging: Spanish moss and rootlets; origin = attach point, hanging down (+y), never turned -->
+    <g id="mossHang" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -6,-2 C -8,10 -4,18 -7,30 C -8,36 -6,40 -7,46 M -1,-2 C 0,12 -2,22 1,36 M 4,-2 C 6,8 3,16 6,26 C 7,30 6,34 7,38 M -3,10 C -6,14 -9,16 -12,22 M 1,18 C 4,22 6,26 7,32" fill="none" stroke="#3e4a36" stroke-width="3.2"/>
+      <path d="M -6,-2 C -8,10 -4,18 -7,30 C -8,36 -6,40 -7,46 M -1,-2 C 0,12 -2,22 1,36 M 4,-2 C 6,8 3,16 6,26 C 7,30 6,34 7,38 M -3,10 C -6,14 -9,16 -12,22 M 1,18 C 4,22 6,26 7,32" fill="none" stroke="#9aa88a" stroke-width="1.5"/>
+    </g>
+    <g id="mossHangShort" stroke-linecap="round">
+      <path d="M -3,-2 C -5,8 -2,14 -4,24 M 2,-2 C 3,6 1,12 3,18 M -1,6 C -4,10 -6,12 -8,16" fill="none" stroke="#3e4a36" stroke-width="3"/>
+      <path d="M -3,-2 C -5,8 -2,14 -4,24 M 2,-2 C 3,6 1,12 3,18 M -1,6 C -4,10 -6,12 -8,16" fill="none" stroke="#a6b494" stroke-width="1.4"/>
+    </g>
+    <g id="rootlet" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 0,-3 C 2,6 -3,13 0,22 C 2,28 0,33 1,40 M 0,9 C -4,13 -6,16 -7,22" stroke="#24150f" stroke-width="4.2"/>
+      <path d="M 0,-3 C 2,6 -3,13 0,22 C 2,28 0,33 1,40 M 0,9 C -4,13 -6,16 -7,22" stroke="#8a6044" stroke-width="2.2"/>
+      <path d="M -0.7,-1 C 0.9,6 -2.3,12 -0.7,19" stroke="#c49670" stroke-width="0.8"/>
+    </g>
+
+    <!-- set pieces, placed per variant by land.ron -->
+    <!-- the trunk's bark: deep furrows running up the trunk, 320 wide from its origin at the top
+         left; clipped to the land, so only the trunk shows it -->
+    <g id="trunkBark" fill="none" stroke-linecap="round">
+      <g stroke="#2a1913" stroke-width="5" opacity="0.6">
+        <path d="M 30,0 C 26,180 36,360 28,560 C 22,720 34,880 30,1100 M 74,0 C 80,160 68,330 76,520 C 84,700 70,860 78,1100 M 120,0 C 114,200 126,380 118,600 C 112,760 124,920 120,1100 M 166,0 C 172,170 160,340 168,540 C 176,720 162,880 170,1100 M 212,0 C 206,190 218,370 210,580 C 204,740 216,900 212,1100 M 258,0 C 264,180 252,350 260,560 C 268,730 254,890 262,1100 M 300,0 C 296,200 306,380 298,600 C 292,760 304,920 300,1100"/>
+      </g>
+      <g stroke="#b4875c" stroke-width="2" opacity="0.45">
+        <path d="M 40,0 C 36,180 46,360 38,560 C 32,720 44,880 40,1100 M 84,0 C 90,160 78,330 86,520 C 94,700 80,860 88,1100 M 130,0 C 124,200 136,380 128,600 C 122,760 134,920 130,1100 M 176,0 C 182,170 170,340 178,540 C 186,720 172,880 180,1100 M 222,0 C 216,190 228,370 220,580 C 214,740 226,900 222,1100 M 268,0 C 274,180 262,350 270,560 C 278,730 264,890 272,1100"/>
+      </g>
+      <g stroke="#2a1913" stroke-width="2" opacity="0.4">
+        <path d="M 52,120 C 50,180 56,220 52,280 M 100,420 C 98,480 104,520 100,600 M 144,200 C 146,260 140,300 144,360 M 190,620 C 188,680 194,720 190,800 M 236,300 C 238,360 232,400 236,460 M 280,700 C 278,760 284,800 280,880"/>
+      </g>
+    </g>
+    <!-- a hollow in the trunk, and the owl that lives in it; centered -->
+    <g id="hollow" stroke-linejoin="round">
+      <path d="M -22,0 C -24,-26 -14,-46 0,-46 C 14,-46 24,-26 22,0 C 22,22 12,38 0,38 C -12,38 -22,22 -22,0 Z" fill="#3a2418" stroke="#24150f" stroke-width="2"/>
+      <path d="M -16,0 C -17,-20 -9,-36 0,-36 C 9,-36 17,-20 16,0 C 16,18 9,30 0,30 C -9,30 -16,18 -16,0 Z" fill="#140a07"/>
+      <path d="M -20,8 C -18,24 -10,34 0,36 C 10,34 18,24 20,8" fill="none" stroke="#b88a5c" stroke-width="2" stroke-linecap="round"/>
+      <g fill="#ffd25a"><circle cx="-6" cy="-6" r="3.6"/><circle cx="6" cy="-6" r="3.6"/></g>
+      <g fill="#140a07"><circle cx="-6" cy="-6" r="1.4"/><circle cx="6" cy="-6" r="1.4"/></g>
+      <path d="M -2,-1 L 0,3 L 2,-1 Z" fill="#c8963a"/>
+    </g>
+    <!-- a firefly jar hung on a cord from under a root; origin = where the cord is tied -->
+    <g id="lantern" stroke-linejoin="round">
+      <path d="M 0,0 C 1,10 -1,20 0,30" fill="none" stroke="#24150f" stroke-width="1.4"/>
+      <circle cy="44" r="20" fill="#ffe27a" opacity="0.3" filter="url(#glow)"/>
+      <path d="M -6,30 H 6 L 7,34 H -7 Z" fill="#7a5236" stroke="#24150f" stroke-width="1.2"/>
+      <path d="M -8,34 C -10,40 -10,50 -7,56 H 7 C 10,50 10,40 8,34 Z" fill="#f6e6a0" stroke="#24150f" stroke-width="1.4" opacity="0.92"/>
+      <g fill="#fff8c8"><circle cx="-2" cy="42" r="1.6"/><circle cx="3" cy="47" r="1.4"/><circle cx="-1" cy="51" r="1.2"/></g>
+      <path d="M -5,38 C -6,42 -6,46 -5,50" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity="0.8"/>
+    </g>
+    <!-- a rope swing hung from under a root; origin = between the two knots -->
+    <g id="swing" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -16,0 L -18,118 M 16,0 L 18,118" fill="none" stroke="#24150f" stroke-width="3.6"/>
+      <path d="M -16,0 L -18,118 M 16,0 L 18,118" fill="none" stroke="#c8a46a" stroke-width="1.8"/>
+      <path d="M -26,116 H 26 L 24,124 H -24 Z" fill="#9a6a44" stroke="#24150f" stroke-width="1.6"/>
+      <path d="M -22,118 H 20" stroke="#c89a6a" stroke-width="1.2"/>
+      <g fill="#7a5236" stroke="#24150f" stroke-width="1"><circle cx="-16" r="3"/><circle cx="16" r="3"/></g>
+    </g>
+    <!-- standing on a top: origin = the ground under its middle -->
+    <g id="frog" stroke="#1a2412" stroke-width="1.2" stroke-linejoin="round">
+      <path d="M -12,1 C -14,-4 -10,-10 -4,-11 C -2,-15 4,-15 6,-11 C 11,-10 14,-5 12,1 Z" fill="#7aa83a"/>
+      <path d="M -7,-9 C -4,-11 2,-12 6,-10" fill="none" stroke="#c4e070" stroke-width="1.4" stroke-linecap="round"/>
+      <g fill="#f2e6a0"><circle cx="-3" cy="-13" r="2.6"/><circle cx="4.6" cy="-13" r="2.6"/></g>
+      <g fill="#1a2412" stroke="none"><circle cx="-2.6" cy="-13" r="1.2"/><circle cx="5" cy="-13" r="1.2"/></g>
+      <path d="M -14,1 C -12,-1 -10,-1 -8,1 M 8,1 C 10,-1 12,-1 14,1" fill="none" stroke-width="1.6"/>
+    </g>
+    <g id="glowcaps">
+      <use href="#glowcap" transform="translate(-8,0) scale(1.3)"/>
+      <use href="#glowcap" transform="translate(4,0)"/>
+      <use href="#glowcap" transform="translate(12,0) scale(0.7)"/>
+    </g>
+    <!-- at the waterline: origin on the surface -->
+    <g id="cattails" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -8,6 C -9,-14 -11,-30 -15,-46 M 0,6 C 0,-18 1,-40 2,-58 M 7,6 C 9,-12 13,-26 18,-36 M -3,6 C -5,-8 -12,-18 -20,-24 M 4,6 C 6,-6 10,-12 15,-16" fill="none" stroke="#1f2a14" stroke-width="3.4"/>
+      <path d="M -8,6 C -9,-14 -11,-30 -15,-46 M 0,6 C 0,-18 1,-40 2,-58 M 7,6 C 9,-12 13,-26 18,-36 M -3,6 C -5,-8 -12,-18 -20,-24 M 4,6 C 6,-6 10,-12 15,-16" fill="none" stroke="#7a9a44" stroke-width="1.6"/>
+      <path d="M -15.4,-44 L -17.4,-60 M 2,-56 L 2.6,-74" stroke="#24150f" stroke-width="7"/>
+      <path d="M -15.4,-44 L -17.4,-60 M 2,-56 L 2.6,-74" stroke="#8a5a36" stroke-width="4.4"/>
+      <path d="M -17.4,-60 L -17.8,-66 M 2.6,-74 L 2.8,-80" stroke="#24150f" stroke-width="1.2"/>
+    </g>
+    <g id="pads" stroke="#1f2a14" stroke-width="1" stroke-linejoin="round">
+      <path d="M -26,0 C -26,-4 -14,-6 -4,-6 C 6,-6 18,-4 18,0 C 18,4 6,6 -4,6 L -2,0 L -8,6 C -16,6 -26,4 -26,0 Z" fill="#5e8a3a"/>
+      <path d="M 14,2 C 14,-1 22,-3 28,-3 C 34,-3 40,-1 40,2 C 40,5 34,6 28,6 L 30,2 L 25,6 C 20,6 14,5 14,2 Z" fill="#6e9a42"/>
+      <path d="M -20,-2 C -14,-4 -6,-4 0,-3" fill="none" stroke="#a8cc66" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M 26,-4 L 23,-12 L 27,-9 L 30,-13 L 31,-8 L 35,-10 L 32,-4 Z" fill="#f4b0c4"/>
+      <circle cx="29" cy="-6" r="1.6" fill="#ffe27a" stroke="none"/>
+    </g>
+    <!-- a heron wading in the shallows; origin = where its legs meet the water -->
+    <g id="heron" stroke="#24150f" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -3,4 L -2,-34 M 4,4 L 3,-34" fill="none" stroke="#3a3440" stroke-width="2.2"/>
+      <path d="M -14,-40 C -16,-56 -2,-64 12,-60 C 22,-58 26,-50 20,-42 C 12,-34 -6,-32 -14,-40 Z" fill="#b6b2c4"/>
+      <path d="M -14,-40 C -22,-44 -30,-42 -36,-38 C -30,-48 -20,-52 -12,-50 Z" fill="#8e88a2"/>
+      <path d="M 14,-58 C 18,-70 14,-80 16,-90 C 18,-96 24,-98 28,-96" fill="none" stroke="#24150f" stroke-width="6"/>
+      <path d="M 14,-58 C 18,-70 14,-80 16,-90 C 18,-96 24,-98 28,-96" fill="none" stroke="#d8d4e2" stroke-width="3.6"/>
+      <path d="M 26,-99 C 30,-101 34,-99 34,-96 L 50,-94 L 34,-92 C 31,-90 27,-91 26,-93 Z" fill="#d8d4e2"/>
+      <path d="M 34,-96 L 50,-94 L 34,-92 Z" fill="#e8b440"/>
+      <path d="M 26,-98 C 20,-100 14,-98 10,-94" fill="none" stroke="#24150f" stroke-width="1.6"/>
+      <circle cx="30" cy="-96" r="1" fill="#24150f" stroke="none"/>
+      <path d="M -6,-50 C 2,-54 10,-54 16,-50" fill="none" stroke="#eeeaf4" stroke-width="1.6"/>
+      <path d="M -8,4 C -4,2 -1,2 2,4 C 5,2 8,2 11,4" fill="none" stroke="#e8c0a0" stroke-width="1.2" opacity="0.8"/>
+    </g>
+    <!-- a skiff tied up at the waterline; origin = the middle of its waterline -->
+    <g id="skiff" stroke="#24150f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -60,-14 C -40,-12 40,-12 64,-18 C 58,-4 44,4 30,4 H -44 C -54,2 -60,-6 -60,-14 Z" fill="#8a5a3a"/>
+      <path d="M -58,-12 C -40,-10 40,-10 62,-16" fill="none" stroke="#c89a62" stroke-width="2.4"/>
+      <path d="M -48,-4 C -20,-2 20,-2 50,-6" fill="none" stroke="#5a3826" stroke-width="1.4"/>
+      <path d="M -20,-13 V -20 H 4 V -13" fill="#6a4430" stroke-width="1.6"/>
+      <path d="M -60,-14 C -70,-30 -84,-40 -96,-44" fill="none" stroke="#c8a46a" stroke-width="1.6"/>
+      <path d="M 10,-12 L 46,-50" fill="none" stroke="#24150f" stroke-width="4.4"/>
+      <path d="M 10,-12 L 46,-50" fill="none" stroke="#a87a4a" stroke-width="2.4"/>
+      <path d="M 40,-44 L 52,-56 L 58,-50 L 46,-38 Z" fill="#a87a4a" stroke-width="1.4"/>
+    </g>
+
+    <!-- what hangs behind the roots, drawn twice below: once above the waterline, once through it -->
+    <g id="hangersAll">
+{{hangers}}
+    </g>
+    <g id="hungAll">
+{{hung}}
+    </g>
+  </defs>
+
+  <!-- behind the roots: moss and rootlets hanging from them, crisp above the water, sunk below -->
+  <use href="#hangersAll" clip-path="url(#above)"/>
+  <use href="#hangersAll" clip-path="url(#below)" filter="url(#underwater)" opacity="0.5"/>
+  <use href="#hungAll" clip-path="url(#above)"/>
+  <use href="#hungAll" clip-path="url(#below)" filter="url(#underwater)" opacity="0.6"/>
+
+  <g clip-path="url(#landClip)">
+    <rect width="2000" height="1100" fill="#7c5640"/>
+    <!-- strata follow the surface: each is the land shifted down, darker deeper in -->
+    <g>
+      <use href="#land" transform="translate(0,18)" fill="#74503b"/>
+      <use href="#land" transform="translate(0,40)" fill="#6a4834"/>
+      <use href="#land" transform="translate(0,70)" fill="#5e3f2e"/>
+    </g>
+    <rect width="2000" height="1100" filter="url(#mottle)" opacity="0.45"/>
+    <g>
+{{bark}}
+    </g>
+    <g>
+{{grain}}
+{{grainUnder}}
+{{grainWall}}
+    </g>
+    <g>
+{{knots}}
+    </g>
+    <rect width="2000" height="1100" fill="#24140e" mask="url(#deepMask)" opacity="0.42"/>
+    <rect width="2000" height="1100" fill="#ffb878" mask="url(#sunMask)" opacity="0.3"/>
+    <rect width="2000" height="1100" fill="#1c1018" mask="url(#shadeMask)" opacity="0.4"/>
+    <rect width="2000" height="1100" fill="#e8907a" mask="url(#bounceMask)" opacity="0.35"/>
+    <g>
+{{set}}
+    </g>
+
+    <!-- form light, inner-edge occlusion, then the moss cap: shade band, fringe, base, lit lip -->
+    <rect width="2000" height="1100" fill="#ffd09a" opacity="0.18" mask="url(#topLightMask)"/>
+    <use href="#land" fill="none" stroke="#1c1010" stroke-width="14" opacity="0.25"/>
+    <rect width="2000" height="1100" fill="#1e2412" mask="url(#capShadeMask)" opacity="0.4"/>
+    <rect width="2000" height="1100" fill="#4a6c28" mask="url(#fringeMask)"/>
+    <rect width="2000" height="1100" fill="#6e9a34" mask="url(#capMask)"/>
+    <rect width="2000" height="1100" fill="#aed05a" mask="url(#capLitMask)"/>
+
+    <!-- the marsh: a tint over everything below the surface, and the surface's bright line -->
+    <rect y="960" width="2000" height="140" fill="url(#marsh)"/>
+    <rect y="957" width="2000" height="4" fill="#f4d0b8" opacity="0.6"/>
+    <rect y="961" width="2000" height="2" fill="#1a262c" opacity="0.45"/>
+  </g>
+
+  <!-- silhouette outline: hard above the water, softer through it -->
+  <use href="#land" fill="none" stroke="#22140e" stroke-width="4.6" stroke-linejoin="round" clip-path="url(#above)"/>
+  <use href="#land" fill="none" stroke="#22303a" stroke-width="3.6" stroke-linejoin="round" opacity="0.7" clip-path="url(#below)"/>
+
+  <!-- edge growth: shelf fungus on the cliffs, moss, ferns and mushrooms along the tops, then what
+       stands on them and what grows at the waterline -->
+  <g clip-path="url(#above)">
+{{walls}}
+  </g>
+  <g>
+{{tufts}}
+  </g>
+  <g>
+{{tops}}
+  </g>
+  <g>
+{{shore}}
+  </g>
+</svg>

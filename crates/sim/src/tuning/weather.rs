@@ -66,6 +66,8 @@ pub const COZYTOWER_B: Tuned<Moondisk> = cited([2, 2, 1, 1, 0, 1, 1], &["GF-vgg"
 /// City (Neonbay).
 pub const METROPOLIS: Tuned<Moondisk> = cited([1, 1, 3, 1, 0, 1, 1], &["GF-vgg"]);
 /// Practice slope (Tumblehill), and the generated practice and test fields.
+/// Root tangle (Rootmere).
+pub const ADIUMROOT: Tuned<Moondisk> = cited([1, 3, 1, 0, 1, 1, 1], &["GF-vgg"]);
 pub const DUMMY_SLOPES: Tuned<Moondisk> = cited([2, 2, 0, 1, 1, 1, 1], &["GF-vgg"]);
 
 /// The weight of Mirror, Drain and Random, which came after the 2004 table.
@@ -91,6 +93,7 @@ pub fn moondisk(name: &str, variant: &str) -> Option<Moondisk> {
         ("clockrise", _) => COZYTOWER_A,
         ("tumblehill", _) => DUMMY_SLOPES,
         ("neonbay", _) => METROPOLIS,
+        ("rootmere", _) => ADIUMROOT,
         _ => return None,
     };
     Some(tuned.value)
@@ -139,5 +142,6 @@ mod unit {
         assert_eq!(moondisk("clockrise", "B").map(|row| (row[1], row[6])), Some((2, 1)), "Cozytower B: Tornado over Thor");
         assert_eq!(moondisk("tumblehill", "B"), Some(DUMMY_SLOPES.value), "the drawn practice slope rolls the practice fields' odds");
         assert_eq!(moondisk("nowhere", "A"), None);
+        assert_eq!(moondisk("rootmere", "B"), Some([1, 3, 1, 0, 1, 1, 1]), "Adiumroot's row: Tornado-heavy, windless");
     }
 }
