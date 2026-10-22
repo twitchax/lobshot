@@ -19,6 +19,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.38 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "No source sets it apart from the reference shot."),
     move_budget: cited(90, &["OB"]),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -36.0, y: -60.0, w: 66.0, h: 60.0 },
         "Lanternwing's drawn body, wings included. The rider and the antennae are cosmetic.",

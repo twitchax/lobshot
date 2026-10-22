@@ -23,6 +23,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.30 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "No source sets it apart from the reference shot."),
     move_budget: cited(90, &["OB"]),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -32.0, y: -54.0, w: 64.0, h: 54.0 },
         "Sparkhorn's drawn wing cases, thorax and head, down to its wheels. The rider, the capacitor and the short horn are cosmetic.",

@@ -345,6 +345,19 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
     flyers
 }
 
+/// How long after its effect a launch leaves the barrel: a rocket rippling off its rack waits for
+/// its first leg.
+fn leaves(effect: &Effect) -> f32 {
+    match effect {
+        Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } => legs.first().map_or(0.0, |leg| ticks(leg.offset + leg.from)),
+        _ => 0.0,
+    }
+}
+
+/// The smallest blast a scene shows: one that carves no crater (an SS rocket striking a mobile)
+/// still flashes.
+const LEAST_PUFF_RADIUS: f64 = 12.0;
+
 /// The cues an effect at `at` adds to its scene.
 fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
     match effect {
@@ -469,7 +482,7 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
             // Balls born in flight burst out of what bore them; shells, strands and beacons leave a
             // cannon; a drop falls quietly.
             Some((after, origin)) => cues.push((at + after, Cue::Burst { at: origin, color: shooter.color(false) })),
-            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) => cues.push((at, Cue::Sound(Sound::Fire))),
+            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) => cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire))),
             None => {}
         }
         flyers.extend(launched);
@@ -563,7 +576,7 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
             }
             // Blast radii are tens of pixels.
             #[allow(clippy::cast_possible_truncation)]
-            let size = (radius * 2.4) as f32;
+            let size = (radius.max(LEAST_PUFF_RADIUS) * 2.4) as f32;
             commands.spawn(puff(dot, at, size, Color::srgb_u8(0xff, 0xb3, 0x47), 0.45));
         }
         Cue::Damage { seat, amount } => {
@@ -804,5 +817,16 @@ mod unit {
             shot: Some(Shot::S2),
         };
         assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
+    }
+
+    #[test]
+    fn a_rocket_fired_late_waits_unseen_and_sounds_as_it_leaves() {
+        let second = TICKS_PER_SECOND;
+        let legs = [leg(0, second, second / 2)];
+        assert_eq!(flyer_at(&legs, None, 0.25), None, "still on the rack");
+        assert_eq!(flyer_at(&legs, None, 0.5), Some(legs[0].flight.at(0)));
+        assert_eq!(flyer_at(&legs, None, 1.0), Some(legs[0].flight.at(second / 2)));
+        assert_eq!(leaves(&Effect::Fired { seat: 0, legs: legs.to_vec() }), 0.5);
+        assert_eq!(leaves(&Effect::Fired { seat: 0, legs: vec![leg(0, second, 0)] }), 0.0);
     }
 }

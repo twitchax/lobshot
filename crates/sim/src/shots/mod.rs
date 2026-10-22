@@ -1,7 +1,7 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
-//! landings (`Gun`), projectiles that land in turn (`barrage`), bolts (`bolt`), helix strands
-//! (`helix`) and bouncing balls (`bounce`).
+//! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
+//! helix strands (`helix`) and bouncing balls (`bounce`).
 
 pub(crate) mod bolt;
 mod bounce;
@@ -13,6 +13,7 @@ mod marblemole;
 pub(crate) mod skyeye;
 mod sparkhorn;
 mod spoutpot;
+mod tuskrack;
 
 use crate::{
     ballistics::Flight,
@@ -168,6 +169,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Sparkhorn => sparkhorn::fire(game, &mut gun, shot, effects),
         MobileKind::Marblemole => marblemole::fire(game, &gun, shot, effects),
         MobileKind::Spoutpot => spoutpot::fire(game, &gun, shot, effects),
+        MobileKind::Tuskrack => tuskrack::fire(game, &gun, shot, effects),
     }
 }
 
@@ -197,22 +199,28 @@ fn teleport(game: &mut Game, gun: &Gun, effects: &mut Vec<Effect>) {
 /// so the later ones meet the craters, and the deaths, of the earlier ones. Returns each one's
 /// path, by index, and the landings' effects in order, so the caller can show the paths first.
 pub(crate) fn barrage(game: &mut Game, flights: &[Flight], land: impl FnMut(&mut Game, usize, &Track, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
-    barrage_from(game, flights, 0, land)
+    land_in_order(game, flights.len(), |game, index| game.track(flights[index], 0, 0), land)
 }
 
 /// `barrage` for projectiles that leave together at stage tick `offset` (Spoutpot's SS balls,
 /// born in flight). Past a launch, no column catches them as they leave (`Game::track`).
-pub(crate) fn barrage_from(game: &mut Game, flights: &[Flight], offset: u32, mut land: impl FnMut(&mut Game, usize, &Track, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
-    let mut paths = vec![Vec::new(); flights.len()];
+pub(crate) fn barrage_from(game: &mut Game, flights: &[Flight], offset: u32, land: impl FnMut(&mut Game, usize, &Track, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
+    land_in_order(game, flights.len(), |game, index| game.track(flights[index], 0, offset), land)
+}
+
+/// `barrage` for `count` projectiles that `fly` follows, by index, over the game as it stands: ones
+/// launched later in the stage (Tuskrack's ripples), or burst out of another (its grenades).
+pub(crate) fn land_in_order(game: &mut Game, count: usize, fly: impl Fn(&Game, usize) -> Track, mut land: impl FnMut(&mut Game, usize, &Track, &mut Vec<Effect>)) -> (Vec<Vec<Leg>>, Vec<Effect>) {
+    let mut paths = vec![Vec::new(); count];
     let mut effects = Vec::new();
-    let mut waiting: Vec<usize> = (0..flights.len()).collect();
+    let mut waiting: Vec<usize> = (0..count).collect();
     loop {
         // Re-fly the rest after each landing: lost ground and mobiles can make a projectile land
         // later, never sooner, so the order holds.
         let next = waiting
             .iter()
             .enumerate()
-            .map(|(place, &index)| (place, game.track(flights[index], 0, offset)))
+            .map(|(place, &index)| (place, fly(game, index)))
             .min_by_key(|(place, track)| (track.impact.tick, *place));
         let Some((place, track)) = next else { break };
         let index = waiting.remove(place);

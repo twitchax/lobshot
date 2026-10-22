@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -56,11 +56,12 @@ pub enum MobileKind {
     Sparkhorn,
     Marblemole,
     Spoutpot,
+    Tuskrack,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 6] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Spoutpot];
+    pub const ALL: [Self; 7] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Spoutpot, Self::Tuskrack];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -85,6 +86,7 @@ impl MobileKind {
             Self::Sparkhorn => &sparkhorn::MOBILE,
             Self::Marblemole => &marblemole::MOBILE,
             Self::Spoutpot => &spoutpot::MOBILE,
+            Self::Tuskrack => &tuskrack::MOBILE,
         }
     }
 }
@@ -300,7 +302,8 @@ pub enum Effect {
     /// One projectile's whole path, leg by leg. A volley of several projectiles (Hookclaw's and
     /// Marblemole's S2) has one `Fired` each. A bouncing marble's legs run bounce to bounce, and a
     /// marble at rest has a leg with no velocity or acceleration. A projectile born in flight
-    /// (Spoutpot's SS balls, after the blob's own `Fired`) starts at its first leg's offset.
+    /// (Spoutpot's SS balls, after the blob's own `Fired`) or fired late (Tuskrack's rockets,
+    /// rippling off the rack) starts at its first leg's offset.
     Fired {
         seat: u8,
         legs: Vec<Leg>,
@@ -948,7 +951,8 @@ impl Game {
         let mut taken = 0;
         let mut died = false;
         while taken < steps && self.players[index].moves_left > 0 {
-            match movement::step(&self.terrain, self.players[index].footing, facing) {
+            let climb = self.players[index].tuning().climb_px.value;
+            match movement::step(&self.terrain, self.players[index].footing, facing, climb) {
                 Step::Blocked => break,
                 Step::Walked(footing) | Step::Fell(Landing::On(footing)) => self.players[index].footing = footing,
                 Step::Fell(Landing::OffMap) => died = true,
@@ -1095,7 +1099,13 @@ impl Game {
 
     /// `track`, stopping only at what `senses` names.
     pub(crate) fn track_sensing(&self, flight: Flight, from_tick: u32, offset: u32, senses: Senses) -> Track {
-        self.follow(flight, from_tick, offset, senses, None).0
+        self.follow(flight, from_tick, offset, from_tick == 0 && offset == 0, senses, None).0
+    }
+
+    /// `track` for a projectile launched `offset` ticks into its stage (one of a ripple off a rack):
+    /// a column it starts inside catches it at once, as one does any shot it starts inside.
+    pub(crate) fn track_launched(&self, flight: Flight, offset: u32) -> Track {
+        self.follow(flight, 0, offset, true, Senses::ALL, None).0
     }
 
     /// `track` from a launch, but only until stage tick `until`. Returns the track, and whether the
@@ -1103,13 +1113,14 @@ impl Game {
     /// stops there, its `last` leg and `last_tick` where the projectile is, and its impact `Gone`.
     #[must_use]
     pub(crate) fn track_until(&self, flight: Flight, until: u32) -> (Track, bool) {
-        self.follow(flight, 0, 0, Senses::ALL, Some(until))
+        self.follow(flight, 0, 0, true, Senses::ALL, Some(until))
     }
 
     /// Follows a projectile through the weather (`track`), stopping only at what `senses` names,
     /// and at stage tick `until` if there is one; also returns whether it was still flying then.
-    /// A deadline that falls while a tornado holds the projectile comes as the tornado lets go.
-    fn follow(&self, flight: Flight, from_tick: u32, offset: u32, senses: Senses, until: Option<u32>) -> (Track, bool) {
+    /// `launched` says whether `flight` is a projectile leaving the barrel (`fly_sensing`). A
+    /// deadline that falls while a tornado holds the projectile comes as the tornado lets go.
+    fn follow(&self, flight: Flight, from_tick: u32, offset: u32, launched: bool, senses: Senses, until: Option<u32>) -> (Track, bool) {
         let guard = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
         let mut legs = Vec::new();
         let mut leg = Leg {
@@ -1120,7 +1131,7 @@ impl Game {
         };
         // Where to fly on from; a column that only marks it moves it on without starting a new leg.
         let mut cursor = from_tick;
-        let mut launched = from_tick == 0 && offset == 0;
+        let mut launched = launched;
         let mut marks = Marks::default();
         loop {
             let last = until.map_or(guard, |until| until.saturating_sub(leg.offset).min(guard));
@@ -1721,6 +1732,45 @@ mod unit {
             }]
         );
         assert_eq!(game.players()[0].moves_left, 0);
+    }
+
+    #[test]
+    fn each_mobile_walks_its_own_budget_and_climbs_its_own_step() {
+        for mobile in MobileKind::ALL {
+            let tuning = mobile.tuning();
+            let mut flat = duel_of(mobile, MobileKind::Coilback, 1600);
+            let effects = flat
+                .apply(Event::Walk {
+                    seat: 0,
+                    facing: Facing::Right,
+                    steps: 500,
+                })
+                .unwrap();
+            assert!(matches!(effects[..], [Effect::Walked { steps, .. }] if steps == tuning.move_budget.value), "{mobile:?}: {effects:?}");
+
+            // A step up as tall as its climb, then one a pixel taller.
+            let climb = u32::try_from(tuning.climb_px.value).unwrap();
+            let steps = Terrain::from_fn(2400, 600, |x, y| {
+                y >= if x < 310 {
+                    500
+                } else if x < 320 {
+                    500 - climb
+                } else {
+                    499 - 2 * climb
+                }
+            })
+            .unwrap();
+            let seats = vec![testing::seat(Team::A, mobile, 300, Facing::Right), testing::seat(Team::B, MobileKind::Coilback, 1900, Facing::Left)];
+            let mut game = testing::game_on(steps, seats);
+            game.apply(Event::Walk {
+                seat: 0,
+                facing: Facing::Right,
+                steps: 50,
+            })
+            .unwrap();
+            let expected = Footing { x: 319, y: 500 - tuning.climb_px.value };
+            assert_eq!(game.players()[0].footing, expected, "{mobile:?} climbs {climb} px, and no more");
+        }
     }
 
     #[test]

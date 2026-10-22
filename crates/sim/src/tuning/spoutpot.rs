@@ -35,6 +35,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
         "Poor mobility (SW-mob): a tiny, slow walking range that takes forever to reach a slope (CR-turtle). \
          OB gives every mobile but Knight 90, so it doesn't tell them apart.",
     ),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -32.0, y: -52.0, w: 66.0, h: 52.0 },
         "Spoutpot's drawn hippo and teapot, a little lower than most: Turtle is tiny (CR-turtle). The rider, the lid and its \

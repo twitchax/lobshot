@@ -43,6 +43,9 @@ why the version moved the way it did.
   let an LLM agent play a seat; `docs/playtests/` holds the report format.
 - Spoutpot (M5), a hippo with a teapot water tank and hose cannons: S1 a water shot, S2 two
   streams that braid and join, SS a blob that bursts into six balls in flight.
+- Tuskrack (M5), a walrus on a tank-sled with a fireworks rack: S1 four rockets rippling off the
+  rack, S2 a bundle of grenades that bursts into three pairs, SS nine rockets. Climbing is now per
+  mobile, and Tuskrack climbs poorly.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

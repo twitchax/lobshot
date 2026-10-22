@@ -53,6 +53,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         52,
         0xb177_3832_280e_639a,
     ),
+    (
+        "roster_tuskrack",
+        include_str!("golden/roster_tuskrack.json"),
+        include_bytes!("golden/roster_tuskrack.bin"),
+        52,
+        0xa672_10b3_49f2_844f,
+    ),
 ];
 
 #[test]
@@ -164,6 +171,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
         ("roster_spoutpot", play(roster_spoutpot(), &winds)),
+        ("roster_tuskrack", play(roster_tuskrack(), &winds)),
     ]
 }
 
@@ -294,6 +302,23 @@ fn roster_spoutpot() -> Setup {
         seats: vec![armed(Team::A, MobileKind::Spoutpot, 420, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(10, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Tuskrack (PRD-0006 T-001): its ripples of rockets and its bursting grenades, on hills in wind.
+fn roster_tuskrack() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Tuskrack, 440, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(12, 140).unwrap(),
         sudden_death: None,
     }
 }

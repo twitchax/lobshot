@@ -17,6 +17,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.45 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "Armor is GunBound's reference shot; the wind rules are stated for it."),
     move_budget: cited(90, &["OB"]),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -30.0, y: -58.0, w: 64.0, h: 58.0 },
         "Coilback's drawn body, shell included. The rider (WP06) and the antennae tips past x = 34 are cosmetic.",

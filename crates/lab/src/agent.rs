@@ -973,6 +973,9 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Spoutpot => {
             "A hippo with a teapot water tank. S1 is a stream of water; S2 two streams that spiral about one path, each its own hit: they cross again and again, and after long enough in the air they come together for good, so time a fork or give it airtime; SS a blob that opens into six balls in mid-flight, which fan out and fall: open it just short of the target and all six land. Pays 12 delay a second of turn time, not 10.".to_owned()
         }
+        MobileKind::Tuskrack => {
+            "Fires spreads of light projectiles, each its own blast, so long shots scatter and close ones pile up. S1 is four missiles leaving the rack one after another, the last two down the same line into one deep crater; S2 a bundle of six grenades that bursts into three pairs a beat after the muzzle (all six go off at once if it strikes first); SS nine missiles, and those that strike a mobile carve nothing. A heavy shot with a narrow aim; it moves far but climbs poorly.".to_owned()
+        }
     }
 }
 
