@@ -90,7 +90,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 }
                 stage.base
             }
-            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } => {
+            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Guide { legs, .. } => {
                 busy = busy.max(stage.base + flight_seconds(legs));
                 stage.base
             }
@@ -394,6 +394,43 @@ mod unit {
         let blast = effects.iter().position(|e| matches!(e, Effect::Exploded { .. })).unwrap();
         assert_eq!(schedule.at[blast], flight_seconds(legs), "it goes off where its path ends");
         assert!(schedule.end > schedule.at[blast]);
+    }
+
+    #[test]
+    fn a_guide_keeps_the_scene_going_until_it_lands() {
+        let leg = |from: u32, to: u32, offset: u32| Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: Vec2::ZERO,
+                velocity: Vec2::new(100.0, 0.0),
+                accel: Vec2::new(0.0, 600.0),
+            },
+            from,
+            to,
+            offset,
+        };
+        let second = TICKS_PER_SECOND;
+        let effects = vec![
+            Effect::Volley { seat: 0, shot: Shot::S1 },
+            Effect::Fired { seat: 0, legs: vec![leg(0, second, 0)] },
+            // Herdhound's guide flies on from where the warhead opened, past its missile's strike.
+            Effect::Guide {
+                seat: 0,
+                legs: vec![leg(second, 3 * second, 0)],
+            },
+            Effect::Fired {
+                seat: 0,
+                legs: vec![leg(0, second, second)],
+            },
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 20.0,
+                tick: 2 * second,
+                dirty: None,
+            },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at, [0.0, 0.0, 0.0, 0.0, 2.0]);
+        assert_eq!(schedule.end, 3.0 + FALL_SECONDS + TAIL_SECONDS);
     }
 
     #[test]

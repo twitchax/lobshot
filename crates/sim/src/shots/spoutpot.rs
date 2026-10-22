@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     ballistics::Flight,
-    game::{Effect, Game, Shot, Track},
+    game::{Course, Effect, Game, Senses, Shot, Track},
     tuning::spoutpot::{
         S1_BLAST, S1_DAMAGE, S2_AMPLITUDE, S2_HERTZ, S2_MERGE_CROSSING, S2_PHASES, S2_STREAM_BLAST, S2_STREAM_DAMAGE, SS_BALL_BLAST, SS_BALL_DAMAGE, SS_EARLY_BLAST, SS_EARLY_DAMAGE, SS_FAN,
         SS_SPEED_KEPT, SS_SPLIT_CROSSING, crossing_seconds,
@@ -45,7 +45,7 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             effects.append(&mut landings);
         }
         Shot::Ss => {
-            let (blob, flying) = game.track_until(flight, ticks(crossing_seconds(SS_SPLIT_CROSSING.value)));
+            let Course { track: blob, flying } = game.track_until(flight, 0, 0, Senses::ALL, ticks(crossing_seconds(SS_SPLIT_CROSSING.value)));
             effects.push(Effect::Fired { seat: gun.seat, legs: blob.legs.clone() });
             if flying {
                 open(game, gun, &blob, effects);

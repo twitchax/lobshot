@@ -1,7 +1,8 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
-//! helix strands (`helix`), bouncing balls (`bounce`) and blobs that walk the ground (`crawl`).
+//! helix strands (`helix`), bouncing balls (`bounce`), blobs that walk the ground (`crawl`) and
+//! homing missiles (`homing`).
 
 pub(crate) mod bolt;
 mod bounce;
@@ -9,6 +10,8 @@ mod coilback;
 mod crawl;
 mod frostfin;
 mod helix;
+mod herdhound;
+mod homing;
 mod hookclaw;
 mod lanternwing;
 mod marblemole;
@@ -178,6 +181,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Tuskrack => tuskrack::fire(game, &gun, shot, effects),
         MobileKind::Sudsotter => sudsotter::fire(game, &gun, shot, effects),
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
+        MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
     }
 }
 
@@ -194,9 +198,15 @@ fn weatherproof(game: &Game, seat: u8) -> bool {
 /// it.
 pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
     match game.players().get(usize::from(seat))?.mobile {
-        MobileKind::Coilback | MobileKind::Lanternwing | MobileKind::Hookclaw | MobileKind::Sparkhorn | MobileKind::Marblemole | MobileKind::Spoutpot | MobileKind::Tuskrack | MobileKind::Frostfin => {
-            None
-        }
+        MobileKind::Coilback
+        | MobileKind::Lanternwing
+        | MobileKind::Hookclaw
+        | MobileKind::Sparkhorn
+        | MobileKind::Marblemole
+        | MobileKind::Spoutpot
+        | MobileKind::Tuskrack
+        | MobileKind::Frostfin
+        | MobileKind::Herdhound => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }

@@ -237,7 +237,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - **M5 adds**, from Aaron's concepts: Spoutpot (a hippo with a teapot water tank, Turtle's
   behavior), Tuskrack (a walrus on a tank-sled with a fireworks rack, Bigfoot's), Sudsotter (an
   otter in a bathtub buggy, J.Frog's) and Frostfin (a narwhal on an ice sled, Ice's: its S2 and SS
-  leave from its tusk, a second barrel, and leave their target brittle to Physical damage).
+  leave from its tusk, a second barrel, and leave their target brittle to Physical damage) and
+  Herdhound (a sheepdog mech, Kalsiddon's: its missiles loop, then home on its whistle).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond).
 

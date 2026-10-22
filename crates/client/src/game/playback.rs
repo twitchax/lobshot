@@ -236,7 +236,9 @@ fn flyer_at(legs: &[Leg], strand: Option<Winding>, seconds: f32) -> Option<SimVe
             None => leg.flight.at(local),
         };
         match tick.checked_sub(leg.offset) {
-            Some(local) if local <= leg.to => return Some(point(local.max(leg.from))),
+            // A path carried on from another's tick (Herdhound's guide) shows from that tick.
+            Some(local) if local < leg.from => return last,
+            Some(local) if local <= leg.to => return Some(point(local)),
             Some(_) => last = Some(point(leg.to)),
             None => return last,
         }
@@ -337,6 +339,8 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
             }
         }
         Effect::Beacon { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x7f, 0xf0, 0xff), 16.0)),
+        // Herdhound's whistle: small and bright, where its missiles are headed.
+        Effect::Guide { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0xff, 0xe2, 0x6b), 7.0)),
         Effect::Dropped { drop, legs, .. } if !legs.is_empty() => {
             let sprite = Sprite {
                 image: props.server.load(lobshot_assets::drop_path(drop.kind)),
@@ -449,6 +453,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::Forecast(_)
         | Effect::WeatherChanged { .. }
         | Effect::Revealed { .. }
+        | Effect::Guide { .. }
         | Effect::SkyeyeLevel { .. }
         | Effect::Spun { .. }
         | Effect::DropRolled { .. } => {}
@@ -488,7 +493,8 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
             // Balls born in flight burst out of what bore them; shells, strands and beacons leave a
             // cannon; a drop falls quietly.
             Some((after, origin)) => cues.push((at + after, Cue::Burst { at: origin, color: shooter.color(false) })),
-            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) => cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire))),
+            // A guide rides its warhead's flight, which sounded already.
+            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. } | Effect::Guide { .. }) => cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire))),
             None => {}
         }
         flyers.extend(launched);
@@ -853,5 +859,19 @@ mod unit {
         assert_eq!(flyer_at(&legs, None, 1.0), Some(legs[0].flight.at(second / 2)));
         assert_eq!(leaves(&Effect::Fired { seat: 0, legs: legs.to_vec() }), 0.5);
         assert_eq!(leaves(&Effect::Fired { seat: 0, legs: vec![leg(0, second, 0)] }), 0.0);
+    }
+
+    #[test]
+    fn a_flyer_shows_once_its_first_leg_starts() {
+        // A missile bursting out of Herdhound's warhead a second into the stage.
+        let second = TICKS_PER_SECOND;
+        let legs = [leg(0, second, second)];
+        assert_eq!(flyer_at(&legs, None, 0.5), None, "not out yet");
+        assert_eq!(flyer_at(&legs, None, 1.5), Some(legs[0].flight.at(second / 2)));
+        assert_eq!(leaves(&Effect::Fired { seat: 0, legs: legs.to_vec() }), 1.0, "it sounds as it bursts out");
+        // A path carried on from another's tick, as a guide carries on its warhead's flight.
+        let carried = [leg(second, 2 * second, 0)];
+        assert_eq!(flyer_at(&carried, None, 0.5), None);
+        assert_eq!(flyer_at(&carried, None, 1.5), Some(carried[0].flight.at(3 * second / 2)));
     }
 }

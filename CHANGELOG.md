@@ -56,6 +56,9 @@ why the version moved the way it did.
   whose storeys float over open works, B twin towers joined by a high bridge.
 - Tumblehill (M5), a sunny training ground on the practice-slope archetype: A two broad hills
   over a valley, B a long slope down to a pond.
+- Herdhound (M5), a sheepdog mech: each shot is a warhead that opens at the top of its arc into a
+  whistle that flies on and missiles that loop, then home on it (S1 two, S2 four, SS four that
+  split into eight, each with its own whistle).
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

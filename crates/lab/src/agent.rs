@@ -284,7 +284,7 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
     for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
         match effect {
-            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } => {
+            Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Guide { legs, .. } => {
                 if let Some(leg) = legs.last() {
                     ends.push(point(leg.flight.at(leg.to)));
                 }
@@ -994,6 +994,9 @@ fn about(mobile: MobileKind) -> String {
             tuning::frostfin::BRITTLE_PER_HIT.value,
             tuning::frostfin::BRITTLE_MAX.value
         ),
+        MobileKind::Herdhound => {
+            "Each shot is a warhead that passes through mobiles and opens at the top of its arc: a guide flies on along the shot's path, and missiles loop for a second, then home on it and strike where it lands. Opened too low, they crash first; a warhead that hits the ground before it opens is a dud. S1 opens into two missiles, S2 four, SS four that split into eight, each with a guide of its own fanned about the path.".to_owned()
+        }
     }
 }
 

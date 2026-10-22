@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="18" viewBox="-8 -8 16 18">
+  <!-- Herdhound's collar, edge on: a studded red band round the neck, just behind the joint, drawn
+       over the head's root so the head turns inside it. The whistle hangs from its ring on the
+       body. Origin = the neck joint (the cannon pivot). -->
+  <defs>
+    <filter id="ol" x="-30%" y="-15%" width="160%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.7" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="band" d="M -4.6,-5.2 Q -1.8,-6 -1.2,-3.8 L -0.6,5.6 Q -0.4,7.8 -3.2,8 Q -5.2,8 -5.6,6 L -6.2,-3.4 Q -6.4,-5 -4.6,-5.2 Z"/>
+    <clipPath id="bandClip"><use href="#band"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <use href="#band" fill="#d94a3c" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#bandClip)">
+      <path d="M -2.8,-7 L -2,4 Q -1.6,7 0,8.4 H 1 V -7 Z" fill="#a8332a"/>
+      <path d="M -5,-3.6 L -4.6,4.6" stroke="#ff8a7a" stroke-width="0.9" fill="none"/>
+    </g>
+    <g fill="#e9b949" stroke="#2a1a2e" stroke-width="0.5">
+      <circle cx="-3.7" cy="-2.4" r="0.9"/>
+      <circle cx="-3.4" cy="1.4" r="0.9"/>
+      <circle cx="-3.1" cy="5" r="0.9"/>
+    </g>
+  </g>
+</svg>

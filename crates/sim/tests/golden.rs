@@ -74,6 +74,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         54,
         0x4659_5909_07ca_6682,
     ),
+    (
+        "roster_herdhound",
+        include_str!("golden/roster_herdhound.json"),
+        include_bytes!("golden/roster_herdhound.bin"),
+        54,
+        0x327a_2cb0_ffd4_2c06,
+    ),
 ];
 
 #[test]
@@ -209,6 +216,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_tuskrack", play(roster_tuskrack(), &winds)),
         ("roster_sudsotter", play(roster_sudsotter(), &winds)),
         ("roster_frostfin", play(roster_frostfin(), &winds)),
+        ("roster_herdhound", play(roster_herdhound(), &winds)),
     ]
 }
 
@@ -394,6 +402,26 @@ fn roster_frostfin() -> Setup {
         seats: vec![armed(Team::A, MobileKind::Frostfin, 380, Facing::Right, &[]), seat(Team::B, 1420, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Herdhound (Kalsiddon's behavior) in a 1v1 on hills in wind: its S1, S2 and SS.
+fn roster_herdhound() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Herdhound, 420, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Coilback, 1380, Facing::Left, &[]),
+        ],
+        order: vec![0, 1],
+        wind: Wind::new(8, 140).unwrap(),
         sudden_death: None,
     }
 }
