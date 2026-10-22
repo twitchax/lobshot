@@ -6,18 +6,21 @@ use super::{DamageRange, Tuned, WeaponType, cited, picked};
 /// A loadout holds six small items, or three big ones.
 pub const LOADOUT_SLOTS: Tuned<u8> = cited(6, &["WP06", "AK"]);
 
-/// Heal's share of max HP. SW-gp says only "small heal".
-pub const HEAL_SHARE: Tuned<f64> = cited(0.12, &["OB"]);
+// Shares of max HP are whole percents, worked in integers: as floats, a Bionic mobile's 12% + 5%
+// Heal came to 169.99999 of 1000 HP, and floored to 169.
 
-/// Big Heal's share of max HP. OpenBound heals 30% (CONTRADICTION).
-pub const BIG_HEAL_SHARE: Tuned<f64> = cited(0.25, &["SW-gp"]);
+/// Heal's share of max HP, in percent. SW-gp says only "small heal".
+pub const HEAL_PERCENT: Tuned<u32> = cited(12, &["OB"]);
 
-/// What Bionic mobiles gain on top of either heal's share (Big Heal: 25% becomes 30%). OpenBound
-/// gives 3% (CONTRADICTION).
-pub const BIONIC_HEAL_EXTRA: Tuned<f64> = cited(0.05, &["SW-gp"]);
+/// Big Heal's share of max HP, in percent. OpenBound heals 30% (CONTRADICTION).
+pub const BIG_HEAL_PERCENT: Tuned<u32> = cited(25, &["SW-gp"]);
 
-/// Sacrifice's cost, as a share of max HP; it never leaves its user below 1 HP.
-pub const SACRIFICE_COST: Tuned<f64> = cited(0.08, &["SW-gp", "OB"]);
+/// The percent Bionic mobiles gain on top of either heal's share (Big Heal: 25% becomes 30%).
+/// OpenBound gives 3% (CONTRADICTION).
+pub const BIONIC_HEAL_EXTRA: Tuned<u32> = cited(5, &["SW-gp"]);
+
+/// Sacrifice's cost, in percent of max HP; it never leaves its user below 1 HP.
+pub const SACRIFICE_PERCENT: Tuned<u32> = cited(8, &["SW-gp", "OB"]);
 
 /// The damage multiplier on the turn's shot from Power Up or Sacrifice.
 pub const DAMAGE_BOOST: Tuned<f64> = cited(1.33, &["SW-gp"]);

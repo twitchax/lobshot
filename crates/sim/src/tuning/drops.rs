@@ -29,6 +29,6 @@ pub const HAMMER_WEAPON: Tuned<WeaponType> = picked(WeaponType::Physical, "A ham
 pub const BOLT_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 76, max: 80 }, &["WP06"]);
 pub const BOLT_WEAPON: Tuned<WeaponType> = picked(WeaponType::Electric, "Lightning is electric.");
 
-/// The chest heals whoever it lands on by this share of their max HP. WP06 lists treasure chests
-/// with no effect.
-pub const CHEST_HEAL: Tuned<f64> = picked(0.12, "No gold in lobshot, so a small heal: the Heal item's share.");
+/// The chest heals whoever it lands on by this share of their max HP, in percent. WP06 lists
+/// treasure chests with no effect.
+pub const CHEST_HEAL_PERCENT: Tuned<u32> = picked(12, "No gold in lobshot, so a small heal: the Heal item's share.");

@@ -1163,13 +1163,11 @@ impl Game {
         }
     }
 
-    /// Heals a living mobile by `share` of its max HP (rounding down), up to the max.
-    pub(crate) fn heal(&mut self, seat: u8, share: f64, effects: &mut Vec<Effect>) {
+    /// Heals a living mobile by `percent` of its max HP (rounding down), up to the max.
+    pub(crate) fn heal(&mut self, seat: u8, percent: u32, effects: &mut Vec<Effect>) {
         let player = &mut self.players[usize::from(seat)];
         let max = player.tuning().hp.value;
-        // A share of at most 1 of a few thousand HP: far inside i32.
-        #[allow(clippy::cast_possible_truncation)]
-        let amount = ((f64::from(max) * share).floor() as i32).min(max - player.hp);
+        let amount = crate::items::percent_of(max, percent).min(max - player.hp);
         if amount > 0 && player.alive {
             player.hp += amount;
             effects.push(Effect::Healed { seat, amount });

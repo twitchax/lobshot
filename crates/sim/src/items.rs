@@ -12,7 +12,7 @@ use crate::{
     game::{Effect, Game},
     tuning::{
         ArmorClass,
-        items::{self, BIG_HEAL_SHARE, BIONIC_HEAL_EXTRA, HEAL_SHARE, ItemTuning, LOADOUT_SLOTS, SACRIFICE_COST},
+        items::{self, BIG_HEAL_PERCENT, BIONIC_HEAL_EXTRA, HEAL_PERCENT, ItemTuning, LOADOUT_SLOTS, SACRIFICE_PERCENT},
     },
 };
 
@@ -206,18 +206,16 @@ pub(crate) fn use_item(game: &mut Game, seat: u8, slot: u8, effects: &mut Vec<Ef
     let player = game.players[index];
     let max_hp = player.tuning().hp.value;
     // Bionic mobiles gain more from healing (SW-mobC, SW-gp).
-    let bionic = if player.tuning().armor.value == ArmorClass::Bionic { BIONIC_HEAL_EXTRA.value } else { 0.0 };
+    let bionic = if player.tuning().armor.value == ArmorClass::Bionic { BIONIC_HEAL_EXTRA.value } else { 0 };
     match item {
-        Item::Heal => game.heal(seat, HEAL_SHARE.value + bionic, effects),
-        Item::BigHeal => game.heal(seat, BIG_HEAL_SHARE.value + bionic, effects),
+        Item::Heal => game.heal(seat, HEAL_PERCENT.value + bionic, effects),
+        Item::BigHeal => game.heal(seat, BIG_HEAL_PERCENT.value + bionic, effects),
         Item::WindFlip => {
             game.wind.direction = (game.wind.direction + 180) % 360;
             effects.push(Effect::WindChanged(game.wind));
         }
         Item::Sacrifice => {
-            // A share of at most 1 of a few thousand HP: far inside i32.
-            #[allow(clippy::cast_possible_truncation)]
-            let cost = ((f64::from(max_hp) * SACRIFICE_COST.value).floor() as i32).min(player.hp - 1);
+            let cost = percent_of(max_hp, SACRIFICE_PERCENT.value).min(player.hp - 1);
             if cost > 0 {
                 game.players[index].hp -= cost;
                 effects.push(Effect::Damaged { seat, amount: cost });
@@ -248,6 +246,11 @@ impl From<Loadout> for Vec<Item> {
     fn from(loadout: Loadout) -> Self {
         loadout.items().collect()
     }
+}
+
+/// `percent` of `hp`, rounding down, in integers so a whole-percent share comes out exact.
+pub(crate) fn percent_of(hp: i32, percent: u32) -> i32 {
+    i32::try_from(i64::from(hp) * i64::from(percent) / 100).unwrap_or(i32::MAX)
 }
 
 #[cfg(test)]
@@ -361,10 +364,21 @@ mod unit {
         assert!(use_slot(&mut game, 1).contains(&Effect::Healed { seat: 0, amount: 100 }), "capped at max");
         assert_eq!(game.players()[0].hp, 1000);
 
-        // Hookclaw is Bionic: Big Heal's 25% becomes 30%.
-        let mut game = carrying(duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800), &[Item::BigHeal]);
+        // Hookclaw is Bionic: Big Heal's 25% becomes 30%, and Heal's 12% becomes 17%: 170 of its
+        // 1000 HP, which float shares floored to 169.
+        let mut game = carrying(duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 800), &[Item::BigHeal, Item::Heal]);
         game.players[0].hp = 100;
         assert!(use_slot(&mut game, 0).contains(&Effect::Healed { seat: 0, amount: 300 }));
+        pass(&mut game, 0);
+        pass_until(&mut game, 0);
+        assert!(use_slot(&mut game, 1).contains(&Effect::Healed { seat: 0, amount: 170 }));
+    }
+
+    #[test]
+    fn percents_of_hp_round_down_exactly() {
+        assert_eq!(percent_of(1000, 17), 170);
+        assert_eq!(percent_of(750, 25), 187);
+        assert_eq!(percent_of(999, 8), 79);
     }
 
     #[test]

@@ -12,7 +12,7 @@ use crate::{
     shots::bolt,
     tuning::{
         BOLT_CRATER, BOLT_REACH, SKY,
-        drops::{BOLT_DAMAGE, BOLT_WEAPON, CHEST_HEAL, DYNAMITE_BLAST, DYNAMITE_DAMAGE, DYNAMITE_WEAPON, DYNAMITE_WIND, GRAVITY, HAMMER_BLAST, HAMMER_DAMAGE, HAMMER_WEAPON},
+        drops::{BOLT_DAMAGE, BOLT_WEAPON, CHEST_HEAL_PERCENT, DYNAMITE_BLAST, DYNAMITE_DAMAGE, DYNAMITE_WEAPON, DYNAMITE_WIND, GRAVITY, HAMMER_BLAST, HAMMER_DAMAGE, HAMMER_WEAPON},
     },
     units::Vec2,
     weather::Weather,
@@ -140,7 +140,7 @@ fn land(game: &mut Game, Falling { seat, drop, .. }: Falling, effects: &mut Vec<
         }
         DropKind::Chest => {
             if let Some(hit) = direct {
-                game.heal(hit, CHEST_HEAL.value, effects);
+                game.heal(hit, CHEST_HEAL_PERCENT.value, effects);
             }
         }
         DropKind::Calm => {
