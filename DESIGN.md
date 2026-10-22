@@ -283,7 +283,7 @@ One PRD per milestone in `.prds/`.
 - **M4 Lab.** Headless balance runs, the win-rate matrix and the CI band gate; the JSON/MCP
   interface for LLM agents.
 - **M5 Full roster.** The remaining 13 mobiles (Raon's mines, Aduka with Thor, JD's pull and push,
-  Nak's digging, Knight, Dragon and the rest); the remaining weathers; the remaining six maps.
+  Nak's digging, Knight, Dragon and the rest); the remaining weathers; the remaining five maps.
 - **M6 Modes.** Score, Tag and Jewel.
 
 ## Risks
