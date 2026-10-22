@@ -153,11 +153,14 @@ What changed after this playtest, and what is still open.
   - Your options show your base delay and a pass's.
   - The rules give heal shares, Power Up, Sacrifice and Dig numbers, each mobile's armor, and that
     slots keep their numbers.
-- **Fixed in the sim:** a Bionic mobile's Heal healed 169 of 1000 HP instead of 170, a float
-  rounding error (2214a2d). Big Heal's 250 against 300 is by design: Bionic mobiles heal 5 points
-  more, and Coilback isn't Bionic.
+- **Fixed in the sim:**
+  - A Bionic mobile's Heal healed 169 of 1000 HP instead of 170, a float rounding error
+    (2214a2d). Big Heal's 250 against 300 is by design: Bionic mobiles heal 5 points more, and
+    Coilback isn't Bionic.
+  - A shot whose muzzle stood inside a weather column passed through it: columns only caught
+    shots flying into them. A shot is now caught by any column it starts in, as in OB.
+- **By design:** the 76 that Power Up didn't raise was the bolt's splash, which is flat whatever
+  the armor, weather or items (GF-max). The rules now say so, under Sparkhorn and Power Up.
 - **Open, for the game:**
   - The ashspine spire against mobiles whose aim stops at 60°.
-  - Shots fired from within about 60 px of a Mirror pass through it.
-  - Power Up and Sparkhorn's side bolt.
   - Normal bots that never walk.

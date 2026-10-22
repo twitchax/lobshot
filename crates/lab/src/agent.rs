@@ -908,20 +908,21 @@ things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dy
 around); if you die, it is spun for you.
 ";
 
-fn about(mobile: MobileKind) -> &'static str {
+fn about(mobile: MobileKind) -> String {
     match mobile {
-        MobileKind::Coilback => "A sturdy mortar. S1 is one heavy round; S2 two warheads, the second carrying on through the first's crater; SS a shell that grows in flight and hits much harder.",
+        MobileKind::Coilback => "A sturdy mortar. S1 is one heavy round; S2 two warheads, the second carrying on through the first's crater; SS a shell that grows in flight and hits much harder.".to_owned(),
         MobileKind::Lanternwing => {
-            "A moth mech with a shield. S1 is a laser bolt; S2 two strands winding about one path, each its own hit; SS a ball that strips every nearby mobile's shield where it lands."
+            "A moth mech with a shield. S1 is a laser bolt; S2 two strands winding about one path, each its own hit; SS a ball that strips every nearby mobile's shield where it lands.".to_owned()
         }
         MobileKind::Hookclaw => {
-            "Throws boomerangs that the wind bends hard: one the wind turns around in flight deals more. S1 is one, S2 four in a cluster, SS one that turns golden if it stays up long enough."
+            "Throws boomerangs that the wind bends hard: one the wind turns around in flight deals more. S1 is one, S2 four in a cluster, SS one that turns golden if it stays up long enough.".to_owned()
         }
-        MobileKind::Sparkhorn => {
-            "Lands a ball that calls lightning onto the impact; ground above a target blocks its bolt. S1's bolt strikes straight down, S2's two come in a V from either side, SS sends one down onto every mobile in reach. Has a shield."
-        }
+        MobileKind::Sparkhorn => format!(
+            "Lands a ball that calls lightning onto the impact; ground above a target blocks its bolt. S1's bolt strikes straight down, S2's two come in a V from either side, SS sends one down onto every mobile in reach. An S1 or S2 bolt also splashes a flat {} onto each mobile near its path, once a turn, whatever its armor, the weather or items. Has a shield.",
+            tuning::sparkhorn::SPLASH.value
+        ),
         MobileKind::Marblemole => {
-            "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground."
+            "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
         }
     }
 }
@@ -933,8 +934,11 @@ fn item_about(item: Item) -> String {
         Item::Dual => "Your S1 or S2 fires twice.".to_owned(),
         Item::DualPlus => "Your shot, then the other of S1 and S2.".to_owned(),
         Item::Teleport => "The shot hurts no one and carries you to where it lands.".to_owned(),
-        Item::PowerUp => format!("This turn's shot deals {}x damage.", DAMAGE_BOOST.value),
-        Item::Sacrifice => format!("Pay {}% of your max HP for {}x damage this turn.", SACRIFICE_PERCENT.value, DAMAGE_BOOST.value),
+        Item::PowerUp => format!("This turn's shot deals {}x damage; a bolt's splash stays flat.", DAMAGE_BOOST.value),
+        Item::Sacrifice => format!(
+            "Pay {}% of your max HP for {}x damage this turn; a bolt's splash stays flat.",
+            SACRIFICE_PERCENT.value, DAMAGE_BOOST.value
+        ),
         Item::Dig => format!("This turn's shot carves {}x craters.", DIG_CRATER.value),
         Item::Heal => heal(HEAL_PERCENT.value),
         Item::BigHeal => heal(BIG_HEAL_PERCENT.value),
@@ -1260,5 +1264,12 @@ mod unit {
         }
         assert!(rules.contains("- Big Heal (`BigHeal`): Heals 25% of your max HP at once (30% for a Bionic mobile)."), "{rules}");
         assert!(rules.contains("Bionic armor") && rules.contains("a pass's, 200"), "{rules}");
+    }
+
+    #[test]
+    fn the_rules_say_a_bolts_splash_stays_flat() {
+        let rules = rules();
+        assert!(rules.contains("splashes a flat 76"), "{rules}");
+        assert!(rules.contains("- Power Up (`PowerUp`): This turn's shot deals 1.33x damage; a bolt's splash stays flat."), "{rules}");
     }
 }
