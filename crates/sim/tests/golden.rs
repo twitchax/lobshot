@@ -46,6 +46,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         33,
         0xb6a8_1233_bdc2_08ff,
     ),
+    (
+        "roster_spoutpot",
+        include_str!("golden/roster_spoutpot.json"),
+        include_bytes!("golden/roster_spoutpot.bin"),
+        63,
+        0x4231_f182_db86_13ad,
+    ),
 ];
 
 #[test]
@@ -156,6 +163,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("brawl_4v4", play(brawl_4v4(), &winds)),
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
+        ("roster_spoutpot", play(roster_spoutpot(), &winds)),
     ]
 }
 
@@ -270,6 +278,23 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Spoutpot firing S1, S2 and SS: a 1v1 on hills in wind.
+fn roster_spoutpot() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Spoutpot, 420, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(10, 140).unwrap(),
+        sudden_death: None,
     }
 }
 

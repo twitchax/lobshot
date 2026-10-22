@@ -351,6 +351,7 @@ mod unit {
                 amplitude: 15.0,
                 hertz: 1.0,
                 strands: vec![Strand { phase: 0.0, to: TICKS_PER_SECOND }, Strand { phase: 3.0, to: 2 * TICKS_PER_SECOND }],
+                merge: None,
             },
             Effect::Bolt {
                 from: Vec2::ZERO,

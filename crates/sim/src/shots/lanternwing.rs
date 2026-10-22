@@ -22,6 +22,7 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
                 amplitude: S2_AMPLITUDE.value,
                 hertz: S2_HERTZ.value,
                 phases: &S2_PHASES.value,
+                merge: None,
             };
             let (legs, strands, mut landings) = helix::fly(game, flight, &shape, |game, _, impact, marks, out| {
                 let blast = gun.blast(impact.at, S2_STRAND_BLAST.value, S2_STRAND_DAMAGE.value, marks.boost());
@@ -33,6 +34,7 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
                 amplitude: shape.amplitude,
                 hertz: shape.hertz,
                 strands,
+                merge: shape.merge,
             });
             effects.append(&mut landings);
         }
@@ -95,7 +97,7 @@ mod unit {
         let leg = legs[0];
         let tick = leg.to / 2;
         let center = leg.flight.at(tick);
-        let [a, b] = [strands[0].phase, strands[1].phase].map(|phase| ballistics::helix_point(&leg.flight, tick, leg.offset, *amplitude, *hertz, phase));
+        let [a, b] = [strands[0].phase, strands[1].phase].map(|phase| ballistics::helix_point(&leg.flight, tick, leg.offset, *amplitude, *hertz, phase, None));
         assert!(a.distance(center) <= 15.0 + 1e-9 && b.distance(center) <= 15.0 + 1e-9);
         assert!(a.distance(b) > 1.0, "{a:?} {b:?}");
     }

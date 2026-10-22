@@ -39,10 +39,15 @@ impl Flight {
 /// Where a helix strand winding about `flight` is at the flight's `tick`: the flight's point,
 /// pushed `amplitude · sin(2π · hertz · t + phase)` along its normal (the velocity turned a quarter
 /// clockwise on screen), where `t` is the shot's elapsed time: `elapsed` ticks at the flight's tick
-/// 0, plus `tick`. The sim collides strands here, and clients draw them here.
+/// 0, plus `tick`. From elapsed tick `merge` on, if there is one, the strand runs on the path
+/// itself (Spoutpot's S2 comes together). The sim collides strands here, and clients draw them
+/// here.
 #[must_use]
-pub fn helix_point(flight: &Flight, tick: u32, elapsed: u32, amplitude: f64, hertz: f64, phase: f64) -> Vec2 {
+pub fn helix_point(flight: &Flight, tick: u32, elapsed: u32, amplitude: f64, hertz: f64, phase: f64, merge: Option<u32>) -> Vec2 {
     let at = flight.at(tick);
+    if merge.is_some_and(|merge| elapsed + tick >= merge) {
+        return at;
+    }
     let velocity = flight.velocity_at(tick);
     let speed = velocity.length();
     if speed <= 0.0 {
@@ -90,6 +95,22 @@ mod unit {
         let landing = flight.at(tick);
         assert!((landing.x - range).abs() < 0.5, "{landing:?} vs {range}");
         assert!(landing.y.abs() < 0.5, "{landing:?}");
+    }
+
+    #[test]
+    fn helix_strands_run_on_the_path_once_they_merge() {
+        let flight = Flight {
+            origin: Vec2::ZERO,
+            velocity: Vec2::new(300.0, -300.0),
+            accel: Vec2::new(0.0, 600.0),
+        };
+        let quarter = TICKS_PER_SECOND / 4;
+        // At a quarter turn a strand is at its widest; from the merge on it is on the path.
+        let wide = helix_point(&flight, quarter, 0, 20.0, 1.0, 0.0, Some(2 * quarter));
+        assert!((wide.distance(flight.at(quarter)) - 20.0).abs() < 1e-9, "{wide:?}");
+        assert_eq!(helix_point(&flight, quarter, quarter, 20.0, 1.0, 0.0, Some(2 * quarter)), flight.at(quarter));
+        assert_eq!(helix_point(&flight, 3 * quarter, 0, 20.0, 1.0, 0.0, Some(2 * quarter)), flight.at(3 * quarter));
+        assert_ne!(helix_point(&flight, 3 * quarter, 0, 20.0, 1.0, 0.0, None), flight.at(3 * quarter));
     }
 
     #[test]

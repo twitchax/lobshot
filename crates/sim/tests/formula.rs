@@ -15,20 +15,21 @@ use lobshot_sim::{
     game::{Game, MobileKind, Seat, Setup, Team},
     items::Loadout,
     map::{MapRef, NoAssets},
-    tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT},
-    units::{Facing, Vec2, Wind},
+    tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, spoutpot},
+    units::{Facing, SCREEN, TICK, Vec2, Wind, ticks},
 };
 
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub).
-const CBCHUI: [(MobileKind, f64); 5] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle).
+const CBCHUI: [(MobileKind, f64); 6] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
     (MobileKind::Sparkhorn, 2.30),
     (MobileKind::Marblemole, 2.33),
+    (MobileKind::Spoutpot, 2.39),
 ];
 
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
@@ -209,6 +210,177 @@ fn formula_side_wind_moves_the_angle_half_a_degree_per_unit() {
     }
 }
 
+// ── Spoutpot (Turtle): airtime ──────────────────────────────────────────────
+//
+// Turtle's shots are timed, so CR-turtle's tables give airtimes as well as distances: its long
+// forks land on S2's fifth crossing, its skybombs open near the top of the arc, and its timebombs
+// open just short of the target (docs/research/spoutpot.md). `tool_fit` sets S2's hertz from the
+// forks and the share of speed the SS's balls keep from one skybomb; the rest are checks.
+
+/// CR-turtle's long forks: aim, bars and screens, each landing on S2's fifth crossing.
+const FORKS: [(i16, f64, f64); 8] = [
+    (82, 1.55, 0.125),
+    (73, 1.61, 0.25),
+    (65, 1.69, 0.375),
+    (59, 1.81, 0.5),
+    (53, 1.92, 0.625),
+    (47, 2.08, 0.75),
+    (43, 2.25, 0.875),
+    (40, 2.4, 1.0),
+];
+
+/// The skybomb `tool_fit` fits the balls' speed to: about one screen (CR-turtle).
+const SKYBOMB_FIT: (i16, f64, f64) = (76, 3.91, 795.0);
+
+/// CR-turtle's skybombs: aim, bars, and px to the target, each opening near the top of its arc.
+const SKYBOMBS: [(i16, f64, f64); 17] = [
+    (88, 3.68, 112.0),
+    (87, 3.68, 167.0),
+    (86, 3.69, 220.0),
+    (85, 3.7, 274.0),
+    (84, 3.7, 328.0),
+    (83, 3.72, 387.0),
+    (82, 3.74, 446.0),
+    (81, 3.77, 503.0),
+    (80, 3.79, 560.0),
+    (79, 3.82, 617.0),
+    (78, 3.85, 676.0),
+    (77, 3.88, 735.0),
+    (76, 3.91, 795.0),
+    (75, 3.94, 860.0),
+    (74, 3.97, 933.0),
+    (73, 4.0, 1009.0),
+    (72, 4.0, 1088.0),
+];
+
+/// CR-turtle's timebombs: aim, bars and screens, each opening a split second before the target.
+const TIMEBOMBS: [(i16, f64, f64); 8] = [
+    (84, 1.8, 0.125),
+    (78, 1.85, 0.25),
+    (71, 1.9, 0.375),
+    (66, 2.0, 0.5),
+    (60, 2.05, 0.625),
+    (56, 2.15, 0.75),
+    (52, 2.3, 0.875),
+    (48, 2.4, 1.0),
+];
+
+fn spoutpot_duel(screens: f64) -> Game {
+    // Table distances are whole pixels to a few.
+    #[allow(clippy::cast_possible_truncation)]
+    duel_of(MobileKind::Spoutpot, (screens * SCREEN).round() as i32)
+}
+
+/// Where `flight` comes down through the height of the target's center: how long it takes, and how
+/// far from the shooter's feet a target would stand for it to pass through its center there.
+/// Turtle's tables are airtimes: a landmark lands at about its distance after about its time.
+fn landing(game: &Game, flight: &Flight) -> (f64, f64) {
+    let (shooter, target) = (game.players()[0], game.players()[1]);
+    let center = target_center(game);
+    let offset = center.x - target.footing.world().x;
+    let mut tick = 0;
+    while flight.at(tick).y < center.y || flight.velocity_at(tick).y <= 0.0 {
+        tick += 1;
+    }
+    (f64::from(tick) * TICK, flight.at(tick).x - offset - shooter.footing.world().x)
+}
+
+/// The middle of an SS's opening (between its two middle balls, the way the blob was going), for
+/// gravity `gravity`, opening after `split` seconds with `kept` of the blob's speed.
+fn opened(game: &Game, aim: i16, bars: f64, gravity: f64, split: f64, kept: f64) -> Flight {
+    let blob = flight(game, aim, bars, Vec2::new(0.0, gravity));
+    let tick = ticks(split);
+    Flight {
+        origin: blob.at(tick),
+        velocity: blob.velocity_at(tick) * kept,
+        accel: blob.accel,
+    }
+}
+
+/// The hertz that puts the mean long fork's arrival on S2's fifth crossing, under `gravity`.
+fn fit_hertz(gravity: f64) -> f64 {
+    let times: Vec<f64> = FORKS
+        .iter()
+        .map(|&(aim, bars, screens)| {
+            let game = spoutpot_duel(screens);
+            landing(&game, &flight(&game, aim, bars, Vec2::new(0.0, gravity))).0
+        })
+        .collect();
+    #[allow(clippy::cast_precision_loss)]
+    let mean = times.iter().sum::<f64>() / times.len() as f64;
+    5.0 / (2.0 * mean)
+}
+
+/// The share of speed the SS's balls keep that lands `SKYBOMB_FIT` on its distance.
+fn fit_speed_kept(gravity: f64, hertz: f64) -> f64 {
+    let (aim, bars, distance) = SKYBOMB_FIT;
+    let game = spoutpot_duel(1.0);
+    let split = spoutpot::SS_SPLIT_CROSSING.value / (2.0 * hertz);
+    bisect(0.05, 1.0, &|kept| landing(&game, &opened(&game, aim, bars, gravity, split, kept)).1 < distance)
+}
+
+/// The SS opens this many seconds after launch.
+fn ss_split() -> f64 {
+    spoutpot::crossing_seconds(spoutpot::SS_SPLIT_CROSSING.value)
+}
+
+#[test]
+fn formula_spoutpot_long_forks_meet_their_targets_as_the_streams_cross() {
+    // CR-turtle: each long fork lands on S2's fifth crossing. A quarter of a crossing either way
+    // leaves the streams at most 0.71 of their widest apart, both still on a mobile.
+    let gravity = MobileKind::Spoutpot.tuning().gravity.value;
+    for (aim, bars, screens) in FORKS {
+        let game = spoutpot_duel(screens);
+        let (at, _) = landing(&game, &flight(&game, aim, bars, Vec2::new(0.0, gravity)));
+        let crossing = 2.0 * spoutpot::S2_HERTZ.value * at;
+        assert!((crossing - 5.0).abs() <= 0.25, "fork {aim} deg, {bars} bars, {screens} screens: crossing {crossing:.2}");
+    }
+}
+
+#[test]
+fn formula_spoutpot_s2_comes_together_given_the_airtime() {
+    // CR-turtle's FAQ: at 60 degrees S2 has the airtime to come together at 1 screen but not at
+    // 1/2; at 70 degrees it is "barely enough" for 1/2 screen. (Its 60 degrees at 3/4 screen falls
+    // 0.09 s short: docs/research/spoutpot.md.)
+    let merge = spoutpot::crossing_seconds(spoutpot::S2_MERGE_CROSSING.value);
+    let calm = tuned_for(MobileKind::Spoutpot, Wind::default());
+    let airtime = |aim: i16, screens: f64| {
+        let game = spoutpot_duel(screens);
+        landing(&game, &flight(&game, aim, ideal_power(&game, aim, calm), calm)).0
+    };
+    assert!(airtime(60, 1.0) >= merge, "60 degrees at 1 screen");
+    assert!(airtime(60, 0.5) < merge, "60 degrees at 1/2 screen");
+    let barely = airtime(70, 0.5);
+    assert!((barely - merge).abs() <= 0.1, "70 degrees at 1/2 screen: {barely:.2} s, coming together at {merge:.2} s");
+}
+
+#[test]
+fn formula_spoutpot_skybombs_land_where_the_table_says() {
+    // CR-turtle: "these won't be pixel perfect": within 6% of the table, or 10 px up close (one
+    // fitted, the rest checks).
+    let gravity = MobileKind::Spoutpot.tuning().gravity.value;
+    let game = spoutpot_duel(1.0);
+    for (aim, bars, distance) in SKYBOMBS {
+        let (_, landed) = landing(&game, &opened(&game, aim, bars, gravity, ss_split(), spoutpot::SS_SPEED_KEPT.value));
+        assert!(
+            (landed - distance).abs() <= (0.06 * distance).max(10.0),
+            "skybomb {aim} deg, {bars} bars: {landed:.0} px, the table says {distance}"
+        );
+    }
+}
+
+#[test]
+fn formula_spoutpot_timebombs_open_a_split_second_before_their_targets() {
+    // CR-turtle: a timebomb opens "a split second before" it would reach the target.
+    let calm = tuned_for(MobileKind::Spoutpot, Wind::default());
+    for (aim, bars, screens) in TIMEBOMBS {
+        let game = spoutpot_duel(screens);
+        let (at, _) = landing(&game, &flight(&game, aim, bars, calm));
+        let early = at - ss_split();
+        assert!((0.0..=0.2).contains(&early), "timebomb {aim} deg, {bars} bars, {screens} screens: opens {early:.2} s early");
+    }
+}
+
 fn bisect(mut low: f64, mut high: f64, too_low: &dyn Fn(f64) -> bool) -> f64 {
     for _ in 0..60 {
         let mid = f64::midpoint(low, high);
@@ -233,8 +405,41 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
-/// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
+/// What the fitted Spoutpot does with every CR-turtle table entry, beside what the table says.
+fn spoutpot_report(gravity: f64, hertz: f64, kept: f64) {
+    let split = spoutpot::SS_SPLIT_CROSSING.value / (2.0 * hertz);
+    let merge = spoutpot::S2_MERGE_CROSSING.value / (2.0 * hertz);
+    println!("  opens at {split:.3} s, comes together at {merge:.3} s");
+    let calm = Vec2::new(0.0, gravity);
+    for (aim, bars, screens) in FORKS {
+        let game = spoutpot_duel(screens);
+        let (at, landed) = landing(&game, &flight(&game, aim, bars, calm));
+        println!(
+            "  fork {aim} {bars} {screens}: lands {at:.3} s, crossing {:.2}, {landed:.0} px, table {:.0}",
+            2.0 * hertz * at,
+            screens * SCREEN
+        );
+    }
+    let game = spoutpot_duel(1.0);
+    for (aim, bars, distance) in SKYBOMBS {
+        let (_, landed) = landing(&game, &opened(&game, aim, bars, gravity, split, kept));
+        println!("  skybomb {aim} {bars}: {landed:.0} px, table {distance}");
+    }
+    for (aim, bars, screens) in TIMEBOMBS {
+        let game = spoutpot_duel(screens);
+        let (at, _) = landing(&game, &flight(&game, aim, bars, calm));
+        let (_, landed) = landing(&game, &opened(&game, aim, bars, gravity, split, kept));
+        println!(
+            "  timebomb {aim} {bars} {screens}: lands {at:.3} s ({:.3} after opening); balls land {landed:.0} px, table {:.0}",
+            at - split,
+            screens * SCREEN
+        );
+    }
+}
+
+/// Derives the fitted constants. The M3 mobiles' and Spoutpot's gravities (cbchui), Hookclaw's wind
+/// sensitivity on top of its gravity (UC-boomer), and Spoutpot's spiral and SS balls (CR-turtle)
+/// are written straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
 /// acceptance tests (and re-record the golden replays if the constants moved).
@@ -246,6 +451,14 @@ fn tool_fit() {
         let file = format!("{}.rs", mobile.tuning().name.to_lowercase());
         rewrite(&file, "GRAVITY", &format!("{gravity:.1}"));
         println!("{mobile:?} gravity: {gravity:.1}");
+        if mobile == MobileKind::Spoutpot {
+            let hertz = fit_hertz(gravity);
+            rewrite(&file, "HERTZ", &format!("{hertz:.3}"));
+            let kept = fit_speed_kept(gravity, hertz);
+            rewrite(&file, "SPEED_KEPT", &format!("{kept:.3}"));
+            println!("{mobile:?} S2 hertz: {hertz:.3}; SS speed kept: {kept:.3}");
+            spoutpot_report(gravity, hertz, kept);
+        }
         if mobile == MobileKind::Hookclaw {
             // More sensitivity saves more power: find the one that saves exactly UC-boomer's.
             let (aim, strength, saving) = BOOMER_HOOK;

@@ -1,0 +1,27 @@
+// Spoutpot: a hippo on four stubby legs with a teapot strapped to its back for a water tank,
+// hosing water from a twin nozzle where the pot's spout would be. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the ground contact between the feet, +x =
+// facing, +y = down; facing left mirrors x. Every part SVG puts its pivot at its own origin, so
+// `at` is where that pivot lands in the body frame, and `cargo xtask art` renders each part with
+// its pivot at the image's center (lobshot_assets::ART_SCALE pixels per world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, cannon pivot and barrel length) lives in
+// sim::tuning::spoutpot; `cargo xtask art` refuses a rig whose cannon disagrees with it.
+MobileRig(
+    name: "Spoutpot",
+    parts: [
+        // Drawn in z order, lowest first. aim: turns with the cannon. It walks, so nothing spins.
+        (id: "body",   file: "body.svg",   at: (0.0, 0.0),    z: 2),
+        // The nozzle swivels in the pot's collar, above the hippo's head.
+        (id: "cannon", file: "cannon.svg", at: (12.0, -41.0), z: 3, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where shots leave, in the cannon's frame at aim 0 (pointing +x): between the two
+        // nozzles' mouths, one barrel length (sim::tuning) from the pivot.
+        muzzle: (25.0, 0.0),
+    ),
+    // Riders are cosmetic and swappable; a rider's origin is its seat: the cushion on the lid.
+    rider_socket: (at: (-6.0, -56.0), z: 4),
+)

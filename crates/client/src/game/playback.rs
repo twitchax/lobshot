@@ -12,7 +12,7 @@ use lobshot_assets::Sound;
 use lobshot_protocol::pacing::{self, FALL_SECONDS};
 use lobshot_sim::{
     ballistics,
-    game::{Death, Effect, Event, Leg, SuddenDeathKind, Team},
+    game::{Death, Effect, Event, Leg, MobileKind, Shot, SuddenDeathKind, Team},
     items::Item,
     movement::Footing,
     tuning::TURN_TIME_LIMIT,
@@ -148,6 +148,11 @@ enum Cue {
     Spark {
         seat: u8,
     },
+    /// Projectiles bursting out of another in flight (Spoutpot's SS opening).
+    Burst {
+        at: SimVec2,
+        color: Color,
+    },
     Item {
         seat: u8,
         item: Item,
@@ -160,11 +165,20 @@ enum Cue {
     SuddenDeath(SuddenDeathKind),
 }
 
+/// How one strand of a helix winds about its path, for `ballistics::helix_point`.
+#[derive(Debug, Clone, Copy)]
+struct Winding {
+    amplitude: f64,
+    hertz: f64,
+    phase: f64,
+    merge: Option<u32>,
+}
+
 /// Something flying its path: a shell, a beacon, a falling drop, or one strand of a helix, which
-/// winds about the path (amplitude, hertz and phase, for `ballistics::helix_point`).
+/// winds about the path.
 struct Flyer {
     legs: Vec<Leg>,
-    strand: Option<(f64, f64, f64)>,
+    strand: Option<Winding>,
     /// When it leaves and when it stops, in the scene's time.
     from: f32,
     until: f32,
@@ -204,21 +218,22 @@ fn ticks(count: u32) -> f32 {
 }
 
 /// Where a flyer is `seconds` into its stage, following its legs (holding still between legs
-/// while a tornado spins it), and winding about them if it's a strand.
-fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Option<SimVec2> {
+/// while a tornado spins it), and winding about them if it's a strand. Nowhere before its first
+/// leg starts: one born in flight (Spoutpot's SS balls) appears where it is born.
+fn flyer_at(legs: &[Leg], strand: Option<Winding>, seconds: f32) -> Option<SimVec2> {
     // A clock reading in seconds, back to whole ticks.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let tick = (f64::from(seconds) * f64::from(TICKS_PER_SECOND)) as u32;
     let mut last = None;
     for leg in legs {
         let point = |local: u32| match strand {
-            Some((amplitude, hertz, phase)) => ballistics::helix_point(&leg.flight, local, leg.offset, amplitude, hertz, phase),
+            Some(w) => ballistics::helix_point(&leg.flight, local, leg.offset, w.amplitude, w.hertz, w.phase, w.merge),
             None => leg.flight.at(local),
         };
         match tick.checked_sub(leg.offset) {
             Some(local) if local <= leg.to => return Some(point(local.max(leg.from))),
             Some(_) => last = Some(point(leg.to)),
-            None => return last.or(Some(point(leg.from))),
+            None => return last,
         }
     }
     last
@@ -249,11 +264,46 @@ fn dot_sprite(dot: &Dot, color: Color, size: f32) -> Sprite {
 struct Props<'a> {
     dot: &'a Dot,
     server: &'a AssetServer,
+    /// Each seat's mobile, for what its shots look like.
+    mobiles: &'a [MobileKind],
+}
+
+/// Whose volley a scene is showing, and which shot.
+#[derive(Debug, Clone, Copy, Default)]
+struct Shooter {
+    mobile: Option<MobileKind>,
+    shot: Option<Shot>,
+}
+
+const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
+const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
+const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+
+impl Shooter {
+    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    fn color(self, strand: bool) -> Color {
+        match self.mobile {
+            Some(MobileKind::Spoutpot) => WATER,
+            _ if strand => GLOW,
+            _ => SHELL,
+        }
+    }
+
+    /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
+    /// in flight small.
+    fn size(self, legs: &[Leg]) -> f32 {
+        let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
+        match (self.mobile, self.shot) {
+            (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            _ if born_in_flight => 8.0,
+            _ => 10.0,
+        }
+    }
 }
 
 /// What an effect sends flying at `at`: a shell, the strands of a helix, a beacon, or a falling
 /// drop (a bolt drops nothing: it strikes at once, `Bolt` next).
-fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) -> Vec<Flyer> {
+fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands: &mut Commands) -> Vec<Flyer> {
     let mut flyers = Vec::new();
     let mut fly = |legs: &[Leg], strand, until: f32, sprite: Sprite| {
         let entity = commands.spawn(flyer_sprite(sprite)).id();
@@ -266,12 +316,19 @@ fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) ->
         });
     };
     match effect {
-        Effect::Fired { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x2a, 0x22, 0x1c), 10.0)),
-        // Lanternwing's S2: each strand flies until it strikes.
-        Effect::Helix { legs, amplitude, hertz, strands, .. } => {
+        Effect::Fired { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, shooter.color(false), shooter.size(legs))),
+        // Lanternwing's and Spoutpot's S2: each strand flies until it strikes.
+        Effect::Helix {
+            legs, amplitude, hertz, strands, merge, ..
+        } => {
             for strand in strands {
-                let sprite = dot_sprite(props.dot, Color::srgb_u8(0xd6, 0x9b, 0xff), 9.0);
-                fly(legs, Some((*amplitude, *hertz, strand.phase)), at + ticks(strand.to), sprite);
+                let winding = Winding {
+                    amplitude: *amplitude,
+                    hertz: *hertz,
+                    phase: strand.phase,
+                    merge: *merge,
+                };
+                fly(legs, Some(winding), at + ticks(strand.to), dot_sprite(props.dot, shooter.color(true), 9.0));
             }
         }
         Effect::Beacon { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x7f, 0xf0, 0xff), 16.0)),
@@ -379,6 +436,13 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
     }
 }
 
+/// For a projectile born in flight (Spoutpot's SS balls): how long into its stage, and where.
+fn born_in_flight(effect: &Effect) -> Option<(f32, SimVec2)> {
+    let Effect::Fired { legs, .. } = effect else { return None };
+    let first = legs.first().filter(|leg| leg.offset > 0)?;
+    Some((ticks(first.offset + first.from), first.flight.at(first.from)))
+}
+
 /// Turns one event's effects into a scene.
 fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Shown)>, commands: &mut Commands) -> Scene {
     let mut cues = Vec::new();
@@ -392,11 +456,21 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
             }
         }
     }
+    let mut shooter = Shooter::default();
     for (effect, at) in played.effects.into_iter().zip(schedule.at) {
-        let launched = take_off(&effect, at, props, commands);
-        // Shells, strands and beacons leave a cannon; a drop falls quietly.
-        if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) {
-            cues.push((at, Cue::Sound(Sound::Fire)));
+        if let Effect::Volley { seat, shot } = effect {
+            shooter = Shooter {
+                mobile: props.mobiles.get(usize::from(seat)).copied(),
+                shot: Some(shot),
+            };
+        }
+        let launched = take_off(&effect, at, props, shooter, commands);
+        match born_in_flight(&effect) {
+            // Balls born in flight burst out of what bore them; shells, strands and beacons leave a
+            // cannon; a drop falls quietly.
+            Some((after, origin)) => cues.push((at + after, Cue::Burst { at: origin, color: shooter.color(false) })),
+            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) => cues.push((at, Cue::Sound(Sound::Fire))),
+            None => {}
         }
         flyers.extend(launched);
         cue(effect, at, &mut cues);
@@ -427,6 +501,7 @@ struct Stagehands<'w> {
     herald: ResMut<'w, Herald>,
     bolts: ResMut<'w, Bolts>,
     sounds: MessageWriter<'w, Play>,
+    game: Option<Res<'w, Match>>,
 }
 
 fn play(
@@ -439,7 +514,12 @@ fn play(
     let Some(dot) = hands.dot.as_deref().map(|dot| Dot(dot.0.clone())) else { return };
     if timeline.scene.is_none() {
         let Some(next) = timeline.queue.pop_front() else { return };
-        let props = Props { dot: &dot, server: &hands.server };
+        let mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
+        let props = Props {
+            dot: &dot,
+            server: &hands.server,
+            mobiles: &mobiles,
+        };
         timeline.scene = Some(stage(next, &props, &mut views, &mut commands));
     }
     let Some(scene) = timeline.scene.as_mut() else { return };
@@ -529,6 +609,9 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         Cue::Beam { from, to, level } => hands.bolts.beam(from, to, level),
         Cue::Bounce { at } => {
             commands.spawn(puff(dot, at, 16.0, Color::srgb_u8(0xc9, 0xa8, 0x7c), 0.35));
+        }
+        Cue::Burst { at, color } => {
+            commands.spawn(puff(dot, at, 26.0, color, 0.35));
         }
         Cue::Spark { seat } => {
             if let Some(foot) = foot_of(views, seat) {
@@ -682,9 +765,44 @@ mod unit {
     #[test]
     fn a_strand_winds_about_the_path_where_the_sim_puts_it() {
         let legs = [leg(0, TICKS_PER_SECOND, 0)];
-        let strand = Some((12.0, 2.0, 1.0));
+        let winding = Winding {
+            amplitude: 12.0,
+            hertz: 2.0,
+            phase: 1.0,
+            merge: Some(TICKS_PER_SECOND / 2),
+        };
         let tick = TICKS_PER_SECOND / 4;
-        assert_eq!(flyer_at(&legs, strand, 0.25).unwrap(), ballistics::helix_point(&legs[0].flight, tick, 0, 12.0, 2.0, 1.0));
-        assert_ne!(flyer_at(&legs, strand, 0.25), flyer_at(&legs, None, 0.25));
+        assert_eq!(
+            flyer_at(&legs, Some(winding), 0.25).unwrap(),
+            ballistics::helix_point(&legs[0].flight, tick, 0, 12.0, 2.0, 1.0, winding.merge)
+        );
+        assert_ne!(flyer_at(&legs, Some(winding), 0.25), flyer_at(&legs, None, 0.25));
+        assert_eq!(flyer_at(&legs, Some(winding), 0.75), flyer_at(&legs, None, 0.75), "merged onto the path");
+    }
+
+    #[test]
+    fn a_shell_born_in_flight_appears_where_and_when_it_is_born_and_bursts_there() {
+        let legs = vec![leg(0, TICKS_PER_SECOND, TICKS_PER_SECOND)];
+        assert_eq!(flyer_at(&legs, None, 0.5), None, "not yet born");
+        assert_eq!(flyer_at(&legs, None, 1.0), Some(legs[0].flight.at(0)));
+        let fired = Effect::Fired { seat: 0, legs: legs.clone() };
+        assert_eq!(born_in_flight(&fired), Some((1.0, legs[0].flight.at(0))));
+        assert_eq!(born_in_flight(&Effect::Fired { seat: 0, legs: vec![leg(0, 10, 0)] }), None);
+    }
+
+    #[test]
+    fn spoutpots_shots_are_water_and_its_ss_blob_is_big() {
+        let ss = Shooter {
+            mobile: Some(MobileKind::Spoutpot),
+            shot: Some(Shot::Ss),
+        };
+        assert_eq!(ss.color(false), WATER);
+        assert_eq!(ss.color(true), WATER);
+        assert!(ss.size(&[leg(0, 10, 0)]) > ss.size(&[leg(0, 10, 100)]), "the blob, then its balls");
+        let lantern = Shooter {
+            mobile: Some(MobileKind::Lanternwing),
+            shot: Some(Shot::S2),
+        };
+        assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
     }
 }

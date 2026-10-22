@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="66" viewBox="-36 -63 76 66">
+  <!-- Spoutpot body: a hippo on four stubby legs with a porcelain teapot strapped to its back for
+       a water tank, its level showing through a porthole. The pot's lid carries the rider's
+       cushion and the valve lever; the twin hose nozzle at the pot's front, where a spout would
+       be, is the cannon.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="torso" d="M -31,-17.6 C -32,-25.6 -22,-31.8 -8,-32.4 C 4,-32.8 12.6,-30.2 16.6,-25.4 L 18.6,-15 C 14.6,-9 -20,-8.4 -26.4,-11 C -30,-13 -31,-15 -31,-17.6 Z"/>
+    <clipPath id="torsoClip"><use href="#torso"/></clipPath>
+    <path id="head" d="M 9.6,-23.8 C 11,-29.4 19.6,-31 24.8,-28.2 C 27.2,-27 29.8,-26.2 31.2,-23.8 L 30.6,-10.8 C 26.8,-7.2 17.6,-7.4 12,-10.6 C 9.4,-13.6 8.8,-19.4 9.6,-23.8 Z"/>
+    <clipPath id="headClip"><use href="#head"/></clipPath>
+    <path id="snout" d="M 23.4,-26.4 C 28,-28.2 33.8,-27.6 35.2,-23.2 C 36.4,-19 36,-13.2 33.4,-10.4 C 30.4,-7.6 24.6,-8 23,-11.2 C 21.8,-15.8 21.8,-22.4 23.4,-26.4 Z"/>
+    <clipPath id="snoutClip"><use href="#snout"/></clipPath>
+    <path id="pot" d="M -12,-51.4 C -17.6,-49.2 -20,-44.4 -20,-38.4 C -20,-31.8 -14.8,-27.6 -4,-27.6 C 6.8,-27.6 12,-31.8 12,-38.4 C 12,-44.4 9.6,-49.2 4,-51.4 Z"/>
+    <clipPath id="potClip"><use href="#pot"/></clipPath>
+    <circle id="glass" cx="-5" cy="-41" r="4.4"/>
+    <clipPath id="glassClip"><use href="#glass"/></clipPath>
+    <radialGradient id="potLight" cx="-12" cy="-48" r="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="hideLight" cx="-18" cy="-31" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#eeeaff" stop-opacity="0.4"/>
+      <stop offset="0.45" stop-color="#eeeaff" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#2a1a50" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2a1a50" stop-opacity="0.25"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- far legs, in the hippo's shadow -->
+    <path d="M -30,-14 V -2.6 Q -30,0 -27.4,0 H -23.4 Q -20.8,0 -20.8,-2.6 V -14 Z" fill="#625a96" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 4.4,-14 V -2.6 Q 4.4,0 7,0 H 10.8 Q 13.4,0 13.4,-2.6 V -14 Z" fill="#625a96" stroke="#2a1a2e" stroke-width="0.9"/>
+
+    <!-- tail: a stub with a tuft -->
+    <path d="M -29.8,-22 C -32.8,-22.4 -34.2,-20.4 -33.8,-17.8" stroke="#2a1a2e" stroke-width="3" fill="none"/>
+    <path d="M -29.8,-22 C -32.8,-22.4 -34.2,-20.4 -33.8,-17.8" stroke="#a8a2d4" stroke-width="1.5" fill="none"/>
+    <path d="M -33.8,-17.8 L -35.2,-15.6 M -33.8,-17.8 L -33.2,-15.2 M -33.8,-17.8 L -34.8,-16.4" stroke="#2a1a2e" stroke-width="1" fill="none"/>
+
+    <!-- torso: a round barrel of a hippo -->
+    <use href="#torso" fill="#a8a2d4" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#torsoClip)">
+      <path d="M -34,-17.4 C -22,-12 4,-11.8 22,-19.6 V -4 H -34 Z" fill="#7f77b4"/>
+      <path d="M -34,-12.8 C -22,-9.4 4,-9.2 22,-14.2 V -4 H -34 Z" fill="#625a96"/>
+      <rect x="-34" y="-36" width="56" height="28" fill="url(#hideLight)"/>
+      <path d="M -26.6,-24.6 C -20.6,-29.6 -12,-31.2 -4,-31.2" stroke="#d4d0f0" stroke-width="1.5" fill="none"/>
+      <g fill="#8f88c4"><circle cx="-22" cy="-19.6" r="0.9"/><circle cx="-18.4" cy="-22.6" r="0.7"/><circle cx="-15.4" cy="-18.8" r="0.8"/></g>
+    </g>
+
+    <!-- head and its big round snout -->
+    <use href="#head" fill="#a8a2d4" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#headClip)">
+      <path d="M 6,-16.6 C 14,-12.8 23,-13.2 34,-18 V -4 H 6 Z" fill="#7f77b4"/>
+      <path d="M 12.6,-26.4 C 15.6,-28.8 19.8,-29.2 22.8,-28" stroke="#d4d0f0" stroke-width="1.3" fill="none"/>
+    </g>
+    <use href="#snout" fill="#ecc6dc" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#snoutClip)">
+      <path d="M 20,-15 Q 29,-12.8 38,-15.6 V -6 H 20 Z" fill="#c99ab8"/>
+      <path d="M 25,-24.8 C 27.8,-26.4 31.4,-26.2 33,-24.2" stroke="#fbe6f0" stroke-width="1.2" fill="none"/>
+    </g>
+    <!-- mouth with a tooth, and the nostrils on top of the snout -->
+    <path d="M 35.4,-15.8 Q 30.4,-13.4 25.6,-14.8" stroke="#2a1a2e" stroke-width="0.9" fill="none"/>
+    <path d="M 31.6,-14.6 L 32.3,-17 L 33.1,-14.4 Z" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.5"/>
+    <ellipse cx="29.6" cy="-25.6" rx="1.5" ry="0.9" transform="rotate(-12 29.6 -25.6)" fill="#2a1a2e"/>
+    <ellipse cx="33.2" cy="-24.4" rx="1" ry="0.75" transform="rotate(-30 33.2 -24.4)" fill="#2a1a2e"/>
+    <!-- ear and eye, up top as hippos wear them -->
+    <ellipse cx="13.4" cy="-28" rx="1.9" ry="2.6" transform="rotate(-24 13.4 -28)" fill="#a8a2d4" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="13.6" cy="-27.8" rx="0.8" ry="1.4" transform="rotate(-24 13.6 -27.8)" fill="#ff9fb8"/>
+    <ellipse cx="19.6" cy="-25.6" rx="2.2" ry="2.5" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="20.3" cy="-25.3" rx="1.3" ry="1.7" fill="#2a1a2e"/>
+    <circle cx="20.7" cy="-26.1" r="0.6" fill="#ffffff"/>
+    <path d="M 17.2,-27.2 Q 19.4,-28.8 21.8,-27.8" stroke="#2a1a2e" stroke-width="0.8" fill="none"/>
+    <ellipse cx="22.2" cy="-19.6" rx="2.3" ry="1.2" fill="#ff8fa8" opacity="0.75"/>
+
+    <!-- near legs, toenails forward -->
+    <path d="M -25,-14 V -2.6 Q -25,0 -22.4,0 H -16.6 Q -14,0 -14,-2.6 V -14 Z" fill="#a8a2d4" stroke="#2a1a2e" stroke-width="1"/>
+    <path d="M -24.4,-8.6 Q -19.4,-6.8 -14.6,-8.8 V -2.6 Q -14.6,-0.6 -16.6,-0.6 H -22.4 Q -24.4,-0.6 -24.4,-2.6 Z" fill="#7f77b4"/>
+    <path d="M 11,-13 V -2.6 Q 11,0 13.6,0 H 18.4 Q 21,0 21,-2.6 V -13 Z" fill="#a8a2d4" stroke="#2a1a2e" stroke-width="1"/>
+    <path d="M 11.6,-8.2 Q 16,-6.6 20.4,-8.4 V -2.6 Q 20.4,-0.6 18.4,-0.6 H 13.6 Q 11.6,-0.6 11.6,-2.6 Z" fill="#7f77b4"/>
+    <g fill="#fff4dc" stroke="#2a1a2e" stroke-width="0.6">
+      <path d="M -19.6,-0.4 Q -19.6,-2.6 -17.8,-2.6 Q -16,-2.6 -16,-0.4 Z"/>
+      <path d="M -15.8,-0.4 Q -15.8,-2.2 -14.6,-2.2 Q -13.6,-2.2 -13.6,-0.4 Z"/>
+      <path d="M 15.8,-0.4 Q 15.8,-2.6 17.6,-2.6 Q 19.4,-2.6 19.4,-0.4 Z"/>
+      <path d="M 19.6,-0.4 Q 19.6,-2.2 20.8,-2.2 Q 21.8,-2.2 21.8,-0.4 Z"/>
+    </g>
+
+    <!-- the strap that holds the pot on, with its buckle -->
+    <path d="M -12.4,-29.2 C -13.8,-22.6 -13.8,-15.6 -12.2,-9.6" stroke="#2a1a2e" stroke-width="3.8" fill="none"/>
+    <path d="M -12.4,-29.2 C -13.8,-22.6 -13.8,-15.6 -12.2,-9.6" stroke="#8a4b2e" stroke-width="2.3" fill="none"/>
+    <path d="M -12.2,-27 C -13,-21.6 -13,-16.4 -11.8,-12" stroke="#c97a4a" stroke-width="0.6" fill="none"/>
+    <rect x="-15.2" y="-20.6" width="3.8" height="3.4" rx="0.6" fill="none" stroke="#e9b949" stroke-width="1"/>
+
+    <!-- the pot's handle, behind it -->
+    <path d="M -16.4,-48.2 C -26.4,-49.4 -28.6,-38 -17.8,-33.2" stroke="#2a1a2e" stroke-width="4.4" fill="none"/>
+    <path d="M -16.4,-48.2 C -26.4,-49.4 -28.6,-38 -17.8,-33.2" stroke="#e9b949" stroke-width="2.6" fill="none"/>
+    <path d="M -18.4,-47.4 C -24.8,-47.4 -26.4,-41.4 -23.6,-37.2" stroke="#fff1a8" stroke-width="0.8" fill="none"/>
+
+    <!-- the teapot -->
+    <use href="#pot" fill="#fff4dc" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#potClip)">
+      <path fill="#e8d4b2" fill-rule="evenodd" d="M -24,-56 H 16 V -26 H -24 Z M -7,-42 m -14.8,0 a 14.8 12 0 1 0 29.6,0 a 14.8 12 0 1 0 -29.6,0"/>
+      <rect x="-24" y="-56" width="40" height="30" fill="url(#potLight)"/>
+      <!-- a cobalt wave band round its belly -->
+      <path d="M -22,-33 Q -19,-35.6 -16,-33 Q -13,-35.6 -10,-33 Q -7,-35.6 -4,-33 Q -1,-35.6 2,-33 Q 5,-35.6 8,-33 Q 11,-35.6 14,-33 V -26 H -22 Z" fill="#3b7fc6"/>
+      <path d="M -22,-31.6 Q -19,-34.2 -16,-31.6 Q -13,-34.2 -10,-31.6 Q -7,-34.2 -4,-31.6 Q -1,-34.2 2,-31.6 Q 5,-34.2 8,-31.6 Q 11,-34.2 14,-31.6" stroke="#9fd0f4" stroke-width="0.7" fill="none"/>
+      <path d="M -24,-30 H 16 V -26 H -24 Z" fill="#2c5f9e"/>
+    </g>
+    <path d="M -17.2,-40.6 C -16.8,-44.6 -14.6,-47.8 -10.6,-49.6" stroke="#ffffff" stroke-width="1.3" fill="none"/>
+    <!-- the porthole: the water level, a wave and its bubbles -->
+    <use href="#glass" fill="#d8f0ff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#glassClip)">
+      <path d="M -10,-41 Q -7.6,-42.6 -5,-41 Q -2.4,-39.4 0,-41 V -36 H -10 Z" fill="#4aa8f0"/>
+      <path d="M -10,-38.4 Q -5,-37 0,-38.8 V -36 H -10 Z" fill="#2f7fcc"/>
+      <circle cx="-3.4" cy="-38.8" r="0.7" fill="#ffffff"/>
+      <circle cx="-6.4" cy="-37.8" r="0.45" fill="#ffffff"/>
+      <path d="M -8.2,-44.2 Q -7,-45.2 -5.6,-45.2" stroke="#ffffff" stroke-width="0.8" fill="none"/>
+    </g>
+    <circle cx="-5" cy="-41" r="5.2" fill="none" stroke="#e9b949" stroke-width="1.4"/>
+    <circle cx="-5" cy="-41" r="6" fill="none" stroke="#2a1a2e" stroke-width="0.5"/>
+    <g fill="#b9822c"><circle cx="-5" cy="-46.2" r="0.5"/><circle cx="0.2" cy="-41" r="0.5"/><circle cx="-5" cy="-35.8" r="0.5"/><circle cx="-10.2" cy="-41" r="0.5"/></g>
+    <!-- the collar where a spout would be: the nozzle swivels in it -->
+    <rect x="7.8" y="-44.6" width="4.4" height="7.2" rx="1" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 8.4,-40 H 11.6" stroke="#b9822c" stroke-width="1.4" fill="none"/>
+    <!-- base ring -->
+    <path d="M -13.2,-29.6 Q -4,-27.2 5.2,-29.6 L 4.6,-27.6 Q -4,-25.8 -12.6,-27.6 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <!-- rim, lid, and the rider's cushion on it -->
+    <ellipse cx="-4" cy="-51.4" rx="9.2" ry="2.1" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -12.2,-51.8 C -11.8,-56 3.8,-56 4.2,-51.8 Z" fill="#fff4dc" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -10,-52.8 C -8.6,-54.4 -5.2,-55 -2.4,-54.6" stroke="#ffffff" stroke-width="0.9" fill="none"/>
+    <!-- the valve lever the rider works -->
+    <path d="M 2.6,-52.6 L 1.4,-60.6" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M 2.6,-52.6 L 1.4,-60.6" stroke="#e9b949" stroke-width="1.2" fill="none"/>
+    <circle cx="1.3" cy="-61" r="1.6" fill="#3b7fc6" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="-5.6" cy="-55.4" rx="6" ry="2.1" fill="#d94a3c" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -9.4,-56 Q -6,-57.2 -2.6,-56" stroke="#ff8a7a" stroke-width="0.8" fill="none"/>
+  </g>
+</svg>
