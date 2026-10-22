@@ -1,13 +1,13 @@
 //! Walking and falling on the pixel mask, in whole pixels. A mobile stands on a surface pixel
-//! (solid, air above); each step moves one column, climbing up to `CLIMB_PX` or dropping up to
-//! `DROP_PX`, and anything steeper is a wall or an edge to fall from. Falling is instant: the sim
+//! (solid, air above); each step moves one column, climbing up to the mobile's climb (most take
+//! `CLIMB_PX`) or dropping up to `DROP_PX`, and anything steeper is a wall or an edge to fall from. Falling is instant: the sim
 //! only needs where it ends, and the client animates it.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     terrain::Terrain,
-    tuning::{CLIMB_PX, DROP_PX, TILT_SEARCH_PX},
+    tuning::{DROP_PX, TILT_SEARCH_PX},
     units::{Facing, Vec2},
 };
 
@@ -63,15 +63,15 @@ pub enum Step {
     Fell(Landing),
 }
 
-/// One 1 px step in `facing`.
+/// One 1 px step in `facing`, climbing at most `climb` px.
 #[must_use]
-pub fn step(terrain: &Terrain, from: Footing, facing: Facing) -> Step {
+pub fn step(terrain: &Terrain, from: Footing, facing: Facing, climb: i32) -> Step {
     let x = from.x + facing.sign();
     let width = i32::try_from(terrain.width()).unwrap_or(i32::MAX);
     if !(0..width).contains(&x) {
         return Step::Blocked;
     }
-    let window = (from.y - CLIMB_PX.value)..=(from.y + DROP_PX.value);
+    let window = (from.y - climb)..=(from.y + DROP_PX.value);
     if let Some(y) = window.clone().find(|&y| terrain.is_surface(x, y)) {
         return Step::Walked(Footing { x, y });
     }
@@ -109,7 +109,9 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::units::to_degrees;
+    use crate::{tuning::CLIMB_PX, units::to_degrees};
+
+    const CLIMB: i32 = CLIMB_PX.value;
 
     /// Ground at `ground(x)`, solid below.
     fn terrain(width: u32, height: u32, ground: impl Fn(u32) -> u32) -> Terrain {
@@ -134,21 +136,30 @@ mod unit {
             _ => 60,
         });
         let start = Footing { x: 10, y: 60 };
-        assert_eq!(step(&ground, start, Facing::Right), Step::Walked(Footing { x: 11, y: 54 }));
-        assert_eq!(step(&ground, Footing { x: 11, y: 54 }, Facing::Right), Step::Walked(Footing { x: 12, y: 59 }));
-        assert_eq!(step(&ground, start, Facing::Left), Step::Walked(Footing { x: 9, y: 60 }));
+        assert_eq!(step(&ground, start, Facing::Right, CLIMB), Step::Walked(Footing { x: 11, y: 54 }));
+        assert_eq!(step(&ground, Footing { x: 11, y: 54 }, Facing::Right, CLIMB), Step::Walked(Footing { x: 12, y: 59 }));
+        assert_eq!(step(&ground, start, Facing::Left, CLIMB), Step::Walked(Footing { x: 9, y: 60 }));
+    }
+
+    #[test]
+    fn a_poor_climber_is_walled_by_a_step_another_takes() {
+        // A 3 px step up at x = 11.
+        let ground = terrain(50, 100, |x| if x >= 11 { 57 } else { 60 });
+        let start = Footing { x: 10, y: 60 };
+        assert_eq!(step(&ground, start, Facing::Right, 3), Step::Walked(Footing { x: 11, y: 57 }));
+        assert_eq!(step(&ground, start, Facing::Right, 2), Step::Blocked);
     }
 
     #[test]
     fn a_wall_blocks_and_an_edge_drops() {
         let wall = terrain(50, 100, |x| if x == 11 { 53 } else { 60 });
-        assert_eq!(step(&wall, Footing { x: 10, y: 60 }, Facing::Right), Step::Blocked);
+        assert_eq!(step(&wall, Footing { x: 10, y: 60 }, Facing::Right, CLIMB), Step::Blocked);
 
         let cliff = terrain(50, 100, |x| if x >= 11 { 90 } else { 60 });
-        assert_eq!(step(&cliff, Footing { x: 10, y: 60 }, Facing::Right), Step::Fell(Landing::On(Footing { x: 11, y: 90 })));
+        assert_eq!(step(&cliff, Footing { x: 10, y: 60 }, Facing::Right, CLIMB), Step::Fell(Landing::On(Footing { x: 11, y: 90 })));
 
         let edge = terrain(50, 100, |_| 60);
-        assert_eq!(step(&edge, Footing { x: 49, y: 60 }, Facing::Right), Step::Blocked, "the map's side is a wall");
+        assert_eq!(step(&edge, Footing { x: 49, y: 60 }, Facing::Right, CLIMB), Step::Blocked, "the map's side is a wall");
     }
 
     #[test]

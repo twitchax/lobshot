@@ -27,6 +27,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
         "10 wind toward the target saves 0.45 bars on a 70-degree, one-screen shot, flat ground.",
     ),
     move_budget: cited(90, &["OB"]),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -33.0, y: -54.0, w: 63.0, h: 54.0 },
         "Hookclaw's drawn jar and crab. The rider, eyestalks and leg tips are cosmetic.",

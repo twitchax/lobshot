@@ -931,7 +931,8 @@ impl Game {
         let mut taken = 0;
         let mut died = false;
         while taken < steps && self.players[index].moves_left > 0 {
-            match movement::step(&self.terrain, self.players[index].footing, facing) {
+            let climb = self.players[index].tuning().climb_px.value;
+            match movement::step(&self.terrain, self.players[index].footing, facing, climb) {
                 Step::Blocked => break,
                 Step::Walked(footing) | Step::Fell(Landing::On(footing)) => self.players[index].footing = footing,
                 Step::Fell(Landing::OffMap) => died = true,
@@ -1666,6 +1667,45 @@ mod unit {
             }]
         );
         assert_eq!(game.players()[0].moves_left, 0);
+    }
+
+    #[test]
+    fn each_mobile_walks_its_own_budget_and_climbs_its_own_step() {
+        for mobile in MobileKind::ALL {
+            let tuning = mobile.tuning();
+            let mut flat = duel_of(mobile, MobileKind::Coilback, 1600);
+            let effects = flat
+                .apply(Event::Walk {
+                    seat: 0,
+                    facing: Facing::Right,
+                    steps: 500,
+                })
+                .unwrap();
+            assert!(matches!(effects[..], [Effect::Walked { steps, .. }] if steps == tuning.move_budget.value), "{mobile:?}: {effects:?}");
+
+            // A step up as tall as its climb, then one a pixel taller.
+            let climb = u32::try_from(tuning.climb_px.value).unwrap();
+            let steps = Terrain::from_fn(2400, 600, |x, y| {
+                y >= if x < 310 {
+                    500
+                } else if x < 320 {
+                    500 - climb
+                } else {
+                    499 - 2 * climb
+                }
+            })
+            .unwrap();
+            let seats = vec![testing::seat(Team::A, mobile, 300, Facing::Right), testing::seat(Team::B, MobileKind::Coilback, 1900, Facing::Left)];
+            let mut game = testing::game_on(steps, seats);
+            game.apply(Event::Walk {
+                seat: 0,
+                facing: Facing::Right,
+                steps: 50,
+            })
+            .unwrap();
+            let expected = Footing { x: 319, y: 500 - tuning.climb_px.value };
+            assert_eq!(game.players()[0].footing, expected, "{mobile:?} climbs {climb} px, and no more");
+        }
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
     gravity: fitted(GRAVITY, &["CR-fixed"], "60 degrees lands one screen at 2.33 bars, zero wind, flat ground."),
     wind_sensitivity: picked(1.0, "No source sets it apart from the reference shot."),
     move_budget: cited(90, &["OB"]),
+    climb_px: super::CLIMB_PX,
     hitbox: picked(
         Rect { x: -34.0, y: -58.0, w: 64.0, h: 58.0 },
         "Marblemole's drawn cart and the mole in it, helmet included. The rider and the lever are cosmetic.",

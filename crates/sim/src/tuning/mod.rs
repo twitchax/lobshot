@@ -186,7 +186,7 @@ pub const TORNADO_WIDTH: Tuned<f64> = cited(70.0, &["OB"]);
 
 // ── Movement ─────────────────────────────────────────────────────────────────
 
-/// How far up a single 1 px step may climb.
+/// How far up a single 1 px step may climb, for every mobile unless its own tuning says otherwise.
 pub const CLIMB_PX: Tuned<i32> = cited(6, &["OB"]);
 
 /// How far down a single 1 px step may drop before the mobile falls instead.
@@ -316,6 +316,8 @@ pub struct MobileTuning {
     pub wind_sensitivity: Tuned<f64>,
     /// 1 px steps per turn.
     pub move_budget: Tuned<u16>,
+    /// How far up a single 1 px step may climb (`CLIMB_PX` for most mobiles).
+    pub climb_px: Tuned<i32>,
     pub hitbox: Tuned<Rect>,
     /// Body-frame x offsets of the two points whose ground heights set the body's tilt.
     pub ground_probes: Tuned<[f64; 2]>,
