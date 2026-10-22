@@ -45,9 +45,26 @@ pub fn to_degrees(radians: f64) -> f64 {
     radians * (180.0 / core::f64::consts::PI)
 }
 
-/// A shot's power: 0 to 4.0 bars in steps of 0.05, stored as twentieths of a bar.
+/// A shot's power: 0 to 4.0 bars in steps of 0.05, stored as twentieths of a bar. It encodes as
+/// its twentieths, and decoding checks them: a player's shot arrives off the wire, and the sim
+/// trusts a `Power` to be at most 4.0 bars.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
 pub struct Power(u8);
+
+impl TryFrom<u8> for Power {
+    type Error = anyhow::Error;
+
+    fn try_from(twentieths: u8) -> Res<Self> {
+        Self::from_twentieths(twentieths)
+    }
+}
+
+impl From<Power> for u8 {
+    fn from(power: Power) -> Self {
+        power.0
+    }
+}
 
 impl Power {
     /// Full power: 4.0 bars.
@@ -220,6 +237,17 @@ mod unit {
         assert_eq!(Power::nearest(9.0), Power::MAX);
         assert_eq!(Power::nearest(-1.0).twentieths(), 0);
         assert!(Power::from_twentieths(81).is_err());
+    }
+
+    #[test]
+    fn power_decodes_only_up_to_four_bars_and_encodes_as_before() {
+        assert_eq!(serde_json::from_str::<Power>("80").unwrap(), Power::MAX);
+        assert!(serde_json::from_str::<Power>("81").is_err());
+        assert!(serde_json::from_str::<Power>("255").is_err());
+        assert_eq!(serde_json::to_string(&Power::nearest(2.0)).unwrap(), "40");
+        // postcard writes a newtype as its inner value, so recorded logs still decode.
+        assert_eq!(postcard::to_allocvec(&Power::MAX).unwrap(), postcard::to_allocvec(&80_u8).unwrap());
+        assert!(postcard::from_bytes::<Power>(&postcard::to_allocvec(&200_u8).unwrap()).is_err());
     }
 
     #[test]

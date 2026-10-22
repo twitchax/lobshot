@@ -324,6 +324,25 @@ mod unit {
     }
 
     #[test]
+    fn a_shot_above_four_bars_never_decodes() {
+        let json = |power: u32| format!(r#"{{"Act":{{"Shoot":{{"shot":"S1","aim":45,"power":{power}}}}}}}"#);
+        assert!(from_json::<ClientMsg>(&json(80)).is_ok());
+        for power in [81, 255] {
+            assert!(from_json::<ClientMsg>(&json(power)).is_err(), "power {power}");
+        }
+        let mut bytes = encode(&ClientMsg::Act(Action::Shoot {
+            shot: Shot::S1,
+            aim: 45,
+            power: Power::MAX,
+        }))
+        .unwrap();
+        // The power is the last byte: 80, then 255 as a cheating client would send it.
+        assert_eq!(bytes.last(), Some(&80));
+        *bytes.last_mut().unwrap() = 255;
+        assert!(decode::<ClientMsg>(&bytes).is_err());
+    }
+
+    #[test]
     fn refuses_other_versions() {
         let mut bytes = encode(&ClientMsg::Ready(true)).unwrap();
         bytes[0] = PROTOCOL_VERSION + 1;
