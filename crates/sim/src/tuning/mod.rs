@@ -6,6 +6,7 @@
 pub mod bot;
 pub mod coilback;
 pub mod drops;
+pub mod frostfin;
 pub mod hookclaw;
 pub mod items;
 pub mod lanternwing;
@@ -16,7 +17,7 @@ pub mod weather;
 
 use serde::{Deserialize, Serialize};
 
-use crate::units::Centis;
+use crate::{game::Shot, units::Centis};
 
 /// Where a number came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -326,6 +327,45 @@ pub struct MobileTuning {
     pub s1: ShotTuning,
     pub s2: ShotTuning,
     pub ss: ShotTuning,
+    /// A second barrel some shots leave from instead of the cannon (Frostfin's tusk); `None` for
+    /// most mobiles.
+    pub second_barrel: Option<SecondBarrel>,
+}
+
+/// A barrel besides the cannon. It turns with the aim, as the cannon does, and the shots it names
+/// leave its muzzle rather than the cannon's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SecondBarrel {
+    /// Its pivot in the body frame.
+    pub pivot: Tuned<(f64, f64)>,
+    /// Pivot to muzzle, along it.
+    pub length: Tuned<f64>,
+    /// The shots that leave it.
+    pub shots: &'static [Shot],
+}
+
+/// A barrel's geometry: where it pivots in the body frame, and its length, pivot to muzzle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Barrel {
+    pub pivot: (f64, f64),
+    pub length: f64,
+}
+
+impl MobileTuning {
+    /// The barrel `shot` leaves: the second barrel if it names the shot, else the cannon.
+    #[must_use]
+    pub fn barrel(&self, shot: Shot) -> Barrel {
+        match self.second_barrel {
+            Some(second) if second.shots.contains(&shot) => Barrel {
+                pivot: second.pivot.value,
+                length: second.length.value,
+            },
+            _ => Barrel {
+                pivot: self.cannon_pivot.value,
+                length: self.barrel_length.value,
+            },
+        }
+    }
 }
 
 #[cfg(test)]

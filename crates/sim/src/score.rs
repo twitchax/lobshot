@@ -214,8 +214,8 @@ impl Scoreboard {
 
 /// The trick shots `event` (a shot) was, judged on its first projectile flown from `before`.
 fn tricks(before: &Game, event: &Event) -> Vec<Bonus> {
-    let Event::Shoot { seat, aim, power, .. } = *event else { return Vec::new() };
-    let Some(flight) = before.launch(seat, aim, power.bars()) else { return Vec::new() };
+    let Event::Shoot { seat, shot, aim, power, .. } = *event else { return Vec::new() };
+    let Some(flight) = before.launch(seat, shot, aim, power.bars()) else { return Vec::new() };
     let track = before.track(flight, 0, 0);
     let columns = &before.weather().columns;
     // Weather starts a new leg where it redirects the shot; its kind is the column the leg starts in.
@@ -387,7 +387,7 @@ mod unit {
         for aim in 70..=89 {
             for twentieths in 0..=Power::MAX.twentieths() {
                 let power = Power::from_twentieths(twentieths).unwrap();
-                let track = game.track(game.launch(0, aim, power.bars()).unwrap(), 0, 0);
+                let track = game.track(game.launch(0, Shot::S1, aim, power.bars()).unwrap(), 0, 0);
                 if track.impact.contact == Contact::Mobile(1) {
                     let flown = seconds(track.impact.tick);
                     let expected = if flown >= 4.0 {
@@ -450,7 +450,7 @@ mod unit {
         (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let impact = game.track(game.launch(seat, 35, power.bars())?, 0, 0).impact;
+                let impact = game.track(game.launch(seat, Shot::S1, 35, power.bars())?, 0, 0).impact;
                 (impact.contact == Contact::Mobile(target)).then(|| (impact.at.distance(center), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))

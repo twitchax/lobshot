@@ -12,7 +12,7 @@
 
 use lobshot_sim::{
     ballistics::{self, Flight},
-    game::{Game, MobileKind, Seat, Setup, Team},
+    game::{Game, MobileKind, Seat, Setup, Shot, Team},
     items::Loadout,
     map::{MapRef, NoAssets},
     tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT},
@@ -22,14 +22,19 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub).
-const CBCHUI: [(MobileKind, f64); 5] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Ice).
+const CBCHUI: [(MobileKind, f64); 6] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
     (MobileKind::Sparkhorn, 2.30),
     (MobileKind::Marblemole, 2.33),
+    (MobileKind::Frostfin, 2.33),
 ];
+
+/// GF-ice's 70-degree table for Ice, in eighths of a screen and bars: the entries in the acceptance
+/// set (docs/research/frostfin.md says which are out, and why).
+const FROSTFIN_SEVENTY: [(i32, f64); 3] = [(6, 2.30), (8, 2.70), (16, 3.90)];
 
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
 /// shot.
@@ -92,21 +97,31 @@ fn miss_below(flight: &Flight, target: Vec2) -> Option<f64> {
     None
 }
 
-/// The flight from seat 0 at `aim` and `bars`, with the acceleration `accel` (so the fit can try
+/// The S1 flight from seat 0 at `aim` and `bars`, with the acceleration `accel` (so the fit can try
 /// constants other than the tuned ones).
 fn flight(game: &Game, aim: i16, bars: f64, accel: Vec2) -> Flight {
-    let mut flight = game.launch(0, aim, bars).unwrap();
+    flight_of(game, Shot::S1, aim, bars, accel)
+}
+
+/// `flight`, leaving `shot`'s barrel.
+fn flight_of(game: &Game, shot: Shot, aim: i16, bars: f64, accel: Vec2) -> Flight {
+    let mut flight = game.launch(0, shot, aim, bars).unwrap();
     flight.accel = accel;
     flight
 }
 
-/// The continuous power that passes through the target's center, by bisection.
+/// The continuous S1 power that passes through the target's center, by bisection.
 fn ideal_power(game: &Game, aim: i16, accel: Vec2) -> f64 {
+    ideal_power_of(game, Shot::S1, aim, accel)
+}
+
+/// `ideal_power` for `fired`, from its own barrel.
+fn ideal_power_of(game: &Game, fired: Shot, aim: i16, accel: Vec2) -> f64 {
     let target = target_center(game);
     let (mut short, mut long) = (0.1, 8.0);
     for _ in 0..60 {
         let mid = f64::midpoint(short, long);
-        match miss_below(&flight(game, aim, mid, accel), target) {
+        match miss_below(&flight_of(game, fired, aim, mid, accel), target) {
             Some(below) if below < 0.0 => long = mid,
             _ => short = mid,
         }
@@ -160,6 +175,30 @@ fn formula_cbchui_fixed_power_by_mobile() {
     // CR-fixed, per mobile: each fitted gravity puts 60 degrees one screen away at its chart power.
     for (mobile, bars) in CBCHUI {
         assert_bars(&format!("cbchui {mobile:?}"), ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())), bars);
+    }
+}
+
+#[test]
+fn formula_frostfin_tusk_lands_where_its_cannon_does() {
+    // GF-ice: S2 leaves the trunk, lower than S1's cannon, yet "hits the exact same place" in the
+    // open. Fitted from the cannon, the tusk's shots hold CR-fixed's power too.
+    let game = duel_of(MobileKind::Frostfin, 800);
+    let calm = tuned_for(MobileKind::Frostfin, Wind::default());
+    for shot in [Shot::S2, Shot::Ss] {
+        assert_bars(&format!("Frostfin {shot:?} from the tusk"), ideal_power_of(&game, shot, 60, calm), 2.33);
+    }
+}
+
+#[test]
+fn formula_frostfin_seventy_degree_table() {
+    // GF-ice's 70-degree power table, which doesn't say which shot it was made with: from the
+    // cannon and from the tusk alike, at the distances docs/research/frostfin.md keeps.
+    let calm = tuned_for(MobileKind::Frostfin, Wind::default());
+    for (eighths, bars) in FROSTFIN_SEVENTY {
+        let game = duel_of(MobileKind::Frostfin, 100 * eighths);
+        for shot in [Shot::S1, Shot::S2] {
+            assert_bars(&format!("Frostfin {shot:?} at 70 degrees, {eighths}/8 screen"), ideal_power_of(&game, shot, 70, calm), bars);
+        }
     }
 }
 
@@ -233,7 +272,7 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
+/// Derives the fitted constants. The other mobiles' gravities (cbchui), and Hookclaw's wind
 /// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
@@ -289,6 +328,13 @@ fn tool_fit() {
         ("plain throw 45 deg, 1/2 screen", 45, 400, 1.33),
     ] {
         println!("{name}: model {:.2}, table {says}", ideal_power(&duel(distance), aim, calm));
+    }
+    // GF-ice's 70-degree BJSL power table, for Frostfin (docs/research/frostfin.md).
+    let frostfin = tuned_for(MobileKind::Frostfin, Wind::default());
+    for (eighths, says) in [(1, 0.90), (2, 1.35), (4, 1.90), (6, 2.30), (8, 2.70), (12, 3.30), (16, 3.90)] {
+        let game = duel_of(MobileKind::Frostfin, 100 * eighths);
+        let (s1, s2) = (ideal_power(&game, 70, frostfin), ideal_power_of(&game, Shot::S2, 70, frostfin));
+        println!("Frostfin 70 deg, {eighths}/8 screen: model S1 {s1:.2}, S2 {s2:.2}, table {says}");
     }
     let lob = flight(&duel(800), 80, ideal_power(&duel(800), 80, calm), calm);
     let target = target_center(&duel(800));

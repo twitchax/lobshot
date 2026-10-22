@@ -143,6 +143,11 @@ enum Cue {
     Spark {
         seat: u8,
     },
+    /// Frostfin's ice leaving a mobile this brittle.
+    Frost {
+        seat: u8,
+        brittle: u8,
+    },
     Item {
         seat: u8,
         item: Item,
@@ -316,6 +321,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         }
         Effect::ShieldRestored { seat, amount } => cues.push((at, Cue::Shield { seat, change: amount })),
         Effect::Healed { seat, amount } => cues.push((at, Cue::Heal { seat, amount })),
+        Effect::Frosted { seat, brittle } => cues.push((at, Cue::Frost { seat, brittle })),
         Effect::Died { seat, death } => {
             cues.push((at, Cue::Die { seat }));
             // A player leaving isn't an explosion.
@@ -527,6 +533,16 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
                 commands.spawn(puff(dot, foot + SimVec2::new(0.0, -28.0), 26.0, Color::srgb_u8(0xff, 0xf0, 0x80), 0.3));
             }
         }
+        // A rime of frost over it, and its tag (`world::brittle_label`) catches up.
+        Cue::Frost { seat, brittle } => {
+            if let Some(foot) = foot_of(views, seat) {
+                commands.spawn(puff(dot, foot + SimVec2::new(0.0, -28.0), 48.0, theme::FROST, 0.5));
+            }
+            if let Some(at) = over(views, seat, Vec2::new(0.0, 128.0)) {
+                commands.spawn(rising("Brittle", theme::FROST, 14.0, at));
+            }
+            adjust(views, seat, |shown| shown.brittle = brittle);
+        }
         Cue::Item { seat, item } => {
             if let Some(at) = over(views, seat, Vec2::new(0.0, 140.0)) {
                 let image = hands.server.load(lobshot_assets::item_path(item));
@@ -669,6 +685,15 @@ mod unit {
         cues.clear();
         cue(Effect::Swapped { seat: 0, with: 2 }, 2.0, &mut cues);
         assert!(matches!(cues[..], [(at, Cue::Swap { seat: 0, with: 2 })] if at == 2.0 - FALL_SECONDS));
+    }
+
+    #[test]
+    fn frost_cues_the_new_brittleness_when_its_hit_lands() {
+        let mut cues = Vec::new();
+        cue(Effect::Frosted { seat: 1, brittle: 15 }, 2.5, &mut cues);
+        assert!(matches!(cues[..], [(at, Cue::Frost { seat: 1, brittle: 15 })] if at == 2.5), "one cue, when the sim scheduled it");
+        assert_eq!(world::brittle_label(15), "-15% DEF");
+        assert_eq!(world::brittle_label(0), "", "a sound mobile shows no tag");
     }
 
     #[test]

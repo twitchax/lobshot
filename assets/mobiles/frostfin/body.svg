@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="58" viewBox="-45 -56 80 58">
+  <!-- Frostfin body: a narwhal lying on a red ice sled. Its tail curled up behind, the sled's runner
+       with its curled prow and its struts, the deck, the narwhal, harness straps, saddle, lever and
+       the brass cup the snow cannon swivels in. The cannon and the tusk are the two barrels; the
+       tusk's socket sits on the upper lip, at the front of the head.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="whale" d="M 22,-15 L -20,-15 C -25,-15 -28.6,-18 -28.6,-22.4 C -28.6,-25.6 -27,-27.6 -25,-29.4 C -19.4,-38.6 -11,-44.6 -1,-44.8 C 7.4,-44.8 15.6,-37.2 23.4,-33.6 C 26.2,-30 27.6,-27.6 27.4,-25 C 27,-21 25,-17 22,-15 Z"/>
+    <clipPath id="whaleClip"><use href="#whale"/></clipPath>
+    <path id="deck" d="M -31,-15.4 H 26 Q 28.6,-15.4 28.6,-12.4 Q 28.6,-8.6 25.6,-8.6 H -30.4 Q -32.6,-8.6 -32.6,-11 V -13.6 Q -32.6,-15.4 -31,-15.4 Z"/>
+    <clipPath id="deckClip"><use href="#deck"/></clipPath>
+    <radialGradient id="whaleLight" cx="-8" cy="-40" r="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6f0ff" stop-opacity="0.5"/>
+      <stop offset="0.45" stop-color="#e6f0ff" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#1b2445" stop-opacity="0"/>
+      <stop offset="1" stop-color="#1b2445" stop-opacity="0.3"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the tail, curled up behind the deck: its stock, then the two lobes of the flukes -->
+    <path d="M -22,-20 C -31,-20 -36.4,-25 -36.6,-32" stroke="#2a1a2e" stroke-width="8.8" fill="none"/>
+    <path d="M -22,-20 C -31,-20 -36.4,-25 -36.6,-32" stroke="#6f86d0" stroke-width="7" fill="none"/>
+    <path d="M -24,-22.6 C -30.6,-23 -34.2,-26.8 -34.8,-31" stroke="#94aee0" stroke-width="2.2" fill="none"/>
+    <path d="M -36.4,-31 C -39.6,-31.8 -42.6,-34.6 -43.6,-39.4 C -39.8,-39.6 -37.4,-37.6 -36,-35.2 C -35.8,-38.8 -33.6,-42 -30.4,-43.4 C -30.2,-38.6 -32.4,-33.8 -36.4,-31 Z" fill="#6f86d0" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -37.6,-32.8 C -40,-33.8 -41.6,-35.8 -42.4,-38.2 M -35.2,-33.4 C -34.4,-36.6 -33,-39.4 -31.4,-41.4" stroke="#94aee0" stroke-width="0.9" fill="none"/>
+
+    <!-- the runner: one steel blade, its prow curled up in front, a brass finial on the curl -->
+    <path d="M -32,-5 C -31.4,-2.6 -30,-1.8 -28,-1.8 H 22 C 28,-1.8 31.6,-5.2 31.6,-10 C 31.6,-14.4 28.6,-16.6 26,-15.4" stroke="#2a1a2e" stroke-width="4.6" fill="none"/>
+    <path d="M -32,-5 C -31.4,-2.6 -30,-1.8 -28,-1.8 H 22 C 28,-1.8 31.6,-5.2 31.6,-10 C 31.6,-14.4 28.6,-16.6 26,-15.4" stroke="#8a88a6" stroke-width="2.8" fill="none"/>
+    <path d="M -29,-2.6 H 22 C 27.4,-2.6 30.6,-5.6 30.8,-10" stroke="#e6f0ff" stroke-width="0.8" fill="none"/>
+    <circle cx="26.2" cy="-15.2" r="1.8" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <!-- struts, runner to deck, over the ground probes -->
+    <g stroke="#2a1a2e" stroke-width="0.8">
+      <rect x="-21.6" y="-9.6" width="3.2" height="7.4" rx="0.8" fill="#5a5870"/>
+      <rect x="16.4" y="-9.6" width="3.2" height="7.4" rx="0.8" fill="#5a5870"/>
+    </g>
+    <path d="M -20.8,-8.6 V -3.4 M 17.2,-8.6 V -3.4" stroke="#8a88a6" stroke-width="0.8"/>
+
+    <!-- the deck: red lacquer with a brass stripe, frost on its front corner -->
+    <use href="#deck" fill="#e8434f" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#deckClip)">
+      <path d="M -34,-11.4 H 30 V -7 H -34 Z" fill="#b93a2c"/>
+      <path d="M -30,-14.2 H 25.4" stroke="#ff9a7e" stroke-width="0.9"/>
+      <path d="M -34,-11.6 H 30" stroke="#e9b949" stroke-width="1"/>
+    </g>
+    <g fill="#7f2520"><circle cx="-16" cy="-10" r="0.6"/><circle cx="-2" cy="-10" r="0.6"/><circle cx="12" cy="-10" r="0.6"/></g>
+    <!-- icicles hanging under the deck, and snow along its top -->
+    <g fill="#c8f6ff" stroke="#2a1a2e" stroke-width="0.6">
+      <path d="M -11.4,-8.6 L -10.4,-5.2 L -9.4,-8.6 Z"/>
+      <path d="M -7.8,-8.6 L -7.2,-6.4 L -6.6,-8.6 Z"/>
+      <path d="M 5,-8.6 L 6,-4.8 L 7,-8.6 Z"/>
+      <path d="M 22.6,-8.6 L 23.4,-6 L 24.2,-8.6 Z"/>
+    </g>
+
+    <!-- the narwhal: slate blue with a pale belly and darker mottling -->
+    <use href="#whale" fill="#94aee0" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#whaleClip)">
+      <path d="M -30,-24 C -18,-26.6 -2,-26 10,-22.4 C 16,-20.6 22,-21.6 30,-25.6 V -12 H -30 Z" fill="#eef4ff"/>
+      <path d="M -30,-20 C -18,-21.4 -2,-21 10,-18 C 16,-16.4 22,-17 30,-20 V -12 H -30 Z" fill="#c9d8f4"/>
+      <path d="M -24,-26.4 C -18,-27.4 -6,-27.4 4,-25.4" stroke="#6f86d0" stroke-width="0.8" fill="none"/>
+      <rect x="-30" y="-48" width="62" height="36" fill="url(#whaleLight)"/>
+      <path d="M -22.6,-31 C -18.6,-38.6 -11,-42.6 -2.6,-42.8" stroke="#e6f0ff" stroke-width="1.5" fill="none"/>
+    </g>
+    <g fill="#5d72b8">
+      <ellipse cx="-14.6" cy="-33.6" rx="2" ry="1.3" transform="rotate(-20 -14.6 -33.6)"/>
+      <ellipse cx="-9" cy="-38.4" rx="1.5" ry="1" transform="rotate(-12 -9 -38.4)"/>
+      <ellipse cx="-19.4" cy="-27.6" rx="1.4" ry="0.9" transform="rotate(-35 -19.4 -27.6)"/>
+      <ellipse cx="-4.6" cy="-33" rx="1.2" ry="0.8"/>
+      <ellipse cx="12" cy="-38.2" rx="1.3" ry="0.8" transform="rotate(20 12 -38.2)"/>
+    </g>
+    <ellipse cx="-13" cy="-39.6" rx="3" ry="1.4" transform="rotate(-28 -13 -39.6)" fill="#f4f8ff"/>
+    <!-- a frost marking on the flank: a six-armed snowflake -->
+    <g transform="translate(-19,-29.6)">
+      <path d="M 0,-3.8 V 3.8 M -3.3,-1.9 L 3.3,1.9 M -3.3,1.9 L 3.3,-1.9" stroke="#2a1a2e" stroke-width="2"/>
+      <path d="M 0,-3.8 V 3.8 M -3.3,-1.9 L 3.3,1.9 M -3.3,1.9 L 3.3,-1.9" stroke="#ffffff" stroke-width="0.9"/>
+      <circle r="1.2" fill="#c8f6ff" stroke="#2a1a2e" stroke-width="0.5"/>
+    </g>
+    <!-- blowhole -->
+    <path d="M -7.4,-44.4 Q -5.6,-45.6 -3.8,-44.6" stroke="#2a1a2e" stroke-width="0.8" fill="none"/>
+    <!-- the face: a big round eye, a smile up to the lip, a blush -->
+    <ellipse cx="15.6" cy="-29.4" rx="3.4" ry="3.9" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="16.4" cy="-28.8" r="2.3" fill="#1b2445"/>
+    <circle cx="17.1" cy="-30" r="0.95" fill="#ffffff"/>
+    <circle cx="15.6" cy="-27.6" r="0.45" fill="#e6fdff"/>
+    <path d="M 12.6,-34.4 Q 15.4,-35.8 18.2,-34.4" stroke="#2a1a2e" stroke-width="0.8" fill="none"/>
+    <path d="M 26.6,-22.6 Q 24,-20.2 19.6,-20.8" stroke="#2a1a2e" stroke-width="0.8" fill="none"/>
+    <ellipse cx="20.4" cy="-24.6" rx="2.2" ry="1.1" fill="#ff8fa8" opacity="0.85"/>
+
+    <!-- the girth: a leather band round the narwhal, from the cannon's cup down to the deck -->
+    <path d="M 7,-44.4 C 3.4,-36 3,-24 6,-15.6" stroke="#2a1a2e" stroke-width="4" fill="none"/>
+    <path d="M 7,-44.4 C 3.4,-36 3,-24 6,-15.6" stroke="#8a4b2e" stroke-width="2.6" fill="none"/>
+    <path d="M 6.2,-42.4 C 3.4,-35 3.2,-26 5.4,-17.6" stroke="#c97a4a" stroke-width="0.7" fill="none"/>
+    <rect x="2.6" y="-31.6" width="4.2" height="3.4" rx="0.6" fill="none" stroke="#e9b949" stroke-width="1.1" transform="rotate(-6 4.7 -29.9)"/>
+
+    <!-- flipper, over the girth -->
+    <path d="M 5.4,-25.6 C 3.6,-22 0.6,-19.4 -3.6,-18.4 C -6,-17.8 -7,-19.6 -5.4,-21 C -2.6,-23.6 0.6,-26 3.6,-27 C 5,-27.4 5.8,-26.6 5.4,-25.6 Z" fill="#6f86d0" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 3.4,-25.4 C 1.4,-23.4 -1.2,-21.6 -4,-20.2" stroke="#94aee0" stroke-width="0.7" fill="none"/>
+
+    <!-- team roundel on the deck -->
+    <circle cx="-24" cy="-12" r="3" fill="#d98a4a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-24" cy="-12" r="2" fill="#e8434f"/>
+    <path transform="translate(-24,-12) scale(0.42)" d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#fff1d0" stroke-width="1.6" fill="none"/>
+
+    <!-- the cannon's brass cup, on a pad on the narwhal's back -->
+    <path d="M -1,-44.2 Q 5,-46.4 11,-44.2 L 11.4,-42.6 Q 5,-40.6 -1.4,-42.6 Z" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -0.6,-49.4 L 10.6,-49.4 L 9.6,-44.6 Q 5,-42.2 0.4,-44.6 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="1"/>
+    <path d="M 10.2,-46.4 L 9.6,-44.6 Q 5,-42.2 0.4,-44.6 L 0,-46.4 Q 5,-43.8 10.2,-46.4 Z" fill="#b9822c"/>
+    <path d="M 0.8,-48.4 H 4" stroke="#fff3b0" stroke-width="0.8"/>
+    <ellipse cx="5" cy="-45.6" rx="4.4" ry="1.3" fill="#5a3812" opacity="0.45"/>
+
+    <!-- control lever, an ice crystal for its knob -->
+    <path d="M -6.6,-43.6 L -9.2,-50.4" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M -6.6,-43.6 L -9.2,-50.4" stroke="#e9b949" stroke-width="1.2" fill="none"/>
+    <path d="M -9.4,-53.6 L -7.8,-51 L -9.4,-48.6 L -11,-51 Z" fill="#8ff0ff" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -9.4,-52.6 L -8.6,-51" stroke="#e6fdff" stroke-width="0.6"/>
+
+    <!-- saddle -->
+    <path d="M -23.4,-40.4 Q -16,-45 -8.8,-42.4 Q -8.4,-40 -15.6,-39.2 Q -23,-38.4 -23.4,-40.4 Z" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -21.4,-41 Q -16,-43.6 -11.2,-42.2" stroke="#c97a4a" stroke-width="0.9" fill="none"/>
+  </g>
+</svg>

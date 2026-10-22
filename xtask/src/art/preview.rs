@@ -12,7 +12,7 @@ use lobshot_sim::{
     base::{Res, Void},
     body::Pose,
     drops::DropKind,
-    game::MobileKind,
+    game::{MobileKind, Shot},
     items::Item,
     movement::{Footing, Landing, settle, tilt},
     terrain::Terrain,
@@ -90,7 +90,7 @@ fn poses(mobile: &Mobile, kind: MobileKind) -> Res<Pixmap> {
     Ok(canvas)
 }
 
-/// Hitbox (dashed red), cannon pivot (cyan), muzzle (red) and ground probes (green).
+/// Hitbox (dashed red), each barrel's pivot (cyan) and muzzle (red), and ground probes (green).
 fn draw_geometry(canvas: &mut Pixmap, view: Transform, pose: &Pose, kind: MobileKind, aim: f64) {
     let tuning = kind.tuning();
     let hitbox = tuning.hitbox.value;
@@ -118,9 +118,12 @@ fn draw_geometry(canvas: &mut Pixmap, view: Transform, pose: &Pose, kind: Mobile
     }
     #[allow(clippy::cast_possible_truncation)]
     let aim = aim.round() as i16;
-    let (px, py) = tuning.cannon_pivot.value;
-    dot(canvas, view, pose.to_world(Vec2::new(px, py)), (0x00, 0xe0, 0xff));
-    dot(canvas, view, pose.muzzle(tuning, aim), (0xff, 0x2d, 0x55));
+    // Each barrel's pivot and muzzle: the cannon's, and a second barrel's if it has one.
+    for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+        let (px, py) = tuning.barrel(shot).pivot;
+        dot(canvas, view, pose.to_world(Vec2::new(px, py)), (0x00, 0xe0, 0xff));
+        dot(canvas, view, pose.muzzle(tuning, shot, aim), (0xff, 0x2d, 0x55));
+    }
     for probe in tuning.ground_probes.value {
         dot(canvas, view, pose.to_world(Vec2::new(probe, 0.0)), (0x7c, 0xff, 0x4f));
     }

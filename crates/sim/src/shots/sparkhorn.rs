@@ -146,7 +146,7 @@ mod unit {
         let power = (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let impact = game.track(game.launch(0, 30, power.bars())?, 0, 0).impact;
+                let impact = game.track(game.launch(0, Shot::Ss, 30, power.bars())?, 0, 0).impact;
                 (impact.contact != Contact::Gone).then(|| ((impact.at.x - between).abs(), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))

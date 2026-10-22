@@ -35,6 +35,8 @@ pub mod theme {
     pub const GOOD: Color = Color::srgb_u8(0x7c, 0xd6, 0x7a);
     /// Pale ice, so a shield reads apart from team A's blue HP bar under it.
     pub const SHIELD: Color = Color::srgb_u8(0xc4, 0xf1, 0xff);
+    /// Frostfin's frost on a brittle mobile: a colder cyan than a shield's.
+    pub const FROST: Color = Color::srgb_u8(0x8f, 0xf0, 0xff);
 }
 
 /// The color for a team.

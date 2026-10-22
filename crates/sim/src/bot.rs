@@ -6,12 +6,12 @@
 //!
 //! Search, in three passes:
 //!
-//! 1. **Aim.** Every shot leaves the barrel on the same flight, so one coarse grid (every 3
-//!    degrees, every 2 power steps) over the union of the allowed shots' aim ranges scores where
-//!    that flight lands: a direct hit on the nearest enemy best (a false-angle hit a little less
-//!    so), then distance from its center, and anything that would hit a teammate worst. The whole
-//!    range, not just the true angles: from a slope or behind a hill only a false angle may clear
-//!    the ground, and 70% damage beats none.
+//! 1. **Aim.** Shots that leave the same barrel leave it on the same flight, so one coarse grid
+//!    per barrel (every 3 degrees, every 2 power steps; most mobiles have one) over the union of its
+//!    allowed shots' aim ranges scores where that flight lands: a direct hit on the nearest enemy
+//!    best (a false-angle hit a little less so), then distance from its center, and anything that
+//!    would hit a teammate worst. The whole range, not just the true angles: from a slope or behind
+//!    a hill only a false angle may clear the ground, and 70% damage beats none.
 //! 2. **Shot.** For each shot it may fire (never a locked or disabled SS), the two best distinct
 //!    trajectories in its own range, refined, are fired in a scratch game and valued by what they
 //!    did: damage to enemies, kills, and twice the cost of any harm to its own side.
@@ -32,7 +32,7 @@ use crate::{
     game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
     items::{Item, Loadout},
     referee::XorShift,
-    tuning::{self, AimRange, bot::Noise},
+    tuning::{self, AimRange, Barrel, bot::Noise},
     units::{Centis, Facing, Power, Vec2, Wind},
 };
 
@@ -205,7 +205,7 @@ fn best_shot(game: &Game, seat: u8, target: &Player) -> Option<Candidate> {
         if !game.can_shoot(seat, shot) {
             continue;
         }
-        for (aim, power) in search.trajectories(shot.tuning(tuning).aim.value) {
+        for (aim, power) in search.trajectories(shot, shot.tuning(tuning).aim.value) {
             let candidate = Candidate::fired(game, seat, None, shot, aim, power, search.proxy(shot, aim, power));
             if best.as_ref().is_none_or(|best| candidate.beats(best)) {
                 best = Some(candidate);
@@ -238,36 +238,50 @@ enum Landing {
     Own,
 }
 
-/// The aim pass: where the shared flight lands for every aim and power on the coarse grid.
+/// The aim pass: where each barrel's flight lands for every aim and power on the coarse grid.
 struct Search<'g> {
     game: &'g Game,
     seat: u8,
     target: Vec2,
-    /// (aim, power in twentieths, where it lands), over the union of the allowed shots' ranges.
-    grid: Vec<(i16, u8, Landing)>,
+    grids: Vec<Grid>,
+}
+
+/// One barrel's share of the aim pass.
+struct Grid {
+    /// The allowed shots that leave this barrel.
+    shots: Vec<Shot>,
+    /// (aim, power in twentieths, where it lands), over the union of those shots' ranges.
+    cells: Vec<(i16, u8, Landing)>,
 }
 
 impl<'g> Search<'g> {
     fn new(game: &'g Game, seat: u8, target: Vec2) -> Self {
-        let mut search = Self { game, seat, target, grid: Vec::new() };
+        let mut search = Self { game, seat, target, grids: Vec::new() };
         let tuning = game.players()[usize::from(seat)].tuning();
-        let ranges: Vec<AimRange> = [Shot::S1, Shot::S2, Shot::Ss]
-            .iter()
-            .filter(|&&shot| game.can_shoot(seat, shot))
-            .map(|shot| shot.tuning(tuning).aim.value)
-            .collect();
-        let (low, high) = (ranges.iter().map(|r| r.min).min().unwrap_or(0), ranges.iter().map(|r| r.max).max().unwrap_or(0));
-        for aim in (low..=high).step_by(3) {
-            for power in (0..=Power::MAX.twentieths()).step_by(2) {
-                let landing = search.land(aim, power);
-                search.grid.push((aim, power, landing));
+        let mut barrels: Vec<(Barrel, Vec<Shot>)> = Vec::new();
+        for shot in [Shot::S1, Shot::S2, Shot::Ss].into_iter().filter(|&shot| game.can_shoot(seat, shot)) {
+            let barrel = tuning.barrel(shot);
+            match barrels.iter_mut().find(|(other, _)| *other == barrel) {
+                Some((_, shots)) => shots.push(shot),
+                None => barrels.push((barrel, vec![shot])),
             }
+        }
+        for (_, shots) in barrels {
+            let ranges: Vec<AimRange> = shots.iter().map(|shot| shot.tuning(tuning).aim.value).collect();
+            let (low, high) = (ranges.iter().map(|r| r.min).min().unwrap_or(0), ranges.iter().map(|r| r.max).max().unwrap_or(0));
+            let mut cells = Vec::new();
+            for aim in (low..=high).step_by(3) {
+                for power in (0..=Power::MAX.twentieths()).step_by(2) {
+                    cells.push((aim, power, search.land(shots[0], aim, power)));
+                }
+            }
+            search.grids.push(Grid { shots, cells });
         }
         search
     }
 
-    fn land(&self, aim: i16, power: u8) -> Landing {
-        let Some(flight) = self.game.launch(self.seat, aim, f64::from(power) / 20.0) else {
+    fn land(&self, shot: Shot, aim: i16, power: u8) -> Landing {
+        let Some(flight) = self.game.launch(self.seat, shot, aim, f64::from(power) / 20.0) else {
             return Landing::Lost;
         };
         let impact = self.game.track(flight, 0, 0).impact;
@@ -292,16 +306,20 @@ impl<'g> Search<'g> {
         }
     }
 
-    /// The shared flight's score at an aim and power off the grid, for `shot`.
+    /// `shot`'s flight's score at an aim and power off the grid.
     fn proxy(&self, shot: Shot, aim: i16, power: u8) -> f64 {
         let range = shot.tuning(self.game.players()[usize::from(self.seat)].tuning()).aim.value;
-        Self::score(range, aim, self.land(aim, power))
+        Self::score(range, aim, self.land(shot, aim, power))
     }
 
-    /// The two best distinct trajectories within `range`, each refined around its grid point.
-    fn trajectories(&self, range: AimRange) -> Vec<(i16, u8)> {
-        let mut ranked: Vec<(f64, i16, u8)> = self
-            .grid
+    /// The two best distinct trajectories for `shot` within its `range`, each refined around its
+    /// grid point.
+    fn trajectories(&self, shot: Shot, range: AimRange) -> Vec<(i16, u8)> {
+        let Some(grid) = self.grids.iter().find(|grid| grid.shots.contains(&shot)) else {
+            return Vec::new();
+        };
+        let mut ranked: Vec<(f64, i16, u8)> = grid
+            .cells
             .iter()
             .filter(|(aim, ..)| range.contains(*aim))
             .map(|&(aim, power, landing)| (Self::score(range, aim, landing), aim, power))
@@ -310,15 +328,15 @@ impl<'g> Search<'g> {
         let Some(&(_, first, _)) = ranked.first() else { return Vec::new() };
         // A second trajectory well away from the first: a lob against a line drive, say.
         let second = ranked.iter().find(|(_, aim, _)| (aim - first).abs() >= 9);
-        ranked.first().into_iter().chain(second).map(|&(_, aim, power)| self.refine(range, aim, power)).collect()
+        ranked.first().into_iter().chain(second).map(|&(_, aim, power)| self.refine(shot, range, aim, power)).collect()
     }
 
-    /// The best aim and power within two degrees and three power steps of a grid point.
-    fn refine(&self, range: AimRange, aim: i16, power: u8) -> (i16, u8) {
+    /// The best aim and power for `shot` within two degrees and three power steps of a grid point.
+    fn refine(&self, shot: Shot, range: AimRange, aim: i16, power: u8) -> (i16, u8) {
         let max = Power::MAX.twentieths();
         ((aim - 2).max(range.min)..=(aim + 2).min(range.max))
             .flat_map(|aim| (power.saturating_sub(3)..=(power + 3).min(max)).map(move |power| (aim, power)))
-            .map(|(aim, power)| (Self::score(range, aim, self.land(aim, power)), aim, power))
+            .map(|(aim, power)| (Self::score(range, aim, self.land(shot, aim, power)), aim, power))
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map_or((aim, power), |(_, aim, power)| (aim, power))
     }
@@ -492,6 +510,20 @@ mod unit {
             assert!(damage_to(&effects, 1) >= 80, "{mobile:?}: {effects:?}");
             assert_eq!(damage_to(&effects, 0), 0, "{mobile:?} hurt itself: {effects:?}");
         }
+    }
+
+    #[test]
+    fn it_aims_each_barrels_shots_by_that_barrels_flight() {
+        let game = duel_of(MobileKind::Frostfin, MobileKind::Coilback, 700);
+        let target = game.players()[1];
+        let search = Search::new(&game, 0, target.center());
+        assert_eq!(search.grids.len(), 2, "Frostfin's cannon and its tusk");
+        for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+            let (aim, power) = search.trajectories(shot, shot.tuning(game.players()[0].tuning()).aim.value)[0];
+            let impact = game.track(game.launch(0, shot, aim, f64::from(power) / 20.0).unwrap(), 0, 0).impact;
+            assert_eq!(impact.contact, Contact::Mobile(1), "{shot:?} at {aim} degrees, {power}/20 bars");
+        }
+        assert_eq!(Search::new(&duel(700), 0, target.center()).grids.len(), 1, "one barrel, one grid");
     }
 
     #[test]

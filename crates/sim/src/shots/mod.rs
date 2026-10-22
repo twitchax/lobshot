@@ -6,6 +6,7 @@
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
+mod frostfin;
 mod helix;
 mod hookclaw;
 mod lanternwing;
@@ -62,6 +63,8 @@ impl Salvo {
 pub(crate) struct Gun<'s> {
     pub salvo: &'s mut Salvo,
     pub seat: u8,
+    /// The shot, which says the barrel it leaves (`MobileTuning::barrel`).
+    pub shot: Shot,
     pub aim: i16,
     pub bars: f64,
     pub tuning: &'static MobileTuning,
@@ -71,9 +74,9 @@ pub(crate) struct Gun<'s> {
 }
 
 impl Gun<'_> {
-    /// The flight of a projectile `aim` degrees and `bars` off the volley's.
+    /// The flight of a projectile `aim` degrees and `bars` off the volley's, from its shot's barrel.
     pub fn launch(&self, game: &Game, aim: i16, bars: f64) -> Option<Flight> {
-        game.launch(self.seat, self.aim + aim, self.bars + bars)
+        game.launch(self.seat, self.shot, self.aim + aim, self.bars + bars)
     }
 
     /// A blast at `center` from this volley's weapon, scaled by `boost` (weather) and the turn's
@@ -144,6 +147,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
     let mut gun = Gun {
         salvo,
         seat,
+        shot,
         aim,
         bars: power.bars(),
         tuning,
@@ -160,6 +164,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Hookclaw => hookclaw::fire(game, &mut gun, shot, effects),
         MobileKind::Sparkhorn => sparkhorn::fire(game, &mut gun, shot, effects),
         MobileKind::Marblemole => marblemole::fire(game, &gun, shot, effects),
+        MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
     }
 }
 

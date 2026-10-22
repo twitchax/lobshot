@@ -62,6 +62,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
             &["CR-mob", "OB"],
         ),
     },
+    second_barrel: None,
 };
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which

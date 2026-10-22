@@ -450,6 +450,9 @@ pub struct PlayerView {
     pub max_hp: i32,
     pub shield: i32,
     pub max_shield: i32,
+    /// How much more damage Physical shots deal it, in percent: Frostfin's S2 and SS leave it
+    /// brittle for the rest of the game.
+    pub brittle: u8,
     /// Accumulated delay: the living player with the least moves next.
     pub delay: u32,
     /// Unused items, by loadout slot.
@@ -649,6 +652,7 @@ fn player_view(game: &Game, seat: u8, player: &Player, you: u8) -> PlayerView {
         max_hp: tuning.hp.value,
         shield: player.shield,
         max_shield: tuning.shield.value,
+        brittle: player.brittle,
         delay: player.clock.delay,
         items: slot_items(player, |_| true),
         ss: match game.ss_state(seat) {
@@ -788,6 +792,10 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::Walked { seat, to, .. } => format!(" {} walked to x={}.", names.who(*seat), to.x),
         Effect::Damaged { seat, amount } => format!(" {} took {amount} damage.", names.who(*seat)),
         Effect::Shielded { seat, amount } => format!(" {} shield took {amount}.", names.whose(*seat)),
+        Effect::Frosted { seat, brittle } => {
+            let (is, them) = if *seat == names.you { ("are", "you") } else { ("is", "it") };
+            format!(" {} {is} {brittle}% brittle: Physical shots deal {them} that much more.", names.who(*seat))
+        }
         Effect::Healed { seat, amount } => format!(" {} healed {amount}.", names.who(*seat)),
         Effect::Died { seat, death } => format!(
             " {} died ({}).",
@@ -942,6 +950,11 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Marblemole => {
             "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
         }
+        MobileKind::Frostfin => format!(
+            "A narwhal on an ice sled, with the most HP of any mobile. S1 is an icicle from the cannon on its back that digs a wide hole; S2 a ball of ice from its tusk, a lower muzzle that can jam in a wall the cannon clears; SS a snowflake from the tusk with a much wider blast. Each S2 or SS leaves every mobile it hurts {}% more brittle, up to {}%, for the rest of the game: Physical shots, anyone's, deal it that much more (`brittle` in the view).",
+            tuning::frostfin::BRITTLE_PER_HIT.value,
+            tuning::frostfin::BRITTLE_MAX.value
+        ),
     }
 }
 
@@ -1282,6 +1295,29 @@ mod unit {
         }
         assert!(rules.contains("- Big Heal (`BigHeal`): Heals 25% of your max HP at once (30% for a Bionic mobile)."), "{rules}");
         assert!(rules.contains("Bionic armor") && rules.contains("a pass's, 200"), "{rules}");
+    }
+
+    #[test]
+    fn a_frosted_mobile_is_brittle_in_the_log_and_the_view() {
+        let mut new = flat(3);
+        new.against = vec!["frostfin".into()];
+        let session = Session::new(&new, &maps()).unwrap();
+        let names = Names { game: session.game(), you: 0 };
+        assert_eq!(
+            effect_line(&names, &Effect::Frosted { seat: 0, brittle: 10 }),
+            " You are 10% brittle: Physical shots deal you that much more."
+        );
+        assert_eq!(
+            effect_line(&names, &Effect::Frosted { seat: 1, brittle: 5 }),
+            " Seat 1 (Frostfin, team B) is 5% brittle: Physical shots deal it that much more."
+        );
+        assert!(rules().contains("5% more brittle, up to 50%"), "{}", rules());
+        // The view reports what the player carries (the Frostfin bot may have frosted it already).
+        let mut player = session.game().players()[0];
+        player.brittle = 0;
+        assert_eq!(player_view(session.game(), 0, &player, 0).brittle, 0);
+        player.brittle = 15;
+        assert_eq!(player_view(session.game(), 0, &player, 0).brittle, 15);
     }
 
     #[test]

@@ -1,11 +1,11 @@
 //! How much an explosion hurts each mobile. No public source gives GunBound's formula (docs/research
 //! /mechanics.md, section 4), so this is our pick, shaped by what the sources do say: a direct hit
 //! deals the shot's listed range by how central it is, a near miss deals less the farther the blast
-//! was, and armor class and false angle scale the result.
+//! was, and armor class, brittleness and false angle scale the result.
 
 use crate::{
     body::Pose,
-    tuning::{ArmorClass, DamageRange, FALSE_ANGLE_DAMAGE, Rect, WeaponType},
+    tuning::{ArmorClass, DamageRange, FALSE_ANGLE_DAMAGE, Rect, WeaponType, frostfin::BRITTLE_AGAINST},
     units::Vec2,
 };
 
@@ -28,6 +28,18 @@ pub struct Target {
     pub pose: Pose,
     pub hitbox: Rect,
     pub armor: ArmorClass,
+    /// How much more Physical damage it takes, in percent (`Player::brittle`).
+    pub brittle: u8,
+}
+
+impl Target {
+    /// The damage multiplier on `weapon` against it: its armor class's, and its brittleness's
+    /// against Physical weapons.
+    #[must_use]
+    pub fn against(&self, weapon: WeaponType) -> f64 {
+        let brittle = if weapon == BRITTLE_AGAINST.value { 1.0 + f64::from(self.brittle) / 100.0 } else { 1.0 };
+        weapon.against(self.armor) * brittle
+    }
 }
 
 /// Damage to `target`. `direct` means the projectile struck this mobile's hitbox.
@@ -49,15 +61,15 @@ pub fn damage(blast: &Blast, target: &Target, direct: bool) -> i32 {
         }
         min * (1.0 - gap / blast.radius)
     };
-    scale(base, blast.weapon, target.armor, blast.false_angle, blast.boost)
+    scale(base, blast.weapon, target, blast.false_angle, blast.boost)
 }
 
-/// `base` damage from a `weapon` against `armor`, scaled for false angle and `boost` (weather,
-/// items), rounding down.
+/// `base` damage from a `weapon` against `target` (its armor and brittleness), scaled for false
+/// angle and `boost` (weather, items), rounding down.
 #[must_use]
-pub fn scale(base: f64, weapon: WeaponType, armor: ArmorClass, false_angle: bool, boost: f64) -> i32 {
+pub fn scale(base: f64, weapon: WeaponType, target: &Target, false_angle: bool, boost: f64) -> i32 {
     let angle = if false_angle { FALSE_ANGLE_DAMAGE.value } else { 1.0 };
-    let damage = (base * weapon.against(armor) * angle * boost).floor();
+    let damage = (base * target.against(weapon) * angle * boost).floor();
     // Bounded by a few times the shot's max damage, far inside i32.
     #[allow(clippy::cast_possible_truncation)]
     let damage = damage as i32;
@@ -82,15 +94,20 @@ mod unit {
             },
             hitbox: Rect { x: -30.0, y: -60.0, w: 60.0, h: 60.0 },
             armor: ArmorClass::Mechanical,
+            brittle: 0,
         }
     }
 
     fn blast(center: Vec2) -> Blast {
+        blast_with(center, WeaponType::Explosion)
+    }
+
+    fn blast_with(center: Vec2, weapon: WeaponType) -> Blast {
         Blast {
             center,
             radius: 30.0,
             damage: DamageRange { min: 120, max: 165 },
-            weapon: WeaponType::Explosion,
+            weapon,
             false_angle: false,
             boost: 1.0,
         }
@@ -124,5 +141,23 @@ mod unit {
         shot.weapon = WeaponType::Explosion;
         shot.boost = 1.33;
         assert_eq!(damage(&shot, &target, true), 219, "165 x 1.33 through Force");
+    }
+
+    #[test]
+    fn a_brittle_mobile_takes_more_from_physical_weapons_only() {
+        let mut target = target();
+        target.brittle = 15;
+        let mut shot = blast(Vec2::new(500.0, 370.0));
+        shot.weapon = WeaponType::Physical;
+        // GF-ice: 15% off its defence turns a 150 shot into about 175.
+        assert_eq!(damage(&shot, &target, true), 182, "165 x 0.96 (Physical against Mechanical) x 1.15");
+        for weapon in [WeaponType::Explosion, WeaponType::Laser, WeaponType::Electric] {
+            shot.weapon = weapon;
+            let mut sound = target;
+            sound.brittle = 0;
+            assert_eq!(damage(&shot, &target, true), damage(&shot, &sound, true), "{weapon:?}");
+        }
+        // Near misses scale the same way.
+        assert_eq!(damage(&blast_with(Vec2::new(545.0, 370.0), WeaponType::Physical), &target, false), 66, "60 x 0.96 x 1.15");
     }
 }
