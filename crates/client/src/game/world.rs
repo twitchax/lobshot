@@ -115,8 +115,10 @@ pub struct Shown {
     pub hp: i32,
     pub shield: i32,
     pub alive: bool,
-    /// The aim to draw the cannon at (this player's live aim, or another's last shot).
+    /// The aim to draw the barrels at (this player's live aim, or another's last shot).
     pub aim: i16,
+    /// How brittle Frostfin's ice has left it (`Player::brittle`).
+    pub brittle: u8,
 }
 
 /// The name and HP bar over a mobile (not rotated or mirrored with it).
@@ -130,6 +132,17 @@ struct HpFill;
 
 #[derive(Component)]
 struct ShieldFill;
+
+/// The tag beside the HP bar of a mobile Frostfin's ice left brittle.
+#[derive(Component)]
+struct BrittleTag;
+
+/// A brittle mobile's tag: how much more Physical damage it takes, as GunBound's defence counter
+/// reads (GF-ice). Empty while it takes no more.
+#[must_use]
+pub fn brittle_label(brittle: u8) -> String {
+    if brittle == 0 { String::new() } else { format!("-{brittle}% DEF") }
+}
 
 #[derive(Component)]
 struct Placeholder;
@@ -307,6 +320,7 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
             shield: player.shield,
             alive: player.alive,
             aim: player.tuning().s1.aim.value.true_min,
+            brittle: player.brittle,
         };
         let hitbox = player.tuning().hitbox.value;
         let color = team_color(player.team);
@@ -373,6 +387,17 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
                 },
                 Anchor::CENTER_LEFT,
                 Transform::from_xyz(-25.0, 0.0, 0.1),
+            ));
+            overlay.spawn((
+                BrittleTag,
+                Text2d::new(brittle_label(shown.brittle)),
+                TextFont {
+                    font_size: bevy::text::FontSize::Px(11.0),
+                    ..default()
+                },
+                TextColor(theme::FROST),
+                Anchor::CENTER_LEFT,
+                Transform::from_xyz(30.0, 0.0, 0.1),
             ));
         });
     }
@@ -496,6 +521,22 @@ fn follow_game(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time
         shown.hp = player.hp;
         shown.shield = player.shield;
         shown.alive = player.alive;
+        shown.brittle = player.brittle;
+    }
+}
+
+/// Keeps each brittle tag on what its mobile shows.
+fn tag_brittle(overlays: Query<(&Overlay, &Children)>, views: Query<(&MobileView, &Shown)>, mut tags: Query<&mut Text2d, With<BrittleTag>>) {
+    for (overlay, children) in &overlays {
+        let Some((_, shown)) = views.iter().find(|(view, _)| view.seat == overlay.seat) else { continue };
+        for child in children.iter() {
+            if let Ok(mut tag) = tags.get_mut(child) {
+                let label = brittle_label(shown.brittle);
+                if tag.0 != label {
+                    tag.0 = label;
+                }
+            }
+        }
     }
 }
 
@@ -514,7 +555,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, pose_mobiles)
+            (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, pose_mobiles, tag_brittle)
                 .chain()
                 .run_if(in_state(Screen::Game)),
         );

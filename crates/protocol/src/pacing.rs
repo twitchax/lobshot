@@ -101,7 +101,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             }
             Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::Beam { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
             Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
-            Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } => stage.blast + DAMAGE_AFTER_BLAST,
+            Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } | Effect::Frosted { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
                 Death::Blasted => stage.blast + DEATH_AFTER_BLAST,
                 Death::Bunged => stage.last_blast + SETTLE_SECONDS + FALL_SECONDS,
@@ -251,6 +251,21 @@ mod unit {
         let schedule = schedule(&effects);
         assert_eq!(schedule.at, [2.0, 2.0 + DAMAGE_AFTER_BLAST, 2.0 + SETTLE_SECONDS]);
         assert_eq!(schedule.end, 2.0 + SETTLE_SECONDS + FALL_SECONDS + TAIL_SECONDS);
+    }
+
+    #[test]
+    fn a_frost_shows_with_the_damage_it_follows() {
+        let effects = vec![
+            Effect::Exploded {
+                at: Vec2::new(10.0, 10.0),
+                radius: 20.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Damaged { seat: 1, amount: 150 },
+            Effect::Frosted { seat: 1, brittle: 5 },
+        ];
+        assert_eq!(schedule(&effects).at, [1.0, 1.0 + DAMAGE_AFTER_BLAST, 1.0 + DAMAGE_AFTER_BLAST]);
     }
 
     #[test]

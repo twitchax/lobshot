@@ -97,7 +97,7 @@ fn pierce(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) 
             from: touch.from,
             to: touch.to,
         });
-        let amount = damage::scale(base, gun.tuning.weapon.value, player.tuning().armor.value, gun.false_angle, boost);
+        let amount = damage::scale(base, gun.tuning.weapon.value, &player.target(), gun.false_angle, boost);
         game.hurt(touch.seat, amount, effects);
     }
 }

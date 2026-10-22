@@ -1,0 +1,35 @@
+// Frostfin: a narwhal on a red ice sled. Icicles fly from the snow cannon on its back; balls of ice
+// and the snowflake leave its tusk. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the runner's ground contact, +x = facing, +y =
+// down; facing left mirrors x. Every part SVG puts its pivot at its own origin, so `at` is where
+// that pivot lands in the body frame, and `cargo xtask art` renders each part with its pivot at the
+// image's center (lobshot_assets::ART_SCALE pixels per world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, both barrels' pivots and lengths) lives in
+// sim::tuning::frostfin; `cargo xtask art` refuses a rig whose cannon or tusk disagrees with it.
+MobileRig(
+    name: "Frostfin",
+    parts: [
+        // Drawn in z order, lowest first. aim: turns with the aim. Both barrels aim together.
+        // The tusk sits in its socket on the upper lip, over the face.
+        (id: "body",   file: "body.svg",   at: (0.0, 0.0),    z: 2),
+        (id: "tusk",   file: "tusk.svg",   at: (26.0, -26.0), z: 3, aim: true),
+        // The snow cannon swivels in its brass cup on the narwhal's back, ahead of the saddle.
+        (id: "cannon", file: "cannon.svg", at: (5.0, -48.0),  z: 3, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where S1 leaves, in the cannon's frame at aim 0 (pointing +x): the icicle's tip, one
+        // barrel length (sim::tuning) from the pivot.
+        muzzle: (25.0, 0.0),
+    ),
+    second_barrel: Some((
+        part: "tusk",
+        // Where S2 and SS leave, in the tusk's frame at aim 0: the ball of ice at its tip, the
+        // second barrel's length (sim::tuning) from the pivot.
+        muzzle: (30.0, 0.0),
+    )),
+    // Riders are cosmetic and swappable; a rider's origin is its seat.
+    rider_socket: (at: (-16.0, -41.6), z: 4),
+)

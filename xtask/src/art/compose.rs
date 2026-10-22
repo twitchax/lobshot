@@ -120,10 +120,11 @@ mod unit {
     use super::*;
     use crate::art::{mobile::load_rig, raster::alpha, sources};
 
-    /// The spike's cannon covered the snail's antennae at aim 0. Past its ball joint, the barrel may
-    /// not cross anything else on the mobile, from 0 up to the highest aim any shot allows.
+    /// The spike's cannon covered the snail's antennae at aim 0. Past its ball joint, a barrel (the
+    /// cannon, or a second barrel) may not cross anything else on the mobile, the other barrel
+    /// included, from 0 up to the highest aim any shot allows.
     #[test]
-    fn the_cannon_clears_the_body_at_every_aim() {
+    fn the_barrels_clear_the_body_at_every_aim() {
         // The ball joint and the turret cup it sits in overlap the barrel by design.
         const JOINT: f64 = 11.0;
         for kind in MobileKind::ALL {
@@ -136,26 +137,30 @@ mod unit {
                 facing: Facing::Right,
                 tilt: 0.0,
             };
-            let pivot = pose.to_world(Vec2::new(tuning.cannon_pivot.value.0, tuning.cannon_pivot.value.1));
             let view = Transform::from_scale(2.0, 2.0);
-            for aim in (0..=top).step_by(5) {
-                let aim = f64::from(aim);
-                let mut cannon = Pixmap::new(400, 300).unwrap();
-                mobile.draw_only(&mut cannon, view, &pose, aim, |id| id == rig.cannon.part);
-                let mut rest = Pixmap::new(400, 300).unwrap();
-                mobile.draw_only(&mut rest, view, &pose, aim, |id| id != rig.cannon.part && id != "rider");
-                let crossed = alpha(&cannon)
-                    .iter()
-                    .zip(alpha(&rest))
-                    .enumerate()
-                    .filter(|&(i, (&a, b))| {
-                        // Pixel centers, back in world pixels (the canvas is at 2x).
-                        let pixel = |n: usize| f64::from(u32::try_from(n).unwrap()) * 0.5 + 0.25;
-                        let world = Vec2::new(pixel(i % 400), pixel(i / 400));
-                        a > 0 && b > 0 && world.distance(pivot) > JOINT
-                    })
-                    .count();
-                assert_eq!(crossed, 0, "{} at aim {aim}: the barrel crosses {crossed} px of the body", rig.name);
+            for barrel in rig.barrels() {
+                // `load_rig` checked each barrel's part pivots where sim::tuning aims it from.
+                let (px, py) = rig.parts.iter().find(|part| part.id == barrel.part).unwrap().at;
+                let pivot = pose.to_world(Vec2::new(px, py));
+                for aim in (0..=top).step_by(5) {
+                    let aim = f64::from(aim);
+                    let mut drawn = Pixmap::new(400, 300).unwrap();
+                    mobile.draw_only(&mut drawn, view, &pose, aim, |id| id == barrel.part);
+                    let mut rest = Pixmap::new(400, 300).unwrap();
+                    mobile.draw_only(&mut rest, view, &pose, aim, |id| id != barrel.part && id != "rider");
+                    let crossed = alpha(&drawn)
+                        .iter()
+                        .zip(alpha(&rest))
+                        .enumerate()
+                        .filter(|&(i, (&a, b))| {
+                            // Pixel centers, back in world pixels (the canvas is at 2x).
+                            let pixel = |n: usize| f64::from(u32::try_from(n).unwrap()) * 0.5 + 0.25;
+                            let world = Vec2::new(pixel(i % 400), pixel(i / 400));
+                            a > 0 && b > 0 && world.distance(pivot) > JOINT
+                        })
+                        .count();
+                    assert_eq!(crossed, 0, "{} at aim {aim}: its {} crosses {crossed} px of the body", rig.name, barrel.part);
+                }
             }
         }
     }

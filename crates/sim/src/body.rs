@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    game::Shot,
     tuning::{MobileTuning, Rect},
     units::{Facing, Vec2, to_radians},
 };
@@ -40,13 +41,13 @@ impl Pose {
         Vec2::new(libm::cos(aim) * self.facing.signum(), -libm::sin(aim)).rotated(self.tilt)
     }
 
-    /// Where a shot leaves the barrel at `aim`.
+    /// Where `shot` leaves its barrel at `aim`.
     #[must_use]
-    pub fn muzzle(&self, mobile: &MobileTuning, aim: i16) -> Vec2 {
-        let (px, py) = mobile.cannon_pivot.value;
+    pub fn muzzle(&self, mobile: &MobileTuning, shot: Shot, aim: i16) -> Vec2 {
+        let barrel = mobile.barrel(shot);
+        let (px, py) = barrel.pivot;
         let aim = to_radians(f64::from(aim));
-        let barrel = mobile.barrel_length.value;
-        self.to_world(Vec2::new(px + barrel * libm::cos(aim), py - barrel * libm::sin(aim)))
+        self.to_world(Vec2::new(px + barrel.length * libm::cos(aim), py - barrel.length * libm::sin(aim)))
     }
 
     /// Whether a world point is inside the hitbox.
@@ -115,7 +116,10 @@ mod unit {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
     use super::*;
-    use crate::{game::MobileKind, tuning::coilback};
+    use crate::{
+        game::MobileKind,
+        tuning::{coilback, frostfin},
+    };
 
     fn pose(facing: Facing, tilt_degrees: f64) -> Pose {
         Pose {
@@ -161,12 +165,33 @@ mod unit {
         let pose = pose(Facing::Right, 0.0);
         for kind in MobileKind::ALL {
             let mobile = kind.tuning();
-            for shot in [&mobile.s1, &mobile.s2, &mobile.ss] {
-                for aim in shot.aim.value.min..=shot.aim.value.max {
-                    assert!(!pose.hit(mobile.hitbox.value, pose.muzzle(mobile, aim)), "{kind:?} at {aim}");
+            for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+                let range = shot.tuning(mobile).aim.value;
+                for aim in range.min..=range.max {
+                    assert!(!pose.hit(mobile.hitbox.value, pose.muzzle(mobile, shot, aim)), "{kind:?} {shot:?} at {aim}");
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_shot_leaves_its_own_barrel() {
+        let pose = pose(Facing::Right, 0.0);
+        let frostfin = frostfin::MOBILE;
+        let tusk = frostfin.second_barrel.unwrap();
+        // At aim 0 a barrel points straight ahead, so its muzzle is its pivot plus its length.
+        let (px, py) = tusk.pivot.value;
+        assert!(close(pose.muzzle(&frostfin, Shot::S2, 0), pose.to_world(Vec2::new(px + tusk.length.value, py))));
+        assert!(close(pose.muzzle(&frostfin, Shot::Ss, 0), pose.muzzle(&frostfin, Shot::S2, 0)));
+        let (cx, cy) = frostfin.cannon_pivot.value;
+        assert!(close(pose.muzzle(&frostfin, Shot::S1, 0), pose.to_world(Vec2::new(cx + frostfin.barrel_length.value, cy))));
+        // The tusk is the lower muzzle at every aim the two share.
+        for aim in 20..=70 {
+            assert!(pose.muzzle(&frostfin, Shot::S2, aim).y > pose.muzzle(&frostfin, Shot::S1, aim).y + 10.0, "at {aim}");
+        }
+        // Every other mobile fires all three from its cannon.
+        let coilback = coilback::MOBILE;
+        assert!(close(pose.muzzle(&coilback, Shot::Ss, 30), pose.muzzle(&coilback, Shot::S1, 30)));
     }
 
     #[test]

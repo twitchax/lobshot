@@ -235,8 +235,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   icons and slot-machine drops, and four maps: Gablewick (town rooftops), Glintvein (mine
   corridors), Rimewake (long flat sea) and Ashspine (dragon's-back ridge), plus Tidewall B.
 - **M5 adds**, from Aaron's concepts: Spoutpot (a hippo with a teapot water tank, Turtle's
-  behavior), Tuskrack (a walrus on a tank-sled with a fireworks rack, Bigfoot's) and Sudsotter (an
-  otter in a bathtub buggy, J.Frog's).
+  behavior), Tuskrack (a walrus on a tank-sled with a fireworks rack, Bigfoot's), Sudsotter (an
+  otter in a bathtub buggy, J.Frog's) and Frostfin (a narwhal on an ice sled, Ice's: its S2 and SS
+  leave from its tusk, a second barrel, and leave their target brittle to Physical damage).
 
 ## Testing
 

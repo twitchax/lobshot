@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -58,11 +58,12 @@ pub enum MobileKind {
     Spoutpot,
     Tuskrack,
     Sudsotter,
+    Frostfin,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -71,6 +72,7 @@ impl MobileKind {
         Self::Spoutpot,
         Self::Tuskrack,
         Self::Sudsotter,
+        Self::Frostfin,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -98,6 +100,7 @@ impl MobileKind {
             Self::Spoutpot => &spoutpot::MOBILE,
             Self::Tuskrack => &tuskrack::MOBILE,
             Self::Sudsotter => &sudsotter::MOBILE,
+            Self::Frostfin => &frostfin::MOBILE,
         }
     }
 }
@@ -493,6 +496,12 @@ pub enum Effect {
     SuddenDeath {
         kind: SuddenDeathKind,
     },
+    /// Frostfin's ice left `seat` brittle, just after hurting it: Physical damage against it is now
+    /// `brittle` percent stronger, for the rest of the game (`Player::brittle`).
+    Frosted {
+        seat: u8,
+        brittle: u8,
+    },
 }
 
 /// What a projectile touched.
@@ -562,6 +571,9 @@ pub struct Player {
     pub ss_lock: u8,
     /// The game's turn count (`Game::turns`) when this seat last spun its slot machine.
     pub last_spin: Option<i64>,
+    /// How much more Physical damage this mobile takes, in percent: Frostfin's S2 and SS leave it
+    /// brittle, for the rest of the game.
+    pub brittle: u8,
 }
 
 impl Player {
@@ -592,6 +604,7 @@ impl Player {
             pose: self.pose(),
             hitbox: self.tuning().hitbox.value,
             armor: self.tuning().armor.value,
+            brittle: self.brittle,
         }
     }
 }
@@ -673,6 +686,7 @@ impl Game {
                 armed: None,
                 ss_lock: 0,
                 last_spin: None,
+                brittle: 0,
             });
         }
 
@@ -1018,15 +1032,16 @@ impl Game {
         }
     }
 
-    /// The flight of a shot from `seat` at `aim` degrees and `bars` of power (continuous, so bots
-    /// and tests can search between power steps).
+    /// The flight of `shot` from `seat` at `aim` degrees and `bars` of power (continuous, so bots
+    /// and tests can search between power steps). It leaves the shot's own barrel
+    /// (`MobileTuning::barrel`).
     #[must_use]
-    pub fn launch(&self, seat: u8, aim: i16, bars: f64) -> Option<Flight> {
+    pub fn launch(&self, seat: u8, shot: Shot, aim: i16, bars: f64) -> Option<Flight> {
         let player = self.players.get(usize::from(seat))?;
         let tuning = player.tuning();
         let pose = player.pose();
         Some(Flight {
-            origin: pose.muzzle(tuning, aim),
+            origin: pose.muzzle(tuning, shot, aim),
             velocity: pose.aim_direction(aim) * ballistics::launch_speed(bars),
             accel: ballistics::acceleration(tuning.gravity.value, self.wind, tuning.wind_sensitivity.value),
         })
@@ -1540,14 +1555,19 @@ pub(crate) mod testing {
         effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count()
     }
 
-    /// The power step whose plain shot from seat 0 at `aim` strikes seat 1's hitbox closest to its
+    /// The power step whose plain S1 from seat 0 at `aim` strikes seat 1's hitbox closest to its
     /// center.
     pub fn direct_hit_power(game: &Game, aim: i16) -> Power {
+        direct_hit_power_of(game, Shot::S1, aim)
+    }
+
+    /// `direct_hit_power` for a plain projectile leaving `shot`'s barrel.
+    pub fn direct_hit_power_of(game: &Game, shot: Shot, aim: i16) -> Power {
         let center = game.players()[1].center();
         (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let impact = game.track(game.launch(0, aim, power.bars())?, 0, 0).impact;
+                let impact = game.track(game.launch(0, shot, aim, power.bars())?, 0, 0).impact;
                 (impact.contact == Contact::Mobile(1)).then(|| (impact.at.distance(center), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
@@ -1933,7 +1953,7 @@ mod unit {
     #[test]
     fn a_mirror_sends_the_shot_back() {
         let game = with_column(WeatherKind::Mirror, 600);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         let track = game.track(flight, 0, 0);
         assert_eq!(track.legs.len(), 2);
         assert!(track.legs[1].flight.velocity.x < 0.0 && track.impact.at.x < 600.0, "{track:?}");
@@ -1943,7 +1963,7 @@ mod unit {
     fn a_mirror_sends_back_a_shot_fired_from_inside_its_beam() {
         // The beam spans 320 to 360, and the muzzle stands at about 334.
         let game = with_column(WeatherKind::Mirror, 340);
-        let flight = game.launch(0, 25, 2.0).unwrap();
+        let flight = game.launch(0, Shot::S1, 25, 2.0).unwrap();
         assert!(game.weather.columns[0].contains(flight.origin.x), "{flight:?}");
         let track = game.track(flight, 0, 0);
         assert_eq!(track.legs.len(), 2, "{track:?}");
@@ -1953,14 +1973,14 @@ mod unit {
     #[test]
     fn force_marks_a_shot_fired_from_inside_its_beam() {
         let game = with_column(WeatherKind::Force, 340);
-        let flight = game.launch(0, 25, 2.0).unwrap();
+        let flight = game.launch(0, Shot::S1, 25, 2.0).unwrap();
         assert!(game.track(flight, 0, 0).marks.forced);
     }
 
     #[test]
     fn a_tornado_holds_the_shot_and_flings_it_up() {
         let game = with_column(WeatherKind::Tornado, 600);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         let track = game.track(flight, 0, 0);
         assert_eq!(track.legs.len(), 2);
         let entry = track.legs[0].to;
@@ -1971,7 +1991,7 @@ mod unit {
     #[test]
     fn force_marks_the_shot_without_turning_it() {
         let game = with_column(WeatherKind::Force, 600);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         let calm = duel(800).track(flight, 0, 0);
         let forced = game.track(flight, 0, 0);
         assert!(forced.marks.forced && !calm.marks.forced);
@@ -1981,7 +2001,7 @@ mod unit {
     #[test]
     fn a_track_with_a_deadline_stops_a_shot_still_flying_then() {
         let game = duel(800);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         let whole = game.track(flight, 0, 0);
         assert_eq!(game.track_until(flight, whole.impact.tick + 10), (whole, false), "a deadline after it lands changes nothing");
         let (cut, flying) = game.track_until(flight, 1000);
@@ -1993,7 +2013,7 @@ mod unit {
     #[test]
     fn a_deadline_counts_only_the_columns_passed_before_it() {
         let game = with_column(WeatherKind::Force, 600);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         // The beam spans 580 to 620.
         let reaches = (0..TICKS_PER_SECOND).find(|&tick| flight.at(tick).x >= 560.0).unwrap();
         assert!(!game.track_until(flight, reaches).0.marks.forced);
@@ -2003,7 +2023,7 @@ mod unit {
     #[test]
     fn a_deadline_inside_a_tornado_comes_as_it_lets_go() {
         let game = with_column(WeatherKind::Tornado, 600);
-        let flight = game.launch(0, 45, 2.4).unwrap();
+        let flight = game.launch(0, Shot::S1, 45, 2.4).unwrap();
         let entry = game.track(flight, 0, 0).legs[0].to;
         let (held, flying) = game.track_until(flight, entry + TICKS_PER_SECOND / 2);
         assert!(flying);

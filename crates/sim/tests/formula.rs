@@ -12,7 +12,7 @@
 
 use lobshot_sim::{
     ballistics::{self, Flight},
-    game::{Game, MobileKind, Seat, Setup, Team},
+    game::{Game, MobileKind, Seat, Setup, Shot, Team},
     items::Loadout,
     map::{MapRef, NoAssets},
     tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, spoutpot},
@@ -22,9 +22,9 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle). J.Frog came after
-/// the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
-const CBCHUI: [(MobileKind, f64); 7] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice). J.Frog came
+/// after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
+const CBCHUI: [(MobileKind, f64); 8] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
@@ -32,7 +32,12 @@ const CBCHUI: [(MobileKind, f64); 7] = [
     (MobileKind::Marblemole, 2.33),
     (MobileKind::Spoutpot, 2.39),
     (MobileKind::Sudsotter, 2.10),
+    (MobileKind::Frostfin, 2.33),
 ];
+
+/// GF-ice's 70-degree table for Ice, in eighths of a screen and bars: the entries in the acceptance
+/// set (docs/research/frostfin.md says which are out, and why).
+const FROSTFIN_SEVENTY: [(i32, f64); 3] = [(6, 2.30), (8, 2.70), (16, 3.90)];
 
 /// CR-fixed gives Bigfoot's power as "??". DBR's per-mobile shot weights (`ax`, clone, unverified)
 /// track the chart's powers as their square roots (docs/research/mechanics.md, 2.3): every mobile
@@ -131,18 +136,28 @@ fn miss_below(flight: &Flight, target: Vec2) -> Option<f64> {
 /// The flight from seat 0 at `aim` and `bars`, with the acceleration `accel` (so the fit can try
 /// constants other than the tuned ones).
 fn flight(game: &Game, aim: i16, bars: f64, accel: Vec2) -> Flight {
-    let mut flight = game.launch(0, aim, bars).unwrap();
+    flight_of(game, Shot::S1, aim, bars, accel)
+}
+
+/// `flight`, leaving `shot`'s barrel.
+fn flight_of(game: &Game, shot: Shot, aim: i16, bars: f64, accel: Vec2) -> Flight {
+    let mut flight = game.launch(0, shot, aim, bars).unwrap();
     flight.accel = accel;
     flight
 }
 
-/// The continuous power that passes through the target's center, by bisection.
+/// The continuous S1 power that passes through the target's center, by bisection.
 fn ideal_power(game: &Game, aim: i16, accel: Vec2) -> f64 {
+    ideal_power_of(game, Shot::S1, aim, accel)
+}
+
+/// `ideal_power` for `fired`, from its own barrel.
+fn ideal_power_of(game: &Game, fired: Shot, aim: i16, accel: Vec2) -> f64 {
     let target = target_center(game);
     let (mut short, mut long) = (0.1, 8.0);
     for _ in 0..60 {
         let mid = f64::midpoint(short, long);
-        match miss_below(&flight(game, aim, mid, accel), target) {
+        match miss_below(&flight_of(game, fired, aim, mid, accel), target) {
             Some(below) if below < 0.0 => long = mid,
             _ => short = mid,
         }
@@ -227,6 +242,30 @@ fn formula_sudsotter_holds_creedos_other_frog_powers() {
     assert_bars("frog cbchui half screen", ideal_power(&duel_of(mobile, 400), 75, calm), 1.95);
     let banpao = ideal_power(&duel_of(mobile, 1200), 60, calm);
     assert!((2.5 - TOLERANCE_BARS..=2.6 + TOLERANCE_BARS).contains(&banpao), "frog banpao: needs {banpao:.3} bars");
+}
+
+#[test]
+fn formula_frostfin_tusk_lands_where_its_cannon_does() {
+    // GF-ice: S2 leaves the trunk, lower than S1's cannon, yet "hits the exact same place" in the
+    // open. Fitted from the cannon, the tusk's shots hold CR-fixed's power too.
+    let game = duel_of(MobileKind::Frostfin, 800);
+    let calm = tuned_for(MobileKind::Frostfin, Wind::default());
+    for shot in [Shot::S2, Shot::Ss] {
+        assert_bars(&format!("Frostfin {shot:?} from the tusk"), ideal_power_of(&game, shot, 60, calm), 2.33);
+    }
+}
+
+#[test]
+fn formula_frostfin_seventy_degree_table() {
+    // GF-ice's 70-degree power table, which doesn't say which shot it was made with: from the
+    // cannon and from the tusk alike, at the distances docs/research/frostfin.md keeps.
+    let calm = tuned_for(MobileKind::Frostfin, Wind::default());
+    for (eighths, bars) in FROSTFIN_SEVENTY {
+        let game = duel_of(MobileKind::Frostfin, 100 * eighths);
+        for shot in [Shot::S1, Shot::S2] {
+            assert_bars(&format!("Frostfin {shot:?} at 70 degrees, {eighths}/8 screen"), ideal_power_of(&game, shot, 70, calm), bars);
+        }
+    }
 }
 
 #[test]
@@ -569,6 +608,14 @@ fn tool_fit() {
     ] {
         println!("{name}: model {:.2}, table {says}", ideal_power(&duel(distance), aim, calm));
     }
+    // GF-ice's 70-degree BJSL power table, for Frostfin (docs/research/frostfin.md).
+    let frostfin = tuned_for(MobileKind::Frostfin, Wind::default());
+    for (eighths, says) in [(1, 0.90), (2, 1.35), (4, 1.90), (6, 2.30), (8, 2.70), (12, 3.30), (16, 3.90)] {
+        let game = duel_of(MobileKind::Frostfin, 100 * eighths);
+        let (s1, s2) = (ideal_power(&game, 70, frostfin), ideal_power_of(&game, Shot::S2, 70, frostfin));
+        println!("Frostfin 70 deg, {eighths}/8 screen: model S1 {s1:.2}, S2 {s2:.2}, table {says}");
+    }
+
     let lob = flight(&duel(800), 80, ideal_power(&duel(800), 80, calm), calm);
     let target = target_center(&duel(800));
     let ticks = (0..20_000).find(|&t| lob.at(t).x >= target.x).unwrap();

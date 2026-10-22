@@ -57,6 +57,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
         delay: cited(800, &["CR-mob", "SW-mob", "SW-mds"]),
         aim: cited(AIM, &["CR-mob", "OB"]),
     },
+    second_barrel: None,
 };
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which

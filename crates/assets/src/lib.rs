@@ -166,7 +166,8 @@ fn png_name(file: &str) -> String {
 }
 
 /// A mobile's cutout rig: the art only. Gameplay geometry (hitbox, aim range, ground probes) lives
-/// in `lobshot_sim::tuning`; `cargo xtask art` checks the rig's cannon agrees with it.
+/// in `lobshot_sim::tuning`; `cargo xtask art` checks the rig's cannon (and second barrel) agrees
+/// with it.
 ///
 /// Body frame: origin at the center of the ground contact, `+x` forward, `y` down, world pixels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -175,6 +176,10 @@ pub struct MobileRig {
     /// Drawn in `z` order, lowest first.
     pub parts: Vec<Part>,
     pub cannon: Cannon,
+    /// A second barrel some shots leave instead of the cannon (Frostfin's tusk): the art of
+    /// `MobileTuning::second_barrel`. Most rigs have none.
+    #[serde(default)]
+    pub second_barrel: Option<Cannon>,
     /// Where the rider sits.
     pub rider_socket: Socket,
 }
@@ -191,12 +196,12 @@ pub struct Part {
     /// Rolls as the mobile moves (wheels).
     #[serde(default)]
     pub spin: bool,
-    /// Turns with the cannon's aim.
+    /// Turns with the aim: the cannon, or a second barrel.
     #[serde(default)]
     pub aim: bool,
 }
 
-/// The cannon: which part aims, and where shots leave it.
+/// A barrel: which part aims, and where shots leave it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cannon {
     pub part: String,
@@ -259,11 +264,18 @@ impl MobileRig {
     ///
     /// # Errors
     ///
-    /// Fails on malformed RON, or a cannon that names no part.
+    /// Fails on malformed RON, or a cannon or second barrel that names no part.
     pub fn from_ron(text: &str) -> Res<Self> {
         let rig: Self = ron::from_str(text).context("reading a rig")?;
-        ensure!(rig.parts.iter().any(|p| p.id == rig.cannon.part), "{}'s cannon names no part {:?}", rig.name, rig.cannon.part);
+        for barrel in rig.barrels() {
+            ensure!(rig.parts.iter().any(|p| p.id == barrel.part), "{}'s barrel names no part {:?}", rig.name, barrel.part);
+        }
         Ok(rig)
+    }
+
+    /// The cannon, then the second barrel if there is one.
+    pub fn barrels(&self) -> impl Iterator<Item = &Cannon> {
+        std::iter::once(&self.cannon).chain(&self.second_barrel)
     }
 }
 
@@ -338,6 +350,22 @@ mod unit {
         )"#;
         let rig = MobileRig::from_ron(source).unwrap();
         assert!(rig.parts[1].aim && !rig.parts[0].spin);
+        assert_eq!(rig.second_barrel, None, "a rig without one has no second barrel");
         assert!(MobileRig::from_ron(&source.replace(r#"part: "cannon""#, r#"part: "nope""#)).is_err());
+    }
+
+    #[test]
+    fn reads_a_rig_with_a_second_barrel() {
+        let source = r#"MobileRig(
+            name: "Frostfin",
+            parts: [(id: "body", file: "body.svg", at: (0.0, 0.0), z: 0), (id: "cannon", file: "cannon.svg", at: (5.0, -47.0), z: 3, aim: true), (id: "tusk", file: "tusk.svg", at: (26.0, -26.0), z: 2, aim: true)],
+            cannon: (part: "cannon", muzzle: (25.0, 0.0)),
+            second_barrel: Some((part: "tusk", muzzle: (30.0, 0.0))),
+            rider_socket: (at: (-16.0, -44.0), z: 4),
+        )"#;
+        let rig = MobileRig::from_ron(source).unwrap();
+        assert_eq!(rig.barrels().map(|barrel| barrel.part.as_str()).collect::<Vec<_>>(), ["cannon", "tusk"]);
+        assert!(MobileRig::from_ron(&source.replace(r#"part: "tusk", muzzle"#, r#"part: "nope", muzzle"#)).is_err());
+        assert_eq!(MobileRig::from_ron(&to_ron(&rig).unwrap()).unwrap(), rig, "round trips");
     }
 }

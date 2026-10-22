@@ -149,7 +149,7 @@ fn touch(game: &mut Game, gun: &Gun, walked: &Walked, marks: Marks, effects: &mu
             from: touch.from,
             to: touch.to,
         });
-        let amount = damage::scale(base, gun.tuning.weapon.value, player.tuning().armor.value, gun.false_angle, boost);
+        let amount = damage::scale(base, gun.tuning.weapon.value, &player.target(), gun.false_angle, boost);
         game.hurt(touch.seat, amount, effects);
     }
 }
@@ -234,7 +234,7 @@ mod unit {
         (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let point = aim_point(game, 0, shot, game.launch(0, aim, power.bars())?, center);
+                let point = aim_point(game, 0, shot, game.launch(0, shot, aim, power.bars())?, center);
                 (point.contact == Contact::Mobile(1)).then(|| (point.at.distance(center), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
@@ -287,7 +287,7 @@ mod unit {
         let power = (20..=60)
             .map(|t| Power::from_twentieths(t).unwrap())
             .find(|power| {
-                let track = game.track_sensing(game.launch(0, 45, power.bars()).unwrap(), 0, 0, THROUGH_MOBILES);
+                let track = game.track_sensing(game.launch(0, Shot::S1, 45, power.bars()).unwrap(), 0, 0, THROUGH_MOBILES);
                 (640.0..690.0).contains(&track.impact.at.x) && track.impact.at.y >= 499.0
             })
             .unwrap();
@@ -369,7 +369,7 @@ mod unit {
         let power = (4..=30)
             .map(|t| Power::from_twentieths(t).unwrap())
             .find(|power| {
-                let track = windy.track(windy.launch(0, 60, power.bars()).unwrap(), 0, 0);
+                let track = windy.track(windy.launch(0, Shot::Ss, 60, power.bars()).unwrap(), 0, 0);
                 track.impact.at.y >= 549.0 && track.impact.at.x >= 420.0 && track.last.flight.velocity_at(track.last_tick).x < 0.0
             })
             .expect("a lob the wind turns round");
@@ -398,7 +398,7 @@ mod unit {
         let (aim, power) = (30..=60)
             .flat_map(|aim| (0..=Power::MAX.twentieths()).map(move |t| (aim, Power::from_twentieths(t).unwrap())))
             .find(|&(aim, power)| {
-                let track = game.track(game.launch(0, aim, power.bars()).unwrap(), 0, 0);
+                let track = game.track(game.launch(0, Shot::S1, aim, power.bars()).unwrap(), 0, 0);
                 track.impact.contact == Contact::Terrain && track.impact.at.distance(center) < 60.0
             })
             .expect("a shot onto the speck");

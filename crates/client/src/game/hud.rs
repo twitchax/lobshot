@@ -605,7 +605,8 @@ fn aim_arc(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Contro
         facing: shown.facing,
         tilt: shown.tilt,
     };
-    let (px, py) = player.tuning().cannon_pivot.value;
+    // Centered on the barrel the shot leaves: Frostfin's S2 and SS leave its tusk.
+    let (px, py) = player.tuning().barrel(controls.shot).pivot;
     let center = pose.to_world(lobshot_sim::units::Vec2::new(px, py));
     let range = controls.shot.tuning(player.tuning()).aim.value;
     let point = |aim: i16, radius: f64| world(center + pose.aim_direction(aim) * radius);

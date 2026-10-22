@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, path::Path};
 
-use anyhow::{Context as _, ensure};
+use anyhow::{Context as _, bail, ensure};
 use lobshot_assets::{MobileRig, mobile_slug, part_path, rider_path, rig_path, to_ron};
 use lobshot_sim::{
     base::{Res, Void},
@@ -26,8 +26,9 @@ pub fn load_rig(sources: &Path, mobile: MobileKind) -> Res<MobileRig> {
     Ok(rig)
 }
 
-/// The art must agree with the gameplay geometry (`DESIGN.md`, "Art"): the cannon pivots where
-/// the sim aims from, and its muzzle sits a barrel's length along it.
+/// The art must agree with the gameplay geometry (`DESIGN.md`, "Art"): each barrel (the cannon,
+/// and a second barrel if the mobile has one) pivots where the sim aims it from, its muzzle sits a
+/// barrel's length along it, and only the barrels' parts aim.
 pub fn check_rig(rig: &MobileRig, tuning: &MobileTuning) -> Void {
     ensure!(rig.name == tuning.name, "the rig is named {:?}, but its tuning {:?}", rig.name, tuning.name);
     let mut ids = BTreeSet::new();
@@ -35,18 +36,26 @@ pub fn check_rig(rig: &MobileRig, tuning: &MobileTuning) -> Void {
         ensure!(ids.insert(&part.id), "two parts are named {:?}", part.id);
         ensure!(!(part.spin && part.aim), "{} both spins and aims", part.id);
     }
-    let aiming: Vec<&str> = rig.parts.iter().filter(|part| part.aim).map(|part| part.id.as_str()).collect();
-    ensure!(aiming == [rig.cannon.part.as_str()], "exactly the cannon part must aim, but {aiming:?} do");
+    let mut barrels = vec![("the cannon", &rig.cannon, tuning.cannon_pivot.value, tuning.barrel_length.value)];
+    match (&rig.second_barrel, tuning.second_barrel) {
+        (Some(drawn), Some(tuned)) => barrels.push(("the second barrel", drawn, tuned.pivot.value, tuned.length.value)),
+        (None, None) => {}
+        (Some(drawn), None) => bail!("the rig draws a second barrel ({:?}), but sim::tuning has none", drawn.part),
+        (None, Some(_)) => bail!("sim::tuning fires some shots from a second barrel, but the rig draws none"),
+    }
+    let aiming: BTreeSet<&str> = rig.parts.iter().filter(|part| part.aim).map(|part| part.id.as_str()).collect();
+    let expected: BTreeSet<&str> = barrels.iter().map(|(_, drawn, ..)| drawn.part.as_str()).collect();
+    ensure!(aiming == expected, "exactly the barrels' parts {expected:?} must aim, but {aiming:?} do");
 
-    let cannon = rig.parts.iter().find(|part| part.id == rig.cannon.part).context("the cannon names no part")?;
-    let pivot = tuning.cannon_pivot.value;
-    ensure!(close(cannon.at, pivot), "the cannon pivots at {:?}, but sim::tuning aims from {pivot:?}", cannon.at);
-    let barrel = tuning.barrel_length.value;
-    ensure!(
-        close(rig.cannon.muzzle, (barrel, 0.0)),
-        "the muzzle is at {:?}, but sim::tuning fires from ({barrel}, 0) along the barrel",
-        rig.cannon.muzzle
-    );
+    for (name, drawn, pivot, length) in barrels {
+        let part = rig.parts.iter().find(|part| part.id == drawn.part).with_context(|| format!("{name} names no part"))?;
+        ensure!(close(part.at, pivot), "{name} pivots at {:?}, but sim::tuning aims from {pivot:?}", part.at);
+        ensure!(
+            close(drawn.muzzle, (length, 0.0)),
+            "{name}'s muzzle is at {:?}, but sim::tuning fires from ({length}, 0) along it",
+            drawn.muzzle
+        );
+    }
     Ok(())
 }
 
@@ -113,7 +122,36 @@ mod unit {
             let cannon = rig.parts.iter().find(|part| part.id == rig.cannon.part).unwrap();
             assert_eq!(cannon.at, mobile.tuning().cannon_pivot.value);
             assert!((rig.cannon.muzzle.0.hypot(rig.cannon.muzzle.1) - mobile.tuning().barrel_length.value).abs() < 1e-9);
+            assert_eq!(rig.second_barrel.is_some(), mobile.tuning().second_barrel.is_some(), "{mobile:?}");
         }
+    }
+
+    #[test]
+    fn a_second_barrel_that_drifts_from_tuning_is_refused() {
+        let tuning = MobileKind::Frostfin.tuning();
+        let rig = load_rig(&sources(), MobileKind::Frostfin).unwrap();
+        check_rig(&rig, tuning).unwrap();
+        let second = rig.second_barrel.clone().unwrap();
+
+        let mut drifted = rig.clone();
+        drifted.parts.iter_mut().find(|part| part.id == second.part).unwrap().at.1 -= 1.0;
+        assert!(check_rig(&drifted, tuning).is_err(), "pivot");
+
+        let mut drifted = rig.clone();
+        drifted.second_barrel.as_mut().unwrap().muzzle.0 += 2.0;
+        assert!(check_rig(&drifted, tuning).is_err(), "length");
+
+        let mut drifted = rig.clone();
+        drifted.parts.iter_mut().find(|part| part.id == second.part).unwrap().aim = false;
+        assert!(check_rig(&drifted, tuning).is_err(), "it must aim");
+
+        let mut drifted = rig.clone();
+        drifted.second_barrel = None;
+        assert!(check_rig(&drifted, tuning).is_err(), "tuning has one the rig doesn't draw");
+
+        let mut coilback = load_rig(&sources(), MobileKind::Coilback).unwrap();
+        coilback.second_barrel = Some(second);
+        assert!(check_rig(&coilback, MobileKind::Coilback.tuning()).is_err(), "the rig draws one tuning doesn't have");
     }
 
     #[test]

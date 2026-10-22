@@ -79,7 +79,7 @@ mod unit {
         let (aim, power) = (60..=89)
             .flat_map(|aim| (20..=80).map(move |twentieths| (aim, Power::from_twentieths(twentieths).unwrap())))
             .filter_map(|(aim, power)| {
-                let track = game.track(game.launch(0, aim, power.bars())?, 0, 0);
+                let track = game.track(game.launch(0, Shot::S1, aim, power.bars())?, 0, 0);
                 (track.impact.contact == Contact::Mobile(1)).then(|| (track.impact.at.distance(target), aim, power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))

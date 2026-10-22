@@ -22,50 +22,57 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x4dd5_bdec_1c7d_34f6),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x8fcc_ce26_c171_0a72),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0x5bef_2ad0_81cf_4718,
+        0xda74_aba2_ec7f_b4c6,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x6519_59e3_0ef8_8350),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x5f86_fa43_5cfb_bb63),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xc819_eb26_3258_611c),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0xe58c_5c04_105d_a1ed),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0x5e63_ffc7_d510_c0b7,
+        0xfaa6_4f74_91a0_96ed,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0xb6a8_1233_bdc2_08ff,
+        0xb543_930f_5ae5_ef4d,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0xb177_3832_280e_639a,
+        0xc504_6940_80e8_0724,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0xa672_10b3_49f2_844f,
+        0x5bce_095d_f719_1bd5,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0x930c_0ab5_df8b_027a,
+        0xfc6b_b7ec_055b_d900,
+    ),
+    (
+        "roster_frostfin",
+        include_str!("golden/roster_frostfin.json"),
+        include_bytes!("golden/roster_frostfin.bin"),
+        54,
+        0x4659_5909_07ca_6682,
     ),
 ];
 
@@ -120,6 +127,27 @@ fn golden_games_play_every_m3_rule() {
     );
     assert!(MobileKind::ALL.iter().all(|mobile| mobiles.contains(mobile)), "mobiles that fired: {mobiles:?}");
     assert!(locked && dropped, "SS locked: {locked}; a drop landed: {dropped}");
+}
+
+#[test]
+fn roster_frostfin_frosts_its_target() {
+    // Frostfin fires all three shots, and its S2s and SSs leave the Coilback brittle.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_frostfin").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut frosts) = (Vec::new(), Vec::new());
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::Frosted { seat, brittle } => frosts.push((seat, brittle)),
+                _ => {}
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(frosts.len() >= 2 && frosts.iter().all(|&(seat, _)| seat == 1), "{frosts:?}");
+    assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
 }
 
 // ── Recording ────────────────────────────────────────────────────────────────
@@ -180,6 +208,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_spoutpot", play(roster_spoutpot(), &winds)),
         ("roster_tuskrack", play(roster_tuskrack(), &winds)),
         ("roster_sudsotter", play(roster_sudsotter(), &winds)),
+        ("roster_frostfin", play(roster_frostfin(), &winds)),
     ]
 }
 
@@ -351,6 +380,24 @@ fn roster_sudsotter() -> Setup {
     }
 }
 
+/// Frostfin (PRD-0006 T-001) against Coilback on hills in wind: its S1, S2 and SS, and its target
+/// growing brittle.
+fn roster_frostfin() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Frostfin, 380, Facing::Right, &[]), seat(Team::B, 1420, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
 /// Plays a game with a simple scripted player and returns its log. The dead spin their slot
 /// machines whenever they may. Every third turn the wind changes (if `winds` has any); every
 /// fourth, the player walks toward the nearest enemy; every seventh, it times out. Every turn it
@@ -429,7 +476,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         let power = (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let impact = game.fly(&game.launch(seat, aim, power.bars())?, 0);
+                let impact = game.fly(&game.launch(seat, shot, aim, power.bars())?, 0);
                 (impact.contact != Contact::Gone).then(|| (impact.at.distance(center), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))

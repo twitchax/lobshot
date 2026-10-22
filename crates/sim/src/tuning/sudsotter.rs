@@ -51,6 +51,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
         delay: cited(800, &["SW-mob", "DB-mob"]),
         aim: AIM,
     },
+    second_barrel: None,
 };
 
 /// Every shot's aim. No GunBound source gives J.Frog's angles (OB marks them "NEED SOURCE"); DBR's

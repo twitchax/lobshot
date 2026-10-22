@@ -177,7 +177,7 @@ mod unit {
         // A 50-degree shot across 1.4 screens stays up past the sixth crossing.
         let mut game = duel(1100);
         let power = direct_hit_power(&game, 50);
-        let flight = game.launch(0, 50, power.bars()).unwrap();
+        let flight = game.launch(0, Shot::S2, 50, power.bars()).unwrap();
         assert!(game.track(flight, 0, 0).impact.tick > ticks(crossing_seconds(S2_MERGE_CROSSING.value)));
         let effects = shoot(&mut game, 0, Shot::S2, 50, power);
         let blasts: Vec<Vec2> = effects.iter().filter_map(|e| if let Effect::Exploded { at, .. } = e { Some(*at) } else { None }).collect();

@@ -49,6 +49,9 @@ why the version moved the way it did.
 - Sudsotter (M5), an otter in a bathtub buggy: sponges that fly through mobiles, stick, and walk
   the ground (S1 left, S2 right), climbing walls, before they go off; SS suds that hurt whoever
   they touch as they walk. The weather leaves its shots' damage alone.
+- Frostfin (M5), a narwhal on an ice sled with the most HP of any mobile: S1 an icicle from the
+  cannon on its back that digs a wide hole; S2 and SS ice from its tusk, a second, lower barrel,
+  each hit leaving its target 5% more brittle to Physical damage, up to 50%, all game.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column
