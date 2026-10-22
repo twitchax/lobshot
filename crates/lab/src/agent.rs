@@ -942,6 +942,9 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Marblemole => {
             "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
         }
+        MobileKind::Spoutpot => {
+            "A hippo with a teapot water tank. S1 is a stream of water; S2 two streams that spiral about one path, each its own hit: they cross again and again, and after long enough in the air they come together for good, so time a fork or give it airtime; SS a blob that opens into six balls in mid-flight, which fan out and fall: open it just short of the target and all six land. Pays 12 delay a second of turn time, not 10.".to_owned()
+        }
     }
 }
 

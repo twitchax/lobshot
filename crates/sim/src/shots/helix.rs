@@ -1,6 +1,7 @@
-//! Helix strands (Lanternwing's S2): projectiles winding about one path, which touches nothing
-//! itself, each striking on its own. OpenBound's shape (OB), reimplemented: strand positions come
-//! from `ballistics::helix_point`, which clients draw with too.
+//! Helix strands (Lanternwing's and Spoutpot's S2): projectiles winding about one path, which
+//! touches nothing itself, each striking on its own, and perhaps coming together on it in the end.
+//! OpenBound's shape (OB), reimplemented: strand positions come from `ballistics::helix_point`,
+//! which clients draw with too.
 
 use crate::{
     ballistics::{self, Flight},
@@ -14,6 +15,8 @@ pub(super) struct Helix<'p> {
     pub hertz: f64,
     /// One strand per phase.
     pub phases: &'p [f64],
+    /// The stage tick from which the strands run together on the path, if they ever do.
+    pub merge: Option<u32>,
 }
 
 /// Flies the strands about `flight`, landing each one (`land`, with its index, its impact, and
@@ -33,7 +36,7 @@ pub(super) fn fly(game: &mut Game, flight: Flight, helix: &Helix, mut land: impl
                 if ends[index].is_some() {
                     continue;
                 }
-                let at = ballistics::helix_point(&leg.flight, tick, leg.offset, helix.amplitude, helix.hertz, phase);
+                let at = ballistics::helix_point(&leg.flight, tick, leg.offset, helix.amplitude, helix.hertz, phase, helix.merge);
                 let contact = if at.x < 0.0 || at.x >= width || at.y >= height {
                     Contact::Gone
                 } else if let Some(&(seat, _)) = frames.iter().find(|(_, frame)| frame.contains(at)) {
