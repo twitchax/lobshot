@@ -141,8 +141,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - `sim` defines a controller: given what a player can see, return intents. Bots see only what a
   player sees, with no oracle wind.
 - **Human:** a remote player on the server.
-- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage. Its
-  levels differ by how badly they read the wind and miss the aim and power they found
+- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage. When
+  nothing good reaches from where it stands, it searches a few spots within its move budget too
+  and walks to the best. Its levels differ by how badly they read the wind and miss the aim and power they found
   (`sim::tuning::bot`): Hard is exact, Normal hurts an enemy with about two shots in three. It
   fills seats in real rooms. Runs on `spawn_blocking` with a ~1 s budget per
   turn so a room of bots cannot starve the others.

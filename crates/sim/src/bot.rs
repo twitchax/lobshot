@@ -17,6 +17,10 @@
 //! 3. **Item.** A heal first when it is low; otherwise Dual (on S1 or S2) or Power Up when the
 //!    chosen shot is strong and the item makes it better.
 //!
+//! It searches from where it stands. When its best shot from there is weak (behind a wall, say),
+//! it runs the first two passes again from a few spots up to its move budget each way, and walks
+//! to the spot with the best shot.
+//!
 //! Difficulty is error around the search (`tuning::bot`): the bot misreads the wind before it
 //! searches, then misses the aim and power it found. Both come from a seed the server rolls, so
 //! a bot's turn is still a pure function of its inputs.
@@ -37,8 +41,12 @@ pub const LOADOUT: Loadout = Loadout::fixed([Item::Dual, Item::PowerUp, Item::He
 /// At or below this share of its max HP, a bot heals before it shoots.
 const LOW_HP: f64 = 0.4;
 
-/// A shot worth at least this much (about GunBound's lowest damage tier) earns Dual or Power Up.
+/// A shot worth at least this much (about GunBound's lowest damage tier) is strong: it earns Dual
+/// or Power Up, and the bot takes it from where it stands rather than look for a better spot.
 const STRONG_SHOT: f64 = 150.0;
+
+/// A bot looking for a better spot tries walks of each third of its move budget, each way.
+const WALK_PARTS: u16 = 3;
 
 /// What a kill is worth on top of its damage, in damage.
 const KILL_VALUE: f64 = 300.0;
@@ -74,39 +82,23 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     }
     let me = *game.players().get(usize::from(seat))?;
     let target = *game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs())?;
-    let facing = if target.footing.x >= me.footing.x { Facing::Right } else { Facing::Left };
 
-    // Search as the bot will stand: turned toward the target.
     let mut events = Vec::new();
     let mut scratch = game.clone();
-    if me.facing != facing {
-        let turn = Event::Walk { seat, facing, steps: 0 };
-        scratch.apply(turn).ok()?;
-        events.push(turn);
-    }
     if let Some(heal) = heal(&scratch, seat) {
         scratch.apply(heal).ok()?;
         events.push(heal);
     }
-    // It searches, and values its shots, in the wind as it reads it.
+    // It picks its spot and its shot, and values them, in the wind as it reads it.
     let noise = level.noise();
     let mut rng = XorShift::new(seed);
     scratch.wind = misread(scratch.wind(), noise, &mut rng);
 
-    let search = Search::new(&scratch, seat, target.center());
-    let mut best: Option<Candidate> = None;
-    for shot in [Shot::S1, Shot::S2, Shot::Ss] {
-        if !scratch.can_shoot(seat, shot) {
-            continue;
-        }
-        for (aim, power) in search.trajectories(shot.tuning(me.tuning()).aim.value) {
-            let candidate = Candidate::fired(&scratch, seat, None, shot, aim, power, search.proxy(shot, aim, power));
-            if best.as_ref().is_none_or(|best| candidate.beats(best)) {
-                best = Some(candidate);
-            }
-        }
+    let Spot { moves, mut best } = Spot::best(&scratch, seat, &target)?;
+    for event in moves {
+        scratch.apply(event).ok()?;
+        events.push(event);
     }
-    let mut best = best?;
     if let Some(boosted) = boost(&scratch, seat, &best) {
         best = boosted;
     }
@@ -126,6 +118,100 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         time: Centis(0),
     });
     Some(events)
+}
+
+/// Where the bot shoots from, and its best shot there.
+struct Spot {
+    /// The walk there, then the turn toward the target, as events.
+    moves: Vec<Event>,
+    best: Candidate,
+}
+
+impl Spot {
+    /// Where it stands, unless its best shot from there is weak; then the best of a few spots up
+    /// to its whole move budget each way. Shorter walks come first, so a tie stays closer.
+    fn best(game: &Game, seat: u8, target: &Player) -> Option<Self> {
+        let me = game.players().get(usize::from(seat))?;
+        let (scratch, moves) = walked(game, seat, None, target)?;
+        let mut seen = vec![me.footing];
+        let mut best = Self::searched(&scratch, moves, seat, target)?;
+        if best.best.value >= STRONG_SHOT {
+            return Some(best);
+        }
+        let toward = facing_toward(me, target);
+        for part in 1..=WALK_PARTS {
+            let steps = me.moves_left * part / WALK_PARTS;
+            for facing in [toward, toward.flip()] {
+                // A walk that ends where another did (against a wall, say) is that spot again.
+                let Some((scratch, moves)) = walked(game, seat, Some((facing, steps)), target) else { continue };
+                let footing = scratch.players()[usize::from(seat)].footing;
+                if seen.contains(&footing) {
+                    continue;
+                }
+                seen.push(footing);
+                if let Some(spot) = Self::searched(&scratch, moves, seat, target)
+                    && spot.best.beats(&best.best)
+                {
+                    best = spot;
+                }
+            }
+        }
+        Some(best)
+    }
+
+    /// The best shot from where `game` has the bot stand, after `moves`.
+    fn searched(game: &Game, moves: Vec<Event>, seat: u8, target: &Player) -> Option<Self> {
+        Some(Self {
+            moves,
+            best: best_shot(game, seat, target)?,
+        })
+    }
+}
+
+/// `game` after `walk`, if any, and turning toward the target, with the moves that did it. `None`
+/// when the walk ends the turn (off the map).
+fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -> Option<(Game, Vec<Event>)> {
+    let mut scratch = game.clone();
+    let mut moves = Vec::new();
+    if let Some((facing, steps)) = walk {
+        let event = Event::Walk { seat, facing, steps };
+        scratch.apply(event).ok()?;
+        moves.push(event);
+        if scratch.phase() != (Phase::Turn { seat }) {
+            return None;
+        }
+    }
+    let me = *scratch.players().get(usize::from(seat))?;
+    let facing = facing_toward(&me, target);
+    if me.facing != facing {
+        let turn = Event::Walk { seat, facing, steps: 0 };
+        scratch.apply(turn).ok()?;
+        moves.push(turn);
+    }
+    Some((scratch, moves))
+}
+
+fn facing_toward(me: &Player, target: &Player) -> Facing {
+    if target.footing.x >= me.footing.x { Facing::Right } else { Facing::Left }
+}
+
+/// The best shot `seat` can take from where it stands, as it faces.
+fn best_shot(game: &Game, seat: u8, target: &Player) -> Option<Candidate> {
+    let tuning = game.players().get(usize::from(seat))?.tuning();
+    let search = Search::new(game, seat, target.center());
+    let mut best: Option<Candidate> = None;
+    for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+        if !game.can_shoot(seat, shot) {
+            continue;
+        }
+        for (aim, power) in search.trajectories(shot.tuning(tuning).aim.value) {
+            let candidate = Candidate::fired(game, seat, None, shot, aim, power, search.proxy(shot, aim, power));
+            if best.as_ref().is_none_or(|best| candidate.beats(best)) {
+                best = Some(candidate);
+            }
+        }
+    }
+    best
 }
 
 /// The wind as a bot with `noise` reads it.
@@ -544,6 +630,63 @@ mod unit {
         assert!(draws.iter().all(|d| (-3..=3).contains(d)));
         assert!((-3..=3).all(|v| draws.contains(&v)), "every value comes up");
         assert_eq!(within(&mut XorShift::new(5), 0), 0);
+    }
+}
+
+#[cfg(test)]
+mod walking {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+    use crate::{
+        game::{
+            MobileKind, Team,
+            testing::{damage_to, duel, game_on, seat},
+        },
+        terrain::Terrain,
+    };
+
+    /// Coilback (aim up to 55 degrees) at x=300 behind a wall 200 px tall from x=360 to 520, with
+    /// its target at x=1100 on the far side. Ground is at y=600, and `pit` columns have none.
+    fn behind_a_wall(pit: std::ops::Range<u32>) -> Game {
+        let terrain = Terrain::from_fn(1600, 800, |x, y| !pit.contains(&x) && (y >= 600 || ((360..520).contains(&x) && y >= 400))).unwrap();
+        game_on(
+            terrain,
+            vec![seat(Team::A, MobileKind::Coilback, 300, Facing::Right), seat(Team::B, MobileKind::Coilback, 1100, Facing::Left)],
+        )
+    }
+
+    fn walks(events: &[Event]) -> Vec<(Facing, u16)> {
+        events
+            .iter()
+            .filter_map(|e| if let Event::Walk { facing, steps, .. } = *e { Some((facing, steps)) } else { None })
+            .collect()
+    }
+
+    #[test]
+    fn it_walks_out_from_behind_a_wall_it_cannot_shoot_over() {
+        let mut game = behind_a_wall(0..0);
+        let target = game.players()[1];
+        assert!(best_shot(&game, 0, &target).unwrap().value <= 0.0, "nothing clears the wall from here");
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert!(walks(&events).iter().any(|&(facing, steps)| facing == Facing::Left && steps > 0), "{events:?}");
+        let effects: Vec<Effect> = events.into_iter().flat_map(|event| game.apply(event).unwrap()).collect();
+        assert!(damage_to(&effects, 1) > 0, "{effects:?}");
+    }
+
+    #[test]
+    fn it_stays_put_when_it_can_hit_from_where_it_stands() {
+        let game = duel(700);
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert!(walks(&events).iter().all(|&(_, steps)| steps == 0), "{events:?}");
+    }
+
+    #[test]
+    fn a_walk_into_a_pit_is_no_spot() {
+        let game = behind_a_wall(230..260);
+        let target = game.players()[1];
+        assert!(walked(&game, 0, Some((Facing::Left, 90)), &target).is_none());
+        assert!(walked(&game, 0, Some((Facing::Left, 30)), &target).is_some(), "short of the pit");
     }
 }
 

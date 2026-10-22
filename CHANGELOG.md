@@ -47,6 +47,8 @@ why the version moved the way it did.
 - Protocol and log wire versions are 2: logs from M2 builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
   practice now rolls its wind up to the room's max.
+- SearchBot walks: when it has no good shot from where it stands, it tries a few spots within its
+  move budget and walks to the one with the best shot.
 
 ### Fixed
 

@@ -161,6 +161,7 @@ What changed after this playtest, and what is still open.
     shots flying into them. A shot is now caught by any column it starts in, as in OB.
 - **By design:** the 76 that Power Up didn't raise was the bolt's splash, which is flat whatever
   the armor, weather or items (GF-max). The rules now say so, under Sparkhorn and Power Up.
-- **Open, for the game:**
-  - The ashspine spire against mobiles whose aim stops at 60°.
-  - Normal bots that never walk.
+- **Fixed in the bot:** SearchBot walks when it has no good shot from where it stands. In a
+  balance run, ashspine games fell from about 70 turns to 60, and its hit rate rose from 13% to
+  16%.
+- **Open, for the game:** the ashspine spire against mobiles whose aim stops at 60°.

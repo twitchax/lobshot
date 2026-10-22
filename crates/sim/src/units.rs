@@ -121,6 +121,15 @@ impl Facing {
     pub fn signum(self) -> f64 {
         f64::from(self.sign())
     }
+
+    /// The other way.
+    #[must_use]
+    pub fn flip(self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
 }
 
 /// The wind: a strength (GunBound's 0 to ~26 scale) and the direction it blows toward, in
