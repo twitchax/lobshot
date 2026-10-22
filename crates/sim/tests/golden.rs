@@ -50,8 +50,8 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
-        63,
-        0x4231_f182_db86_13ad,
+        52,
+        0xb177_3832_280e_639a,
     ),
 ];
 

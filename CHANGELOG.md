@@ -41,6 +41,8 @@ why the version moved the way it did.
   map and reports the win-rate matrix, damage per delay, turns to kill and hit rates, with a
   35-65% gate (`cargo make balance-gate`, not yet in CI); `lobshot-lab play` and `lobshot-lab mcp`
   let an LLM agent play a seat; `docs/playtests/` holds the report format.
+- Spoutpot (M5), a hippo with a teapot water tank and hose cannons: S1 a water shot, S2 two
+  streams that braid and join, SS a blob that bursts into six balls in flight.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

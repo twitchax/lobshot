@@ -234,6 +234,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   Sparkhorn (a rhino beetle, Lightning's) and Marblemole (a mole in a mine cart, Grub's), the item
   icons and slot-machine drops, and four maps: Gablewick (town rooftops), Glintvein (mine
   corridors), Rimewake (long flat sea) and Ashspine (dragon's-back ridge), plus Tidewall B.
+- **M5 adds**, from Aaron's concepts: Spoutpot (a hippo with a teapot water tank, Turtle's
+  behavior).
 
 ## Testing
 
