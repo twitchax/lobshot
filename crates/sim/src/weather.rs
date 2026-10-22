@@ -1,6 +1,7 @@
 //! The weather queue (GunBound's moondisk): five upcoming weathers, the front one activating every
 //! N turns, where N is the number of players (SW-weather). Column weathers (Force, Mirror, Tornado,
-//! Electricity, Drain) stand on the map where the server rolled them; Wind rerolls the wind. The server rolls every
+//! Electricity, Drain) stand on the map where the server rolled them; Wind rerolls the wind; Lock
+//! and Balm hold over the whole map until the next weather comes up. The server rolls every
 //! new queue entry and every new wind; the sim only says when one is owed (`Game::pending_roll`).
 
 use serde::{Deserialize, Serialize};
@@ -23,16 +24,24 @@ pub enum WeatherKind {
     Electricity,
     /// A column that weakens any shot passing through it (GunBound's Weakness).
     Drain,
+    /// No one may use an item; shields stop regenerating, and SS recharges twice as fast
+    /// (GunBound's Item Lock, WP06).
+    Lock,
+    /// Each player heals a little as their turn starts, Bionic mobiles double (GunBound's Moon).
+    Balm,
 }
 
 impl WeatherKind {
     /// Every kind the server may roll, in a fixed order.
-    pub const ALL: [Self; 6] = [Self::Wind, Self::Force, Self::Mirror, Self::Tornado, Self::Electricity, Self::Drain];
+    pub const ALL: [Self; 8] = [Self::Wind, Self::Force, Self::Mirror, Self::Tornado, Self::Electricity, Self::Drain, Self::Lock, Self::Balm];
 
     /// Whether it stands on the map as a column.
     #[must_use]
     pub fn is_column(self) -> bool {
-        self != Self::Wind
+        match self {
+            Self::Force | Self::Mirror | Self::Tornado | Self::Electricity | Self::Drain => true,
+            Self::Wind | Self::Lock | Self::Balm => false,
+        }
     }
 }
 
@@ -71,6 +80,8 @@ pub struct Weather {
     pub turns_left: u32,
     /// The active weather rerolled the wind and the server hasn't sent it yet.
     pub wind_owed: bool,
+    /// The weather that came up last: it holds until the next one does.
+    pub now: Option<WeatherKind>,
 }
 
 impl Weather {
@@ -94,15 +105,22 @@ impl Weather {
         }
         self.turns_left = round;
         let next = self.queue.remove(0);
-        if next.kind == WeatherKind::Wind {
-            self.columns.clear();
-            self.wind_owed = true;
-        } else {
+        self.now = Some(next.kind);
+        if next.kind.is_column() {
             if self.columns.first().is_some_and(|c| c.kind != next.kind) {
                 self.columns.clear();
             }
             self.columns.push(Column { kind: next.kind, x: next.x });
+        } else {
+            self.columns.clear();
+            self.wind_owed |= next.kind == WeatherKind::Wind;
         }
+    }
+
+    /// Whether `kind` is the weather now.
+    #[must_use]
+    pub fn is(&self, kind: WeatherKind) -> bool {
+        self.now == Some(kind)
     }
 }
 
@@ -126,7 +144,7 @@ impl Marks {
             WeatherKind::Force => self.forced = true,
             WeatherKind::Drain => self.drained = true,
             WeatherKind::Electricity => self.charged = true,
-            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado => return false,
+            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado | WeatherKind::Lock | WeatherKind::Balm => return false,
         }
         true
     }
@@ -195,6 +213,20 @@ mod unit {
         weather.tick(1);
         weather.tick(1);
         assert!(weather.columns.is_empty() && weather.wind_owed);
+    }
+
+    #[test]
+    fn lock_and_balm_clear_the_columns_and_hold_until_the_next() {
+        let mut weather = Weather::new(1);
+        weather.queue = vec![forecast(WeatherKind::Force, 100), forecast(WeatherKind::Lock, 0), forecast(WeatherKind::Balm, 0)];
+        weather.tick(1);
+        assert!(weather.is(WeatherKind::Force) && weather.columns.len() == 1);
+        weather.tick(1);
+        assert!(weather.is(WeatherKind::Lock) && weather.columns.is_empty() && !weather.wind_owed);
+        weather.tick(1);
+        assert!(weather.is(WeatherKind::Balm) && !weather.is(WeatherKind::Lock));
+        weather.tick(1);
+        assert!(weather.is(WeatherKind::Balm), "an empty queue leaves it up");
     }
 
     #[test]

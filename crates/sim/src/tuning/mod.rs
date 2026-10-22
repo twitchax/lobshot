@@ -153,12 +153,24 @@ pub fn column_width(kind: crate::weather::WeatherKind) -> f64 {
     use crate::weather::WeatherKind;
     match kind {
         WeatherKind::Tornado => TORNADO_WIDTH.value,
-        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind => BEAM_WIDTH.value,
+        // Wind, Lock and Balm never stand as columns.
+        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => BEAM_WIDTH.value,
     }
 }
 
 /// Force, Mirror, Electricity and Drain beams (OB gives Weakness Force's).
 pub const BEAM_WIDTH: Tuned<f64> = cited(40.0, &["OB"]);
+
+/// How many own turns of SS lock each turn under Lock counts for: SS "will recharge twice as fast
+/// during Item Locks" (WP06), and lobshot's SS lock counts own turns.
+pub const LOCK_SS_RECHARGE: Tuned<u8> = cited(2, &["WP06"]);
+
+/// What Balm (GunBound's Moon) heals as each player's turn starts, in percent of max HP. WP06 says
+/// only a small heal each turn; OB heals once, when it comes up, a flat 35 (CONTRADICTION).
+pub const BALM_HEAL_PERCENT: Tuned<u32> = cited(3, &["NAMU", "SW-weather"]);
+
+/// Bionic mobiles heal this many times as much under Balm.
+pub const BALM_BIONIC_FACTOR: Tuned<u32> = cited(2, &["WP06", "NAMU"]);
 
 /// What a Drain column (GunBound's Weakness) leaves of a shot's damage. OB divides by 1.2 and
 /// subtracts 10 (CONTRADICTION).

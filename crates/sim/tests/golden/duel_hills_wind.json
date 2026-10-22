@@ -56,13 +56,13 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Electricity",
         "x": 1556
       }
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Drain",
         "x": 1945
       }
     },
@@ -100,7 +100,7 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
+        "kind": "Lock",
         "x": 334
       }
     },
@@ -138,7 +138,7 @@
     },
     {
       "Weather": {
-        "kind": "Tornado",
+        "kind": "Balm",
         "x": 723
       }
     },
@@ -210,15 +210,9 @@
       }
     },
     {
-      "Wind": {
-        "strength": 14,
-        "direction": 200
-      }
-    },
-    {
       "Weather": {
-        "kind": "Mirror",
-        "x": 1890
+        "kind": "Force",
+        "x": 1501
       }
     },
     {
@@ -233,7 +227,7 @@
         "seat": 0,
         "shot": "Ss",
         "aim": 30,
-        "power": 79,
+        "power": 80,
         "time": 1396
       }
     },
@@ -249,14 +243,14 @@
         "seat": 1,
         "shot": "S1",
         "aim": 32,
-        "power": 60,
+        "power": 59,
         "time": 1533
       }
     },
     {
       "Weather": {
-        "kind": "Tornado",
-        "x": 279
+        "kind": "Mirror",
+        "x": 1890
       }
     },
     {
@@ -271,7 +265,7 @@
         "seat": 1,
         "shot": "S2",
         "aim": 32,
-        "power": 60,
+        "power": 59,
         "time": 1670
       }
     },
@@ -287,14 +281,14 @@
         "seat": 0,
         "shot": "S1",
         "aim": 32,
-        "power": 72,
+        "power": 71,
         "time": 307
       }
     },
     {
       "Weather": {
-        "kind": "Wind",
-        "x": 668
+        "kind": "Tornado",
+        "x": 279
       }
     },
     {
@@ -328,8 +322,8 @@
     },
     {
       "Weather": {
-        "kind": "Force",
-        "x": 1057
+        "kind": "Electricity",
+        "x": 668
       }
     },
     {
@@ -342,8 +336,8 @@
     {
       "Shoot": {
         "seat": 0,
-        "shot": "S1",
-        "aim": 32,
+        "shot": "Ss",
+        "aim": 30,
         "power": 80,
         "time": 718
       }
@@ -360,52 +354,8 @@
         "seat": 1,
         "shot": "S1",
         "aim": 32,
-        "power": 47,
+        "power": 54,
         "time": 855
-      }
-    },
-    {
-      "Wind": {
-        "strength": 3,
-        "direction": 270
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Tornado",
-        "x": 1835
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S2",
-        "aim": 32,
-        "power": 78,
-        "time": 992
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 51,
-        "time": 1129
       }
     }
   ]

@@ -43,6 +43,8 @@ enum Readout {
     Angle,
     /// The sudden-death countdown, or which one is on.
     Sudden,
+    /// A weather that holds over the whole map (Lock, Balm).
+    Weather,
 }
 
 /// A bar the HUD keeps current.
@@ -168,6 +170,7 @@ fn top_bar(top: &mut ChildSpawnerCommands) {
         clock.spawn((Readout::Timer, text("20", 34.0, theme::ACCENT)));
         clock.spawn((Readout::Turn, text("", 15.0, theme::TEXT)));
         clock.spawn((Readout::Sudden, text("", 13.0, theme::MUTED)));
+        clock.spawn((Readout::Weather, text("", 13.0, theme::MUTED)));
     });
 }
 
@@ -394,6 +397,17 @@ fn weather_look(kind: WeatherKind) -> (&'static str, Color) {
         WeatherKind::Tornado => ("T", Color::srgb_u8(0x6f, 0xc4, 0x8a)),
         WeatherKind::Electricity => ("E", Color::srgb_u8(0xf2, 0xd6, 0x4b)),
         WeatherKind::Drain => ("D", Color::srgb_u8(0x7a, 0x5c, 0x9e)),
+        WeatherKind::Lock => ("L", Color::srgb_u8(0x8a, 0x8f, 0x98)),
+        WeatherKind::Balm => ("B", Color::srgb_u8(0xb8, 0xe6, 0xc9)),
+    }
+}
+
+/// What a weather that holds over the whole map does, while it is up; columns show on the map.
+fn weather_label(now: Option<WeatherKind>) -> &'static str {
+    match now {
+        Some(WeatherKind::Lock) => "Lock: no items",
+        Some(WeatherKind::Balm) => "Balm: heals each turn",
+        _ => "",
     }
 }
 
@@ -438,6 +452,7 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
             },
             Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
             Readout::Sudden => String::new(),
+            Readout::Weather => weather_label(game.predicted.weather().now).to_owned(),
         };
         if **text != value {
             **text = value;
@@ -957,6 +972,14 @@ mod unit {
         assert_eq!(sudden_label(Sudden::In { turns: 12, kind: SuddenDeathKind::Double }), "Sudden death in 12 turns");
         assert_eq!(sudden_label(Sudden::In { turns: 1, kind: SuddenDeathKind::Double }), "Sudden death next turn");
         assert_eq!(sudden_label(Sudden::On(SuddenDeathKind::BigBomb)), "Sudden death: Big Bomb");
+    }
+
+    #[test]
+    fn lock_and_balm_say_what_they_do() {
+        assert_eq!(weather_label(Some(WeatherKind::Lock)), "Lock: no items");
+        assert_eq!(weather_label(Some(WeatherKind::Balm)), "Balm: heals each turn");
+        assert_eq!(weather_label(Some(WeatherKind::Force)), "", "a column shows on the map");
+        assert_eq!(weather_label(None), "");
     }
 
     #[test]

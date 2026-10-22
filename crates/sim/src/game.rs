@@ -25,8 +25,8 @@ use crate::{
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
     tuning::{
-        MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback, drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole,
-        sparkhorn,
+        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -328,6 +328,8 @@ pub enum Effect {
     WeatherChanged {
         columns: Vec<Column>,
         wind_owed: bool,
+        /// The weather now (`Weather::now`).
+        now: Option<WeatherKind>,
     },
     /// The turn passes to `seat`. Its shield regenerating (`ShieldRestored`) and its SS coming
     /// ready (`SsReady`) follow, as the turn starts.
@@ -874,6 +876,7 @@ impl Game {
     fn check_item(&self, seat: u8, slot: u8) -> Void {
         self.ensure_turn(seat)?;
         ensure!(self.sudden_death().is_none(), "items are off in sudden death");
+        ensure!(!self.weather.is(WeatherKind::Lock), "the Lock weather has locked every item");
         let player = self.player(seat)?;
         ensure!(player.armed.is_none(), "seat {seat} has used an item this turn");
         let Some(item) = player.items.get(usize::from(slot)).copied().flatten() else {
@@ -1108,8 +1111,9 @@ impl Game {
                     },
                     ticks(TORNADO_HOLD_SECONDS.value),
                 )),
-                // Marked above. Wind never stands as a column; were one there, it would do nothing.
-                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind => {
+                // Marked above. Wind, Lock and Balm never stand as columns; were one there, it would
+                // do nothing.
+                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => {
                     cursor = impact.tick + 1;
                     continue;
                 }
@@ -1219,12 +1223,13 @@ impl Game {
         player.clock.delay += turn::turn_delay(tuning.base_delay.value, ending, items, tuning.delay_per_second.value, time);
         player.clock.last_turn = self.turns;
         self.turns += 1;
-        let before = (self.weather.columns.clone(), self.weather.wind_owed);
+        let before = (self.weather.columns.clone(), self.weather.wind_owed, self.weather.now);
         self.weather.tick(self.round);
-        if (self.weather.columns.clone(), self.weather.wind_owed) != before {
+        if (self.weather.columns.clone(), self.weather.wind_owed, self.weather.now) != before {
             effects.push(Effect::WeatherChanged {
                 columns: self.weather.columns.clone(),
                 wind_owed: self.weather.wind_owed,
+                now: self.weather.now,
             });
         }
         drops::land_due(self, effects);
@@ -1255,8 +1260,8 @@ impl Game {
         true
     }
 
-    /// Hands the turn to whoever has the least delay. Their shield regenerates and their SS lock
-    /// counts down as it starts.
+    /// Hands the turn to whoever has the least delay. As it starts, their shield regenerates
+    /// (not under Lock), their SS lock counts down (twice under Lock), and Balm heals them.
     fn start_next_turn(&mut self, effects: &mut Vec<Effect>) {
         if self.check_over(effects) {
             return;
@@ -1272,16 +1277,21 @@ impl Game {
         let player = &mut self.players[usize::from(seat)];
         let tuning = player.tuning();
         player.moves_left = tuning.move_budget.value;
-        let regen = tuning.shield_regen.value.min(tuning.shield.value - player.shield);
+        let locked = self.weather.is(WeatherKind::Lock);
+        let regen = if locked { 0 } else { tuning.shield_regen.value.min(tuning.shield.value - player.shield) };
         if regen > 0 {
             player.shield += regen;
             effects.push(Effect::ShieldRestored { seat, amount: regen });
         }
         if player.ss_lock > 0 {
-            player.ss_lock -= 1;
+            player.ss_lock = player.ss_lock.saturating_sub(if locked { LOCK_SS_RECHARGE.value } else { 1 });
             if player.ss_lock == 0 {
                 effects.push(Effect::SsReady { seat });
             }
+        }
+        if self.weather.is(WeatherKind::Balm) {
+            let bionic = tuning.armor.value == ArmorClass::Bionic;
+            self.heal(seat, BALM_HEAL_PERCENT.value * if bionic { BALM_BIONIC_FACTOR.value } else { 1 }, effects);
         }
     }
 
@@ -1522,7 +1532,8 @@ mod unit {
         assert!(
             effects.contains(&Effect::WeatherChanged {
                 columns: vec![Column { kind: WeatherKind::Tornado, x: 900 }],
-                wind_owed: false
+                wind_owed: false,
+                now: Some(WeatherKind::Tornado),
             }),
             "{effects:?}"
         );
@@ -1630,6 +1641,38 @@ mod unit {
         let mut game = duel(800);
         game.weather.columns = vec![Column { kind, x }];
         game
+    }
+
+    /// `game` with `kind` the weather now, and the next one far off.
+    fn under(mut game: Game, kind: WeatherKind) -> Game {
+        game.weather.now = Some(kind);
+        game.weather.turns_left = 100;
+        game
+    }
+
+    #[test]
+    fn lock_bars_items_stops_shields_and_doubles_the_ss_countdown() {
+        let mut game = under(duel_of(MobileKind::Coilback, MobileKind::Lanternwing, 800), WeatherKind::Lock);
+        game.players[0].items = Loadout::new(&[Item::Heal]).unwrap().positions();
+        assert!(!game.can_use_item(0, 0));
+        assert!(game.apply(Event::UseItem { seat: 0, slot: 0, time: Centis(0) }).is_err());
+        game.players[1].shield -= 100;
+        game.players[1].ss_lock = 3;
+        let effects = pass(&mut game, 0);
+        assert!(!effects.iter().any(|e| matches!(e, Effect::ShieldRestored { .. })), "{effects:?}");
+        assert_eq!(game.players[1].ss_lock, 1, "three own turns of lock, less two");
+    }
+
+    #[test]
+    fn balm_heals_each_player_as_their_turn_starts_and_bionic_double() {
+        let mut game = under(duel_of(MobileKind::Coilback, MobileKind::Hookclaw, 800), WeatherKind::Balm);
+        game.players[0].hp = 500;
+        game.players[1].hp = 500;
+        let hookclaw = game.players[1].tuning().hp.value;
+        assert!(pass(&mut game, 0).contains(&Effect::Healed { seat: 1, amount: hookclaw * 6 / 100 }), "Hookclaw is Bionic");
+        let coilback = game.players[0].tuning().hp.value;
+        pass_until(&mut game, 0);
+        assert_eq!(game.players[0].hp, 500 + coilback * 3 / 100, "healed once, as its turn started");
     }
 
     #[test]

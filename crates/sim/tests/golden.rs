@@ -22,29 +22,29 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6488_3e84_636b_4225),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xfd13_af09_cfe6_736f),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
-        51,
-        0x84c1_a385_0145_7872,
+        44,
+        0x31a7_85a8_647a_4522,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 101, 0xa588_204d_b585_e0ad),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 197, 0xe011_32dc_5600_ae36),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 184, 0x719c_05ab_de32_47a2),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x3cf6_aa14_cbe2_1fbc),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
-        59,
-        0x4282_e25a_a342_19f6,
+        71,
+        0x72a3_404e_81ad_9d98,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
-        34,
-        0xe275_135b_e719_4872,
+        33,
+        0x4be2_70c5_5692_3a56,
     ),
 ];
 

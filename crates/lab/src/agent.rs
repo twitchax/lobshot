@@ -411,6 +411,8 @@ pub struct WindView {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WeatherView {
+    /// The weather that came up last; Lock and Balm act while it is theirs.
+    pub now: Option<WeatherKind>,
     /// Columns standing now.
     pub columns: Vec<WeatherSpot>,
     /// What comes next, front first; the front arrives in `turns_until_next` turns.
@@ -421,7 +423,7 @@ pub struct WeatherView {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct WeatherSpot {
     pub kind: WeatherKind,
-    /// The column's center (no column for Wind, which rerolls the wind).
+    /// The column's center (no column for Wind, Lock or Balm).
     pub x: i32,
 }
 
@@ -531,6 +533,7 @@ fn view(session: &Session, happened: &[Happened]) -> View {
             up: round2(up),
         },
         weather: WeatherView {
+            now: weather.now,
             columns: weather.columns.iter().map(|c| WeatherSpot { kind: c.kind, x: c.x }).collect(),
             coming: weather.queue.iter().map(|f| WeatherSpot { kind: f.kind, x: f.x }).collect(),
             turns_until_next: weather.turns_left,
@@ -602,7 +605,8 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         let glyph = match column.kind {
             WeatherKind::Force => 'F',
             WeatherKind::Mirror => 'M',
-            WeatherKind::Tornado | WeatherKind::Wind => 'T',
+            // Wind, Lock and Balm never stand as columns.
+            WeatherKind::Tornado | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => 'T',
             WeatherKind::Electricity => 'E',
             WeatherKind::Drain => 'D',
         };
@@ -796,14 +800,15 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", names.who(*seat), to.x),
         Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", names.who(*seat), names.who(*with)),
         Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
-        Effect::WeatherChanged { columns, .. } => {
-            let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
-            if standing.is_empty() {
-                " The weather cleared.".to_owned()
-            } else {
+        Effect::WeatherChanged { columns, now, .. } => match now {
+            Some(WeatherKind::Lock) => " Lock came up: no items, and no shields regenerate.".to_owned(),
+            Some(WeatherKind::Balm) => " Balm came up: everyone heals as their turn starts.".to_owned(),
+            _ if columns.is_empty() => " The weather cleared.".to_owned(),
+            _ => {
+                let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
                 format!(" Weather now: {}.", standing.join(", "))
             }
-        }
+        },
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
@@ -819,7 +824,9 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
 /// How to play, for an agent that has never seen the game.
 #[must_use]
 pub fn rules() -> String {
-    let mut text = RULES.replace("{PASS}", &tuning::PASS_DELAY.value.to_string());
+    let mut text = RULES
+        .replace("{PASS}", &tuning::PASS_DELAY.value.to_string())
+        .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string());
     text.push_str("\n## Mobiles\n");
     for mobile in MobileKind::ALL {
         let t = mobile.tuning();
@@ -900,7 +907,10 @@ makes you wait longer. Agent turns are charged a fixed time.
 The wind pushes every shot; `wind.across` and `wind.up` give its push right and up. Weather
 columns stand on the map: Force boosts shots through it, Drain halves them, Electricity calls a
 bolt down wherever a shot through it lands, Mirror sends them back the way they came, Tornado
-flings them back up. A Wind weather rerolls the wind. The view lists what is coming.
+flings them back up. A Wind weather rerolls the wind. Lock and Balm cover the whole map while
+they last (`weather.now`): under Lock no one may use an item, shields stop regenerating and SS
+comes back twice as fast; under Balm each player heals {BALM}% of max HP as their turn starts
+(Bionic mobiles double). The view lists what is coming.
 
 ## SS, sudden death, the slot machine
 
@@ -1267,6 +1277,19 @@ mod unit {
         }
         assert!(rules.contains("- Big Heal (`BigHeal`): Heals 25% of your max HP at once (30% for a Bionic mobile)."), "{rules}");
         assert!(rules.contains("Bionic armor") && rules.contains("a pass's, 200"), "{rules}");
+    }
+
+    #[test]
+    fn lock_and_balm_are_in_the_rules_and_the_log() {
+        assert!(rules().contains("each player heals 3% of max HP as their turn starts"));
+        let session = Session::new(&flat(1), &maps()).unwrap();
+        let names = Names { game: session.game(), you: 0 };
+        let lock = Effect::WeatherChanged {
+            columns: Vec::new(),
+            wind_owed: false,
+            now: Some(WeatherKind::Lock),
+        };
+        assert_eq!(effect_line(&names, &lock), " Lock came up: no items, and no shields regenerate.");
     }
 
     #[test]

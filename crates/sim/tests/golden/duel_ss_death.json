@@ -68,13 +68,13 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Electricity",
         "x": 1556
       }
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Drain",
         "x": 1945
       }
     },
@@ -126,7 +126,7 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
+        "kind": "Lock",
         "x": 334
       }
     },
@@ -178,7 +178,7 @@
     },
     {
       "Weather": {
-        "kind": "Tornado",
+        "kind": "Balm",
         "x": 723
       }
     },
@@ -264,15 +264,9 @@
       }
     },
     {
-      "Wind": {
-        "strength": 14,
-        "direction": 200
-      }
-    },
-    {
       "Weather": {
-        "kind": "Mirror",
-        "x": 1890
+        "kind": "Force",
+        "x": 1501
       }
     },
     {
@@ -287,7 +281,7 @@
         "seat": 1,
         "shot": "Ss",
         "aim": 32,
-        "power": 75,
+        "power": 73,
         "time": 1396
       }
     }
