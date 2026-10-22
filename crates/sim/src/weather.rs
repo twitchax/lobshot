@@ -60,6 +60,43 @@ impl WeatherKind {
     }
 }
 
+/// How often each kind comes up on a map (`tuning::weather`): a forecast rolls each kind with a
+/// chance in proportion to its weight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Odds([u8; WeatherKind::ALL.len()]);
+
+impl Odds {
+    /// Each kind's weight.
+    #[must_use]
+    pub fn new(weight: impl Fn(WeatherKind) -> u8) -> Self {
+        Self(WeatherKind::ALL.map(weight))
+    }
+
+    #[must_use]
+    pub fn weight(&self, kind: WeatherKind) -> u8 {
+        WeatherKind::ALL.iter().zip(self.0).find(|(k, _)| **k == kind).map_or(0, |(_, weight)| weight)
+    }
+
+    #[must_use]
+    pub fn total(&self) -> u32 {
+        self.0.iter().map(|&weight| u32::from(weight)).sum()
+    }
+
+    /// The kind a roll in `0..total()` lands on, counting through the kinds by weight.
+    #[must_use]
+    pub fn pick(&self, roll: u32) -> WeatherKind {
+        let mut left = roll;
+        for (kind, weight) in WeatherKind::ALL.into_iter().zip(self.0) {
+            if left < u32::from(weight) {
+                return kind;
+            }
+            left -= u32::from(weight);
+        }
+        // Only a roll past the total gets here; Wind changes the least.
+        WeatherKind::Wind
+    }
+}
+
 /// A queued weather: its kind, where its column will stand, and what a Random one hides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Forecast {
@@ -309,6 +346,19 @@ mod unit {
         assert!((marks.boost() - FORCE_DAMAGE.value * DRAIN_DAMAGE.value).abs() < 1e-12);
         assert!(!marks.mark(WeatherKind::Mirror) && !marks.charged);
         assert_eq!(Marks::default() | Marks { charged: true, ..Marks::default() }, Marks { charged: true, ..Marks::default() });
+    }
+
+    #[test]
+    fn odds_pick_each_kind_in_proportion_to_its_weight() {
+        let odds = Odds::new(|kind| match kind {
+            WeatherKind::Force => 2,
+            WeatherKind::Lock => 1,
+            _ => 0,
+        });
+        assert_eq!(odds.total(), 3);
+        let picks: Vec<WeatherKind> = (0..3).map(|roll| odds.pick(roll)).collect();
+        assert_eq!(picks, [WeatherKind::Force, WeatherKind::Force, WeatherKind::Lock]);
+        assert_eq!(odds.weight(WeatherKind::Wind), 0);
     }
 
     #[test]

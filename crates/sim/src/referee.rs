@@ -144,8 +144,8 @@ pub fn wind(max: u8, dice: &mut impl Dice) -> Wind {
 /// `max_wind`.
 pub fn answer(roll: Roll, max_wind: u8, dice: &mut impl Dice) -> Event {
     match roll {
-        Roll::Weather { width } => {
-            let kind = WeatherKind::ALL[roll_index(WeatherKind::ALL.len(), dice)];
+        Roll::Weather { width, odds } => {
+            let kind = odds.pick(dice.below(odds.total()));
             let x = column(width, dice);
             let hides = (kind == WeatherKind::Random).then(|| WeatherKind::HIDDEN[roll_index(WeatherKind::HIDDEN.len(), dice)]);
             Event::Weather(Forecast { kind, x, hides })
@@ -201,6 +201,7 @@ mod unit {
         game::{Game, Shot},
         map::{MapRef, NoAssets},
         units::Power,
+        weather::Odds,
     };
 
     fn field() -> Arena {
@@ -293,7 +294,9 @@ mod unit {
         let mut dice = XorShift::new(3);
         let (mut weathers, mut drops, mut hidden) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
         for _ in 0..400 {
-            let Event::Weather(forecast) = answer(Roll::Weather { width: 50 }, 26, &mut dice) else { panic!() };
+            let Event::Weather(forecast) = answer(Roll::Weather { width: 50, odds: Odds::new(|_| 1) }, 26, &mut dice) else {
+                panic!()
+            };
             assert!((0..50).contains(&forecast.x));
             assert!(forecast.is_whole(), "a Random forecast says what it hides: {forecast:?}");
             weathers.insert(format!("{:?}", forecast.kind));

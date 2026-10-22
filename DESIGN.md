@@ -94,7 +94,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - **Shots** follow a closed-form trajectory under gravity and wind acceleration, sampled at fixed
   sub-steps. Each mobile's shots are behavior functions in `sim`.
 - **Weather** is GunBound's moondisk: five forecasts, the front one coming up every N turns (N =
-  players). Force, Drain, Electricity, Mirror and Tornado stand as full-height columns where the
+  players). Each map rolls them by the weights of the GunBound map whose archetype it is built on
+  (GF-vgg, `sim::tuning::weather`); Mirror, Drain and Random, which came later, weigh 1. Force, Drain, Electricity, Mirror and Tornado stand as full-height columns where the
   server rolled them; repeats of a kind stack, a new kind clears them. A shot that starts inside a
   column is caught by it too. Force adds 33% damage (GF-tiro); Drain (GunBound's Weakness) halves
   it (WP08); Electricity calls the Thunder item's bolt down where the shot lands, once per

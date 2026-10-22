@@ -30,7 +30,7 @@ use crate::{
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
-    weather::{Column, Forecast, Marks, Weather, WeatherKind},
+    weather::{Column, Forecast, Marks, Odds, Weather, WeatherKind},
 };
 
 /// The most players a room seats: 4v4.
@@ -231,9 +231,9 @@ pub enum Event {
 /// Something random the server owes the game before anyone may act.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Roll {
-    /// A new forecast for the back of the weather queue: any `WeatherKind`, and a column x in
-    /// `0..width`.
-    Weather { width: u32 },
+    /// A new forecast for the back of the weather queue: a `WeatherKind` by the map's `odds`, and a
+    /// column x in `0..width`.
+    Weather { width: u32, odds: Odds },
     /// New wind (the Wind weather just came up): strength up to the room's max, any direction.
     Wind,
     /// A slot machine was spun: any `DropKind`, and a column x in `0..width`.
@@ -579,6 +579,8 @@ pub struct Game {
     pub(crate) players: Vec<Player>,
     pub(crate) wind: Wind,
     weather: Weather,
+    /// How often each weather comes up on this map.
+    odds: Odds,
     /// Turns per weather: one per seat (SW-weather).
     round: u32,
     /// Turns completed so far.
@@ -648,6 +650,7 @@ impl Game {
             players,
             wind: setup.wind,
             weather: Weather::new(round),
+            odds: crate::tuning::weather::odds(&setup.map),
             round,
             turns: 0,
             phase: Phase::Over { winner: None },
@@ -719,7 +722,10 @@ impl Game {
         if self.weather.wind_owed {
             Some(Roll::Wind)
         } else if self.weather.short() {
-            Some(Roll::Weather { width: self.terrain.width() })
+            Some(Roll::Weather {
+                width: self.terrain.width(),
+                odds: self.odds,
+            })
         } else if self.spin_owed.is_some() {
             Some(Roll::Drop { width: self.terrain.width() })
         } else {
@@ -1555,7 +1561,7 @@ mod unit {
     #[test]
     fn the_server_owes_five_forecasts_before_anyone_moves() {
         let mut game = Game::new(&duel_setup(800), &NoAssets).unwrap();
-        assert_eq!(game.pending_roll(), Some(Roll::Weather { width: 2400 }));
+        assert!(matches!(game.pending_roll(), Some(Roll::Weather { width: 2400, .. })));
         assert!(game.apply(Event::Pass { seat: 0, time: Centis(0) }).is_err(), "no moves while a roll is owed");
         assert!(game.apply(Event::Wind(Wind::default())).is_err(), "no wind is owed");
         for _ in 0..5 {
@@ -1583,7 +1589,7 @@ mod unit {
             }),
             "{effects:?}"
         );
-        assert_eq!(game.pending_roll(), Some(Roll::Weather { width: 2400 }), "the queue needs refilling");
+        assert!(matches!(game.pending_roll(), Some(Roll::Weather { width: 2400, .. })), "the queue needs refilling");
         game.apply(Event::Weather(Forecast::new(WeatherKind::Force, 5))).unwrap();
         game.apply(Event::Pass { seat: 0, time: Centis(0) }).unwrap();
         game.apply(Event::Pass { seat: 1, time: Centis(0) }).unwrap();

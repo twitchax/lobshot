@@ -22,29 +22,29 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xe6aa_9f32_68b6_236f),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xf41c_fd63_93d4_27b1),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0xf523_c08c_114c_03dd,
+        0xcc67_363f_80fd_6825,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 183, 0xd1a9_b649_0539_8f52),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x5796_0d79_ab7f_d9ad),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 183, 0x0b84_576f_b904_f244),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x7671_97d2_a3c6_3639),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         73,
-        0x20d9_5eac_d262_e943,
+        0x5465_b18c_def9_03a3,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0x6feb_f297_6157_beaf,
+        0x3229_6916_11f1_63ed,
     ),
 ];
 
@@ -299,7 +299,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             rolls += 1;
             let event = match roll {
                 Roll::Weather { .. } if winds.is_empty() => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
-                Roll::Weather { width } => {
+                Roll::Weather { width, .. } => {
                     let kind = WeatherKind::ALL[rolls % WeatherKind::ALL.len()];
                     let x = i32::try_from((rolls * 389) % usize::try_from(width).unwrap()).unwrap();
                     let hides = (kind == WeatherKind::Random).then_some(WeatherKind::HIDDEN[rolls % WeatherKind::HIDDEN.len()]);
