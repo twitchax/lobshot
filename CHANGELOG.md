@@ -52,6 +52,8 @@ why the version moved the way it did.
 - Frostfin (M5), a narwhal on an ice sled with the most HP of any mobile: S1 an icicle from the
   cannon on its back that digs a wide hole; S2 and SS ice from its tusk, a second, lower barrel,
   each hit leaving its target 5% more brittle to Physical damage, up to 50%, all game.
+- Clockrise (M5), a toy clocktower town on the tall-tower archetype: A one cuckoo-clock tower
+  whose storeys float over open works, B twin towers joined by a high bridge.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column
