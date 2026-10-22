@@ -454,9 +454,10 @@ mod unit {
     use crate::{
         game::{
             Effect, MobileKind, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
-            testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, start},
+            testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, game_on, seat, start},
         },
         map::MapRef,
+        terrain::Terrain,
     };
 
     #[test]
@@ -511,6 +512,19 @@ mod unit {
             assert!(damage_to(&effects, 1) >= 80, "{mobile:?}: {effects:?}");
             assert_eq!(damage_to(&effects, 0), 0, "{mobile:?} hurt itself: {effects:?}");
         }
+    }
+
+    #[test]
+    fn it_lands_a_walking_sponge_short_for_its_walk_to_carry_it_in() {
+        // The target stands at the brink of a pit: a sponge aimed at it flies through and falls in,
+        // so the bot must land one short, where its walk ends inside the target.
+        let terrain = Terrain::from_fn(2400, 600, |x, y| y >= 500 && x < 1115).unwrap();
+        let seats = vec![seat(Team::A, MobileKind::Sudsotter, 300, Facing::Right), seat(Team::B, MobileKind::Coilback, 1100, Facing::Left)];
+        let mut game = game_on(terrain, seats);
+        game.players[0].ss_lock = 2;
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let effects = play(&mut game, events);
+        assert!(damage_to(&effects, 1) >= 150, "{effects:?}");
     }
 
     #[test]
