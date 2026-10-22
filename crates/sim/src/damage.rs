@@ -64,6 +64,25 @@ pub fn damage(blast: &Blast, target: &Target, direct: bool) -> i32 {
     scale(base, blast.weapon, target, blast.false_angle, blast.boost)
 }
 
+/// Damage to `target` from a blast that burns low (Thistleback's SS): `max` going off at or below
+/// its feet, falling linearly to `min` at the top of its body by height up the hitbox, and outside
+/// the hitbox that, falling linearly to 0 at the blast's edge. The ground under a mobile counts as
+/// its feet: for this blast, its hitbox reaches down through it.
+#[must_use]
+pub fn low(blast: &Blast, target: &Target) -> i32 {
+    let DamageRange { min, max } = blast.damage;
+    let (min, max) = (f64::from(min), f64::from(max));
+    let hitbox = target.hitbox;
+    let at = target.pose.to_body(blast.center);
+    let nearest = Vec2::new(at.x.clamp(hitbox.x, hitbox.x + hitbox.w), at.y.max(hitbox.y));
+    let gap = at.distance(nearest);
+    if gap >= blast.radius {
+        return 0;
+    }
+    let height = ((hitbox.y + hitbox.h - at.y) / hitbox.h).clamp(0.0, 1.0);
+    scale((max - (max - min) * height) * (1.0 - gap / blast.radius), blast.weapon, target, blast.false_angle, blast.boost)
+}
+
 /// `base` damage from a `weapon` against `target` (its armor and brittleness), scaled for false
 /// angle and `boost` (weather, items), rounding down.
 #[must_use]
@@ -127,6 +146,20 @@ mod unit {
         assert_eq!(damage(&blast(Vec2::new(545.0, 370.0)), &target, false), 60);
         assert_eq!(damage(&blast(Vec2::new(560.0, 370.0)), &target, false), 0);
         assert_eq!(damage(&blast(Vec2::new(531.0, 370.0)), &target, false), 116);
+    }
+
+    #[test]
+    fn a_low_blast_burns_most_at_and_under_the_feet() {
+        let target = target();
+        let low = |at: Vec2| super::low(&blast(at), &target);
+        // Hitbox spans x 470..530 and y 340..400, its feet at the bottom.
+        assert_eq!(low(Vec2::new(500.0, 400.0)), 165, "at the feet");
+        assert_eq!(low(Vec2::new(500.0, 410.0)), 165, "in the ground under them");
+        assert_eq!(low(Vec2::new(500.0, 370.0)), 142, "half way up: 165 - 45 / 2");
+        assert_eq!(low(Vec2::new(500.0, 340.0)), 120, "the top");
+        assert_eq!(low(Vec2::new(545.0, 400.0)), 82, "15 px past its side at its feet: half of 165");
+        assert_eq!(low(Vec2::new(500.0, 325.0)), 60, "15 px over its top: half of 120");
+        assert_eq!(low(Vec2::new(560.0, 400.0)), 0, "the blast's edge");
     }
 
     #[test]

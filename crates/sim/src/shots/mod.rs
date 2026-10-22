@@ -1,8 +1,8 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
-//! helix strands (`helix`), bouncing balls (`bounce`), blobs that walk the ground (`crawl`) and
-//! homing missiles (`homing`).
+//! helix strands (`helix`), orbiters (`orbit`), bouncing balls (`bounce`), blobs that walk the
+//! ground (`crawl`) and homing missiles (`homing`).
 
 pub(crate) mod bolt;
 mod bounce;
@@ -15,10 +15,12 @@ mod homing;
 mod hookclaw;
 mod lanternwing;
 mod marblemole;
+mod orbit;
 pub(crate) mod skyeye;
 mod sparkhorn;
 mod spoutpot;
 mod sudsotter;
+mod thistleback;
 mod tuskrack;
 
 use crate::{
@@ -120,9 +122,17 @@ impl Gun<'_> {
             Contact::Mobile(seat) => Some(seat),
         };
         game.explode(blast, crater * self.salvo.crater, direct, impact.tick, effects);
+        self.follow_up(game, blast.center, impact.tick, marks, effects);
+    }
+
+    /// What follows a projectile that landed at `at` at `tick`, once a projectile however many
+    /// blasts it sets off (Thistleback's SS): a bolt down its column a beat later if Thunder is
+    /// armed or it passed through Electricity (one bolt either way: the item is the weather,
+    /// GF-tiro), and Skyeye's beam toward it if Skyeye is up (GF-tiro).
+    pub fn follow_up(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
         if self.salvo.thunder || marks.charged {
-            let strike = bolt::from_sky(game, blast.center.x);
-            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, impact.tick + ticks(BOLT_DELAY_SECONDS.value), effects);
+            let strike = bolt::from_sky(game, at.x);
+            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick + ticks(BOLT_DELAY_SECONDS.value), effects);
             let thunder = Blast {
                 center: strike.at,
                 radius: BOLT_REACH.value,
@@ -134,7 +144,7 @@ impl Gun<'_> {
             bolt::zap(game, &strike, &thunder, effects);
         }
         if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
-            skyeye::beam(game, impact.at, impact.tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
+            skyeye::beam(game, at, tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
         }
     }
 
@@ -182,6 +192,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Sudsotter => sudsotter::fire(game, &gun, shot, effects),
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
+        MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
     }
 }
 
@@ -206,7 +217,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Spoutpot
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
-        | MobileKind::Herdhound => None,
+        | MobileKind::Herdhound
+        | MobileKind::Thistleback => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }

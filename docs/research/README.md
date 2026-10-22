@@ -12,6 +12,7 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`tuskrack.md`](tuskrack.md) | Bigfoot (Tuskrack): its spreads, ripples and bursts, and the inferred shot weight. |
 | [`frostfin.md`](frostfin.md) | Ice (Frostfin): GF-ice's guide, the two muzzles, the defence shred and its 70-degree power table. |
 | [`herdhound.md`](herdhound.md) | Kalsiddon (Herdhound): its guides and homing missiles, from Creedo's and the official guides. |
+| [`thistleback.md`](thistleback.md) | Trico (Thistleback): its orbiting S2 and nine-blast SS, from the GunBound wiki and OB. |
 | [`sudsotter.md`](sudsotter.md) | J.Frog (Sudsotter): Creedo's frog guide, its walking shots and its weather-proofing. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |

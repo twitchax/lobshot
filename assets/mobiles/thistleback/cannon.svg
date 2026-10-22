@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="18" viewBox="-8 -9 44 18">
+  <!-- Thistleback's catapult: a wooden throwing arm on a spring hinge, a ladle-cup at its end
+       holding a cabbage. Origin = pivot (the hinge bolt); drawn at aim 0 (pointing +x).
+       Muzzle = (28, 0), the cabbage's center. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the arm, tapering toward the cup -->
+    <path d="M 1,-2.4 L 22,-1.6 L 22,1.6 L 1,2.4 Z" fill="#c98a4f" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 1,0.8 L 22,0.6 L 22,1.6 L 1,2.4 Z" fill="#9a6235"/>
+    <path d="M 3,-1.2 L 20,-0.8" stroke="#e8b07a" stroke-width="0.7"/>
+    <rect x="12" y="-2.6" width="2.2" height="5.2" rx="0.6" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.6"/>
+    <!-- the cup, cradling the cabbage from behind -->
+    <path d="M 27.4,-6.2 A 6.4 6.4 0 0 0 27.4,6.2 L 27.4,4.4 A 4.6 4.6 0 0 1 27.4,-4.4 Z" fill="#9a6235" stroke="#2a1a2e" stroke-width="0.8"/>
+    <!-- the cabbage: leaves cupped round a pale heart -->
+    <circle cx="28" r="5" fill="#7cc35a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 24,-2 C 25.6,-4.6 29.4,-5.2 31.6,-3 M 23.6,1.6 C 25.4,4.4 29.6,5 32,2.6" stroke="#4f9a40" stroke-width="0.9" fill="none"/>
+    <circle cx="28.6" cy="-0.2" r="2.2" fill="#c8ec92" stroke="#4f9a40" stroke-width="0.6"/>
+    <path d="M 28.6,-2.4 V 2" stroke="#e8f8c8" stroke-width="0.6"/>
+    <circle cx="26" cy="-2.8" r="0.9" fill="#e8f8c8"/>
+    <!-- the spring hinge -->
+    <circle r="4.6" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 3.2,0 A 3.2 3.2 0 1 1 0,-3.2 M 2,0 A 2 2 0 1 0 0,2" stroke="#b4b2cc" stroke-width="0.8" fill="none"/>
+    <circle r="1.5" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+  </g>
+</svg>

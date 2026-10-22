@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="84" height="66" viewBox="-44 -62 84 66">
+  <!-- Thistleback body: a hedgehog gardener in a straw hat pushing a painted wheelbarrow loaded with
+       cabbages and a pumpkin. The hedgehog (quill mantle, face, gloved paws on the handles), the
+       barrow (handles, far rim, its load, near wall, leg, wheel fork) and the catapult's release
+       lever for the rider, who rides in the barrow. The barrow wheel spins; the spring catapult on
+       the barrow's front rim is the cannon.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="tub" d="M 0,-37 L 36,-37 L 27.4,-15.4 Q 26.6,-13.6 24.6,-13.6 L 9.4,-13.6 Q 7.4,-13.6 7,-15.6 Z"/>
+    <clipPath id="tubClip"><use href="#tub"/></clipPath>
+    <ellipse id="egg" cx="-19" cy="-24" rx="15" ry="22"/>
+    <clipPath id="eggClip"><use href="#egg"/></clipPath>
+    <radialGradient id="tubLight" cx="8" cy="-35" r="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d8ffb0" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#d8ffb0" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#10301a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#10301a" stop-opacity="0.3"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- hind feet, planted -->
+    <ellipse cx="-27.4" cy="-2" rx="4.6" ry="2.4" fill="#c98a6a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <ellipse cx="-15.2" cy="-2" rx="4.8" ry="2.4" fill="#e3a98a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -13.4,-0.6 V 0.2 M -11.6,-0.8 V 0" stroke="#8a4f3a" stroke-width="0.6"/>
+
+    <!-- the far handle, behind the hedgehog's paw -->
+    <path d="M 8,-19.6 L -6.6,-25" stroke="#2a1a2e" stroke-width="4.2" fill="none"/>
+    <path d="M 8,-19.6 L -6.6,-25" stroke="#8a5a30" stroke-width="2.4" fill="none"/>
+
+    <!-- the quill mantle: two ranks of spikes over the crown and down the back -->
+    <use href="#egg" fill="#5e3826"/>
+    <path d="M -10.6,-42.2 L -14.5,-55 L -15.3,-45.3 L -21.9,-55.4 L -20.4,-45.9 L -28.9,-52.1 L -25.4,-43.9 L -34.8,-45.6 L -29.6,-39.6 L -38.9,-36.4 L -32.6,-33.4 L -40.6,-25.9 L -33.9,-26.1 L -39.7,-15.1 L -33.5,-18.6 L -36.4,-5.3 L -31.4,-11.7 L -25.8,-17.2 L -27,-21 L -27.2,-25.2 L -26.5,-29.2 L -24.8,-32.6 L -22.5,-34.9 L -19.8,-36 L -17,-35.7 L -14.4,-34 Z" fill="#5e3826" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -14.1,-40.1 L -18.3,-50.4 L -18.1,-41.6 L -24.4,-49.2 L -22.2,-41 L -29.9,-45 L -25.9,-38.4 L -34.1,-38.4 L -28.8,-34.1 L -36.5,-30.1 L -30.6,-28.7 L -36.9,-21 L -31,-22.7 L -35.2,-12.4 L -30,-16.8 L -25,-20.1 L -25.6,-23.3 L -25.4,-26.6 L -24.4,-29.6 L -22.8,-31.9 L -20.8,-33.3 L -18.5,-33.7 L -16.3,-32.8 Z" fill="#7a4a30" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -17.4,-37 L -22.4,-44.5 L -21.1,-36.9 L -27.6,-40.9 L -24.3,-34.6 L -31.5,-34.6 L -26.8,-30.7 L -33.3,-26.5 L -27.9,-25.7 L -32.8,-18 L -27.7,-20.4 L -23.8,-22 L -23.9,-24.9 L -23.3,-27.7 L -21.9,-29.8 L -20.1,-31.1 L -18.1,-31.1 Z" fill="#93603e" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -14.8,-52.4 L -14.6,-54.3 M -21.6,-52.8 L -21.8,-54.7 M -28.1,-49.8 L -28.7,-51.5 M -33.5,-43.8 L -34.5,-45.1 M -37.2,-35.4 L -38.5,-36.2 M -38.8,-25.7 L -40.1,-25.8 M -38,-15.8 L -39.3,-15.3 M -35,-6.9 L -36.1,-5.7" stroke="#f2d7a8" stroke-width="1.5" fill="none"/>
+    <path d="M -18.5,-42.9 L -18.4,-48.2 M -22.9,-42 L -24,-47.1 M -26.8,-39.1 L -29,-43.3 M -29.8,-34.3 L -32.8,-37.2 M -21.3,-38.1 L -22,-42.4 M -24.9,-35.6 L -26.7,-39.1" stroke="#c48a5c" stroke-width="0.9" fill="none"/>
+    <g clip-path="url(#eggClip)">
+      <!-- the face and belly: cream, the front of the egg -->
+      <ellipse cx="-5" cy="-21" rx="11.4" ry="19.4" fill="#f6d9ac"/>
+      <ellipse cx="-4" cy="-13" rx="8" ry="10.4" fill="#fbe7c6"/>
+      <path d="M -15.6,-36 C -16.8,-25 -16,-12 -13,-3" stroke="#e0b47e" stroke-width="1.2" fill="none"/>
+    </g>
+
+    <!-- the snout, a pink-tipped point with a shiny black nose -->
+    <path d="M -8.6,-38.6 C -3.6,-38.8 1.6,-35.6 5.4,-32.4 C 4.6,-30.4 -1.4,-27 -8.2,-27.2 Z" fill="#f6d9ac" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -6.4,-29 C -2.6,-28.8 1.4,-30.2 4.2,-31.6" stroke="#e0b47e" stroke-width="1" fill="none"/>
+    <circle cx="5.4" cy="-32.6" r="2.4" fill="#2e2030" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="4.7" cy="-33.5" r="0.8" fill="#9a8aa8"/>
+    <path d="M -1.8,-28.8 Q -0.2,-27.6 1.6,-28.4" stroke="#2a1a2e" stroke-width="0.7" fill="none"/>
+    <!-- a bead eye, a brow and a blush -->
+    <circle cx="-6.6" cy="-35.2" r="2.5" fill="#2e2030"/>
+    <circle cx="-7.4" cy="-36.2" r="0.9" fill="#ffffff"/>
+    <circle cx="-5.6" cy="-34.2" r="0.4" fill="#ffffff"/>
+    <path d="M -9.6,-39.2 Q -7,-40.8 -4.2,-39.6" stroke="#5e3826" stroke-width="0.9" fill="none"/>
+    <ellipse cx="-8.4" cy="-30.4" rx="2.2" ry="1.2" fill="#ff8fa8" opacity="0.85"/>
+    <!-- a round ear peeking out of the quills -->
+    <circle cx="-14.4" cy="-40" r="2.6" fill="#e3a98a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-14.2" cy="-39.8" r="1.2" fill="#b87a62"/>
+
+    <!-- straw sun hat with a green band and a sprig of thistle -->
+    <g transform="translate(3.4,1.2) rotate(-4 -16 -46)">
+    <path d="M -24.6,-46 C -24.6,-52.8 -20.2,-55.6 -15.4,-55.4 C -10.6,-55.2 -7,-52 -7.4,-46.6 Z" fill="#f2cf6e" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -24.2,-48.8 C -19,-47.6 -13,-47.8 -7.6,-49.2 L -7.4,-46.6 C -13,-45.4 -19.2,-45.4 -24.6,-46.4 Z" fill="#3f8f4a" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M -22,-52.2 C -20.4,-54 -17.8,-54.8 -15,-54.4" stroke="#fff1b8" stroke-width="1.1" fill="none"/>
+    <ellipse cx="-16" cy="-45.6" rx="12.6" ry="2.7" fill="#e9bf55" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -26.4,-45 C -20.6,-46.6 -11.6,-47.2 -4.6,-46.6" stroke="#fff1b8" stroke-width="0.8" fill="none"/>
+    <!-- a thistle in the band: a green bulb, a purple tuft -->
+    <path d="M -21,-48 L -23.4,-53.6" stroke="#2a1a2e" stroke-width="1.8" fill="none"/>
+    <path d="M -21,-48 L -23.4,-53.6" stroke="#5ea848" stroke-width="0.8" fill="none"/>
+    <ellipse cx="-23.8" cy="-54.6" rx="1.7" ry="1.5" fill="#5ea848" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M -25.6,-55.6 L -26.4,-58.2 L -25,-56.4 L -24.4,-59 L -23.6,-56.4 L -22.2,-58.4 L -22.2,-55.6 Z" fill="#b06ad8" stroke="#2a1a2e" stroke-width="0.6"/>
+    </g>
+
+    <!-- the barrow's far rim, seen over its near wall -->
+    <path d="M 1.4,-39.4 L 34.6,-39.4" stroke="#2a1a2e" stroke-width="3" fill="none"/>
+    <path d="M 1.4,-39.4 L 34.6,-39.4" stroke="#2c6a38" stroke-width="1.6" fill="none"/>
+    <!-- its load: a cabbage and a pumpkin, a sprout tucked between -->
+    <ellipse cx="26.4" cy="-40.6" rx="5" ry="4.4" fill="#ff9a3a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 26.4,-45 C 24,-42.8 24,-38.4 26.4,-36.2 M 26.4,-45 C 28.8,-42.8 28.8,-38.4 26.4,-36.2" stroke="#d96a1a" stroke-width="0.8" fill="none"/>
+    <path d="M 26.4,-44.8 L 27.4,-47.4" stroke="#2a1a2e" stroke-width="1.8"/>
+    <path d="M 26.4,-44.8 L 27.4,-47.4" stroke="#5ea848" stroke-width="0.8"/>
+    <circle cx="24.6" cy="-42.4" r="0.9" fill="#ffd08a"/>
+    <circle cx="20.2" cy="-39.4" r="2.6" fill="#a6d86a" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 19.1,-40.4 Q 20.2,-38.8 21.5,-40.2" stroke="#5ea848" stroke-width="0.6" fill="none"/>
+
+    <!-- the near wall: painted steel, a rolled rim, rivets -->
+    <use href="#tub" fill="#3f8f4a" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#tubClip)">
+      <path d="M -4,-23 C 8,-20.6 20,-21.4 42,-25 V -10 H -4 Z" fill="#2e6e3a"/>
+      <path d="M 4,-33 C 12,-33.6 22,-33.6 32,-33.2" stroke="#7cc87a" stroke-width="1" fill="none"/>
+      <path d="M 4.4,-29 L 7.6,-18" stroke="#7cc87a" stroke-width="0.8" fill="none"/>
+      <rect x="-2" y="-40" width="44" height="28" fill="url(#tubLight)"/>
+    </g>
+    <rect x="-0.8" y="-39.2" width="37.6" height="3.6" rx="1.7" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 1,-38.2 H 35" stroke="#8a88a6" stroke-width="0.8"/>
+    <g fill="#1f4a28"><circle cx="4.4" cy="-32.6" r="0.7"/><circle cx="31.8" cy="-32.6" r="0.7"/><circle cx="10" cy="-17.2" r="0.7"/><circle cx="24.4" cy="-17.2" r="0.7"/></g>
+    <!-- team roundel -->
+    <circle cx="17" cy="-26" r="3" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="17" cy="-26" r="2" fill="#e8434f"/>
+    <path transform="translate(17,-26) scale(0.42)" d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#fff1d0" stroke-width="1.6" fill="none"/>
+
+    <!-- the barrow's leg, lifted while it is pushed, and the wheel's fork -->
+    <path d="M 10.4,-14.6 L 6.8,-5.4 L 2.8,-4.8" stroke="#2a1a2e" stroke-width="4.2" fill="none"/>
+    <path d="M 10.4,-14.6 L 6.8,-5.4 L 2.8,-4.8" stroke="#8a88a6" stroke-width="2.4" fill="none"/>
+    <path d="M 9.6,-13 L 7,-6.4" stroke="#b4b2cc" stroke-width="0.7" fill="none"/>
+    <path d="M 22,-14.6 L 26,-10 M 30,-23 L 26,-10" stroke="#2a1a2e" stroke-width="4" fill="none"/>
+    <path d="M 22,-14.6 L 26,-10 M 30,-23 L 26,-10" stroke="#8a88a6" stroke-width="2.2" fill="none"/>
+    <circle cx="26" cy="-10" r="2.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="26" cy="-10" r="0.9" fill="#8a5a22"/>
+
+    <!-- the near handle, gripped in a gloved paw -->
+    <path d="M 8.4,-17 L -6.2,-22.6" stroke="#2a1a2e" stroke-width="4.6" fill="none"/>
+    <path d="M 8.4,-17 L -6.2,-22.6" stroke="#c98a4f" stroke-width="2.8" fill="none"/>
+    <path d="M 6.4,-18.4 L -4,-22.4" stroke="#e8b07a" stroke-width="0.8" fill="none"/>
+    <path d="M -13.4,-23.6 C -11,-22.6 -8.6,-22.4 -6.6,-22.8" stroke="#2a1a2e" stroke-width="3.6" fill="none"/>
+    <path d="M -13.4,-23.6 C -11,-22.6 -8.6,-22.4 -6.6,-22.8" stroke="#8f5a3a" stroke-width="2.2" fill="none"/>
+    <path d="M -8.4,-25.6 C -5.4,-26.4 -3.2,-24.6 -3.4,-22.2 C -3.6,-19.8 -6.4,-18.8 -8.6,-19.8 Z" fill="#ff9f43" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -7.6,-24.6 C -6,-25 -4.8,-24.2 -4.6,-23" stroke="#ffd08a" stroke-width="0.8" fill="none"/>
+    <path d="M -9.6,-25.4 L -8.4,-19.6" stroke="#3f8f4a" stroke-width="1.6"/>
+
+    <!-- the catapult's release lever, for the rider's hands -->
+    <path d="M 16.6,-38 L 18.4,-45.4" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M 16.6,-38 L 18.4,-45.4" stroke="#c98a4f" stroke-width="1.2" fill="none"/>
+    <circle cx="18.6" cy="-46" r="1.8" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.8"/>
+  </g>
+</svg>

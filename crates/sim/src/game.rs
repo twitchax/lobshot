@@ -14,7 +14,7 @@ use anyhow::{bail, ensure};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ballistics::{self, Flight},
+    ballistics::{self, Flight, Spin},
     base::{Res, Void},
     body::{HitFrame, Pose},
     damage::{self, Blast, Target},
@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -60,11 +60,12 @@ pub enum MobileKind {
     Sudsotter,
     Frostfin,
     Herdhound,
+    Thistleback,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -75,6 +76,7 @@ impl MobileKind {
         Self::Sudsotter,
         Self::Frostfin,
         Self::Herdhound,
+        Self::Thistleback,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -104,6 +106,7 @@ impl MobileKind {
             Self::Sudsotter => &sudsotter::MOBILE,
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
+            Self::Thistleback => &thistleback::MOBILE,
         }
     }
 }
@@ -303,6 +306,17 @@ pub struct Strand {
     pub to: u32,
 }
 
+/// One projectile of an orbit (`Effect::Orbit`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Orbiter {
+    /// How far from the path it circles, px; 0 flies the path itself (`ballistics::orbit_point`).
+    pub radius: f64,
+    /// Where on its circle it starts, radians clockwise from `+x` on screen.
+    pub phase: f64,
+    /// The stage tick it stopped at: where it struck, or left the map.
+    pub to: u32,
+}
+
 /// What an event did, in order, for the client to show.
 ///
 /// **Stages.** An event's effects play as one or more stages. `Volley` and `Dropped` each start
@@ -363,9 +377,9 @@ pub enum Effect {
     GameOver {
         winner: Option<Team>,
     },
-    /// `seat` fires `shot`, starting a stage: the volley's projectiles (`Fired`, `Helix`, `Beacon`)
-    /// follow, then what they do in tick order. A Dual, Dual+ or Double turn has two volleys, the
-    /// second from wherever the shooter stands once the first has settled.
+    /// `seat` fires `shot`, starting a stage: the volley's projectiles (`Fired`, `Helix`, `Orbit`,
+    /// `Beacon`) follow, then what they do in tick order. A Dual, Dual+ or Double turn has two
+    /// volleys, the second from wherever the shooter stands once the first has settled.
     Volley {
         seat: u8,
         shot: Shot,
@@ -382,6 +396,16 @@ pub enum Effect {
         strands: Vec<Strand>,
         /// The stage tick from which the strands run together on the path, if they ever do.
         merge: Option<u32>,
+    },
+    /// Thistleback's S2: projectiles circling one path in the screen's plane, each striking on its
+    /// own. `legs` is the path, which touches nothing itself; orbiter `i` is at
+    /// `ballistics::orbit_point(leg.flight, t, leg.offset, spin, orbiters[i].radius,
+    /// orbiters[i].phase)` for each leg tick `t` until its `to`.
+    Orbit {
+        seat: u8,
+        legs: Vec<Leg>,
+        spin: Spin,
+        orbiters: Vec<Orbiter>,
     },
     /// The Teleport item's beacon: one path like `Fired`, but it hurts and carves nothing. If it
     /// lands, `Teleported` follows.
@@ -1259,6 +1283,12 @@ impl Game {
     /// Detonates `blast` at `tick`: carves a crater of radius `crater` (the blast's reach unless an
     /// item or sudden death widens it), then damages every living mobile in reach.
     pub(crate) fn explode(&mut self, blast: &Blast, crater: f64, direct: Option<u8>, tick: u32, effects: &mut Vec<Effect>) {
+        self.explode_by(blast, crater, tick, effects, |seat, target| damage::damage(blast, target, direct == Some(seat)));
+    }
+
+    /// `explode`, with `harm` saying what the blast deals each living mobile (by seat), for a blast
+    /// that hurts by a rule of its own (Thistleback's SS).
+    pub(crate) fn explode_by(&mut self, blast: &Blast, crater: f64, tick: u32, effects: &mut Vec<Effect>, harm: impl Fn(u8, &Target) -> i32) {
         let dirty = self.terrain.carve(blast.center, crater);
         effects.push(Effect::Exploded {
             at: blast.center,
@@ -1270,7 +1300,7 @@ impl Game {
             let player = self.players[seat];
             let Ok(seat) = u8::try_from(seat) else { continue };
             if player.alive {
-                self.hurt(seat, damage::damage(blast, &player.target(), direct == Some(seat)), effects);
+                self.hurt(seat, harm(seat, &player.target()), effects);
             }
         }
     }
@@ -1381,7 +1411,9 @@ impl Game {
         let paths: Vec<&Leg> = effects[from..]
             .iter()
             .flat_map(|effect| match effect {
-                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } | Effect::Guide { legs, .. } => legs.as_slice(),
+                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Orbit { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } | Effect::Guide { legs, .. } => {
+                    legs.as_slice()
+                }
                 _ => &[],
             })
             .collect();
@@ -1915,6 +1947,17 @@ mod unit {
         let effects = shoot(&mut game, 0, Shot::S1, 45, Power::nearest(2.0));
         assert!(effects.iter().any(|e| matches!(e, Effect::Exploded { .. })), "the sponge went off: {effects:?}");
         assert!(beams(&effects).is_empty(), "{effects:?}");
+    }
+
+    #[test]
+    fn skyeye_beams_once_for_a_projectile_that_bursts_many_times() {
+        let calm = duel_of(MobileKind::Thistleback, MobileKind::Coilback, 800);
+        let power = direct_hit_power(&calm, 30);
+        let mut game = under(calm, WeatherKind::Skyeye);
+        let effects = shoot(&mut game, 0, Shot::Ss, 30, power);
+        let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
+        assert!(blasts >= 9, "the pumpkin's ring went off: {effects:?}");
+        assert_eq!(beams(&effects).len(), 1, "one pumpkin, one beam");
     }
 
     #[test]

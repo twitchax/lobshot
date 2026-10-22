@@ -81,6 +81,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         54,
         0x327a_2cb0_ffd4_2c06,
     ),
+    (
+        "roster_thistleback",
+        include_str!("golden/roster_thistleback.json"),
+        include_bytes!("golden/roster_thistleback.bin"),
+        63,
+        0xc8a1_51a2_4657_e6be,
+    ),
 ];
 
 #[test]
@@ -217,6 +224,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_sudsotter", play(roster_sudsotter(), &winds)),
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
+        ("roster_thistleback", play(roster_thistleback(), &winds)),
     ]
 }
 
@@ -422,6 +430,23 @@ fn roster_herdhound() -> Setup {
         ],
         order: vec![0, 1],
         wind: Wind::new(8, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Thistleback against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_thistleback() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
     }
 }
