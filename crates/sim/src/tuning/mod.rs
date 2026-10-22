@@ -12,6 +12,7 @@ pub mod lanternwing;
 pub mod marblemole;
 pub mod score;
 pub mod sparkhorn;
+pub mod sudsotter;
 pub mod weather;
 
 use serde::{Deserialize, Serialize};

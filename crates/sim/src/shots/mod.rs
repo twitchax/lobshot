@@ -1,16 +1,18 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`), bolts (`bolt`), helix strands
-//! (`helix`) and bouncing balls (`bounce`).
+//! (`helix`), bouncing balls (`bounce`) and blobs that walk the ground (`crawl`).
 
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
+mod crawl;
 mod helix;
 mod hookclaw;
 mod lanternwing;
 mod marblemole;
 mod sparkhorn;
+mod sudsotter;
 
 use crate::{
     ballistics::Flight,
@@ -160,6 +162,17 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Hookclaw => hookclaw::fire(game, &mut gun, shot, effects),
         MobileKind::Sparkhorn => sparkhorn::fire(game, &mut gun, shot, effects),
         MobileKind::Marblemole => marblemole::fire(game, &gun, shot, effects),
+        MobileKind::Sudsotter => sudsotter::fire(game, &gun, shot, effects),
+    }
+}
+
+/// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
+/// for SearchBot's aim pass (Sudsotter's shots walk on from there). `target` is where the bot wants
+/// it.
+pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
+    match game.players().get(usize::from(seat))?.mobile {
+        MobileKind::Coilback | MobileKind::Lanternwing | MobileKind::Hookclaw | MobileKind::Sparkhorn | MobileKind::Marblemole => None,
+        MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }
 

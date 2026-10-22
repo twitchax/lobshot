@@ -11,7 +11,8 @@
 //!    that flight lands: a direct hit on the nearest enemy best (a false-angle hit a little less
 //!    so), then distance from its center, and anything that would hit a teammate worst. The whole
 //!    range, not just the true angles: from a slope or behind a hill only a false angle may clear
-//!    the ground, and 70% damage beats none.
+//!    the ground, and 70% damage beats none. A shot that does its work somewhere else (a walking
+//!    sponge, `shots::aim_point`) is scored by where that is.
 //! 2. **Shot.** For each shot it may fire (never a locked or disabled SS), the two best distinct
 //!    trajectories in its own range, refined, are fired in a scratch game and valued by what they
 //!    did: damage to enemies, kills, and twice the cost of any harm to its own side.
@@ -29,9 +30,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
+    game::{Contact, Death, Effect, Event, Game, Impact, Phase, Player, Shot},
     items::{Item, Loadout},
     referee::XorShift,
+    shots,
     tuning::{self, AimRange, bot::Noise},
     units::{Centis, Facing, Power, Vec2, Wind},
 };
@@ -198,14 +200,14 @@ fn facing_toward(me: &Player, target: &Player) -> Facing {
 
 /// The best shot `seat` can take from where it stands, as it faces.
 fn best_shot(game: &Game, seat: u8, target: &Player) -> Option<Candidate> {
-    let tuning = game.players().get(usize::from(seat))?.tuning();
+    game.players().get(usize::from(seat))?;
     let search = Search::new(game, seat, target.center());
     let mut best: Option<Candidate> = None;
-    for shot in [Shot::S1, Shot::S2, Shot::Ss] {
+    for shot in SHOTS {
         if !game.can_shoot(seat, shot) {
             continue;
         }
-        for (aim, power) in search.trajectories(shot.tuning(tuning).aim.value) {
+        for (aim, power) in search.trajectories(shot) {
             let candidate = Candidate::fired(game, seat, None, shot, aim, power, search.proxy(shot, aim, power));
             if best.as_ref().is_none_or(|best| candidate.beats(best)) {
                 best = Some(candidate);
@@ -238,39 +240,54 @@ enum Landing {
     Own,
 }
 
-/// The aim pass: where the shared flight lands for every aim and power on the coarse grid.
+/// The shots, in the order a grid cell keeps their landings.
+const SHOTS: [Shot; 3] = [Shot::S1, Shot::S2, Shot::Ss];
+
+/// The aim pass: where the shared flight lands for every aim and power on the coarse grid, and so
+/// where each shot does its work (`shots::aim_point`: somewhere else for a shot that walks on).
 struct Search<'g> {
     game: &'g Game,
     seat: u8,
     target: Vec2,
-    /// (aim, power in twentieths, where it lands), over the union of the allowed shots' ranges.
-    grid: Vec<(i16, u8, Landing)>,
+    /// (aim, power in twentieths, where each of `SHOTS` does its work), over the union of the
+    /// allowed shots' ranges.
+    grid: Vec<(i16, u8, [Landing; 3])>,
 }
 
 impl<'g> Search<'g> {
     fn new(game: &'g Game, seat: u8, target: Vec2) -> Self {
         let mut search = Self { game, seat, target, grid: Vec::new() };
         let tuning = game.players()[usize::from(seat)].tuning();
-        let ranges: Vec<AimRange> = [Shot::S1, Shot::S2, Shot::Ss]
-            .iter()
-            .filter(|&&shot| game.can_shoot(seat, shot))
-            .map(|shot| shot.tuning(tuning).aim.value)
-            .collect();
+        let ranges: Vec<AimRange> = SHOTS.iter().filter(|&&shot| game.can_shoot(seat, shot)).map(|shot| shot.tuning(tuning).aim.value).collect();
         let (low, high) = (ranges.iter().map(|r| r.min).min().unwrap_or(0), ranges.iter().map(|r| r.max).max().unwrap_or(0));
         for aim in (low..=high).step_by(3) {
             for power in (0..=Power::MAX.twentieths()).step_by(2) {
-                let landing = search.land(aim, power);
-                search.grid.push((aim, power, landing));
+                let landings = search.landings(aim, power);
+                search.grid.push((aim, power, landings));
             }
         }
         search
     }
 
-    fn land(&self, aim: i16, power: u8) -> Landing {
+    /// Where each of `SHOTS` does its work from one launch: the shared flight's landing, unless the
+    /// shot does it elsewhere.
+    fn landings(&self, aim: i16, power: u8) -> [Landing; 3] {
+        let Some(flight) = self.game.launch(self.seat, aim, f64::from(power) / 20.0) else {
+            return [Landing::Lost; 3];
+        };
+        let shared = self.game.track(flight, 0, 0).impact;
+        SHOTS.map(|shot| self.classify(shots::aim_point(self.game, self.seat, shot, flight, self.target).unwrap_or(shared)))
+    }
+
+    /// Where `shot` at `aim` and `power` does its work.
+    fn land(&self, shot: Shot, aim: i16, power: u8) -> Landing {
         let Some(flight) = self.game.launch(self.seat, aim, f64::from(power) / 20.0) else {
             return Landing::Lost;
         };
-        let impact = self.game.track(flight, 0, 0).impact;
+        self.classify(shots::aim_point(self.game, self.seat, shot, flight, self.target).unwrap_or_else(|| self.game.track(flight, 0, 0).impact))
+    }
+
+    fn classify(&self, impact: Impact) -> Landing {
         let me = self.game.players()[usize::from(self.seat)];
         match impact.contact {
             Contact::Gone | Contact::Column(_) => Landing::Lost,
@@ -292,33 +309,35 @@ impl<'g> Search<'g> {
         }
     }
 
-    /// The shared flight's score at an aim and power off the grid, for `shot`.
+    /// `shot`'s score at an aim and power off the grid.
     fn proxy(&self, shot: Shot, aim: i16, power: u8) -> f64 {
         let range = shot.tuning(self.game.players()[usize::from(self.seat)].tuning()).aim.value;
-        Self::score(range, aim, self.land(aim, power))
+        Self::score(range, aim, self.land(shot, aim, power))
     }
 
-    /// The two best distinct trajectories within `range`, each refined around its grid point.
-    fn trajectories(&self, range: AimRange) -> Vec<(i16, u8)> {
+    /// `shot`'s two best distinct trajectories within its range, each refined around its grid point.
+    fn trajectories(&self, shot: Shot) -> Vec<(i16, u8)> {
+        let range = shot.tuning(self.game.players()[usize::from(self.seat)].tuning()).aim.value;
+        let index = SHOTS.iter().position(|&s| s == shot).unwrap_or(0);
         let mut ranked: Vec<(f64, i16, u8)> = self
             .grid
             .iter()
             .filter(|(aim, ..)| range.contains(*aim))
-            .map(|&(aim, power, landing)| (Self::score(range, aim, landing), aim, power))
+            .map(|&(aim, power, landings)| (Self::score(range, aim, landings[index]), aim, power))
             .collect();
         ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
         let Some(&(_, first, _)) = ranked.first() else { return Vec::new() };
         // A second trajectory well away from the first: a lob against a line drive, say.
         let second = ranked.iter().find(|(_, aim, _)| (aim - first).abs() >= 9);
-        ranked.first().into_iter().chain(second).map(|&(_, aim, power)| self.refine(range, aim, power)).collect()
+        ranked.first().into_iter().chain(second).map(|&(_, aim, power)| self.refine(shot, range, aim, power)).collect()
     }
 
-    /// The best aim and power within two degrees and three power steps of a grid point.
-    fn refine(&self, range: AimRange, aim: i16, power: u8) -> (i16, u8) {
+    /// The best aim and power for `shot` within two degrees and three power steps of a grid point.
+    fn refine(&self, shot: Shot, range: AimRange, aim: i16, power: u8) -> (i16, u8) {
         let max = Power::MAX.twentieths();
         ((aim - 2).max(range.min)..=(aim + 2).min(range.max))
             .flat_map(|aim| (power.saturating_sub(3)..=(power + 3).min(max)).map(move |power| (aim, power)))
-            .map(|(aim, power)| (Self::score(range, aim, self.land(aim, power)), aim, power))
+            .map(|(aim, power)| (Self::score(range, aim, self.land(shot, aim, power)), aim, power))
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map_or((aim, power), |(_, aim, power)| (aim, power))
     }

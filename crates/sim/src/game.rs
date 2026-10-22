@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, sudsotter,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -55,11 +55,12 @@ pub enum MobileKind {
     Hookclaw,
     Sparkhorn,
     Marblemole,
+    Sudsotter,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
+    pub const ALL: [Self; 6] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Sudsotter];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -83,6 +84,7 @@ impl MobileKind {
             Self::Hookclaw => &hookclaw::MOBILE,
             Self::Sparkhorn => &sparkhorn::MOBILE,
             Self::Marblemole => &marblemole::MOBILE,
+            Self::Sudsotter => &sudsotter::MOBILE,
         }
     }
 }
@@ -297,7 +299,8 @@ pub enum Effect {
     },
     /// One projectile's whole path, leg by leg. A volley of several projectiles (Hookclaw's and
     /// Marblemole's S2) has one `Fired` each. A bouncing marble's legs run bounce to bounce, and a
-    /// marble at rest has a leg with no velocity or acceleration.
+    /// marble at rest has a leg with no velocity or acceleration. A walking blob (Sudsotter's) has
+    /// a leg with no acceleration for each straight run of its walk, and a resting one at its end.
     Fired {
         seat: u8,
         legs: Vec<Leg>,
@@ -383,8 +386,8 @@ pub enum Effect {
         at: Vec2,
         tick: u32,
     },
-    /// Marblemole's SS passed through `seat` from tick `from` to `to`, hurting it all the while;
-    /// its damage follows.
+    /// Marblemole's SS passed through `seat` from tick `from` to `to`, or Sudsotter's suds stayed
+    /// within reach of it, hurting it all the while; its damage follows.
     Pierced {
         seat: u8,
         from: u32,
@@ -498,7 +501,7 @@ pub struct Track {
 /// What a projectile stops at, beyond leaving the map. Weather columns always act on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Senses {
-    /// Living mobiles (Marblemole's SS passes through them).
+    /// Living mobiles (Marblemole's SS and Sudsotter's sponges pass through them).
     pub mobiles: bool,
     /// Solid ground (a helix's center passes through it; only its strands collide).
     pub terrain: bool,

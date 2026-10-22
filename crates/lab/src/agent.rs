@@ -942,6 +942,11 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Marblemole => {
             "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
         }
+        MobileKind::Sudsotter => format!(
+            "Fires sponges that fly through mobiles, stick where they land and walk along the ground, climbing walls and clinging under ledges, then go off {} s after landing wherever they are: S1's walk left on screen, S2's right, whichever way you face (about {:.0} px on level ground). SS is a blob of suds that walks the way it was moving as it landed, hurting every mobile it passes near, most on a small island it circles; a direct hit only pops it. The weather leaves its damage alone.",
+            tuning::sudsotter::SPONGE_FUSE_SECONDS.value,
+            tuning::sudsotter::WALK_SPEED.value * tuning::sudsotter::SPONGE_FUSE_SECONDS.value
+        ),
     }
 }
 

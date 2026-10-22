@@ -22,13 +22,15 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub).
-const CBCHUI: [(MobileKind, f64); 5] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub). J.Frog came after the
+/// chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
+const CBCHUI: [(MobileKind, f64); 6] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
     (MobileKind::Sparkhorn, 2.30),
     (MobileKind::Marblemole, 2.33),
+    (MobileKind::Sudsotter, 2.10),
 ];
 
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
@@ -164,6 +166,16 @@ fn formula_cbchui_fixed_power_by_mobile() {
 }
 
 #[test]
+fn formula_sudsotter_holds_creedos_other_frog_powers() {
+    // CR-frog, unfitted: cbchui-style "1.95 (half screen shots)" at 75 degrees, and Banpao-style
+    // "between 2.5 and 2.6 bars" at 60 degrees, 1.5 screens ("untested").
+    let (mobile, calm) = (MobileKind::Sudsotter, tuned_for(MobileKind::Sudsotter, Wind::default()));
+    assert_bars("frog cbchui half screen", ideal_power(&duel_of(mobile, 400), 75, calm), 1.95);
+    let banpao = ideal_power(&duel_of(mobile, 1200), 60, calm);
+    assert!((2.5 - TOLERANCE_BARS..=2.6 + TOLERANCE_BARS).contains(&banpao), "frog banpao: needs {banpao:.3} bars");
+}
+
+#[test]
 fn formula_boomer_hooks_with_the_wind() {
     // UC-boomer: Hookclaw's wind sensitivity saves it about 0.45 bars with 10 wind behind a
     // 70-degree, one-screen shot.
@@ -233,7 +245,7 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
+/// Derives the fitted constants. The other mobiles' gravities (cbchui), and Hookclaw's wind
 /// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the

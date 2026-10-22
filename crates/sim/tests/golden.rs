@@ -46,6 +46,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         33,
         0x3229_6916_11f1_63ed,
     ),
+    (
+        "roster_sudsotter",
+        include_str!("golden/roster_sudsotter.json"),
+        include_bytes!("golden/roster_sudsotter.bin"),
+        55,
+        0xbbbe_8b3a_4a8f_915c,
+    ),
 ];
 
 #[test]
@@ -156,6 +163,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("brawl_4v4", play(brawl_4v4(), &winds)),
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
+        ("roster_sudsotter", play(roster_sudsotter(), &winds)),
     ]
 }
 
@@ -270,6 +278,26 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Sudsotter's sponges walking the hills, and its suds, in wind.
+fn roster_sudsotter() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Sudsotter, 440, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Coilback, 1420, Facing::Left, &[]),
+        ],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
     }
 }
 
