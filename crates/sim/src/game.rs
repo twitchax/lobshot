@@ -986,19 +986,20 @@ impl Game {
     /// mobile's feet is direct.
     #[must_use]
     pub fn fly(&self, flight: &Flight, from_tick: u32) -> Impact {
-        self.fly_sensing(flight, from_tick, Senses::ALL)
+        self.fly_sensing(flight, from_tick, from_tick == 0, Senses::ALL)
     }
 
-    /// `fly`, stopping only at what `senses` names.
-    pub(crate) fn fly_sensing(&self, flight: &Flight, from_tick: u32, senses: Senses) -> Impact {
+    /// `fly`, stopping only at what `senses` names. A `launched` flight is a projectile at its
+    /// first tick, which no column has touched yet: one it starts inside catches it at once, as
+    /// OB's weathers act on any projectile they haven't touched. Otherwise only entering a column
+    /// counts, so a fresh leg out of one, or a shot flying on, isn't redirected again at once.
+    pub(crate) fn fly_sensing(&self, flight: &Flight, from_tick: u32, launched: bool, senses: Senses) -> Impact {
         let width = f64::from(self.terrain.width());
         let height = f64::from(self.terrain.height());
         let last = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
         let targets = if senses.mobiles { self.hit_frames() } else { Vec::new() };
         let columns = &self.weather.columns;
-        // Only entering a column counts, so a shot that starts inside one (a fresh leg) isn't
-        // redirected again at once.
-        let mut inside: Vec<bool> = columns.iter().map(|c| c.contains(flight.at(from_tick).x)).collect();
+        let mut inside: Vec<bool> = columns.iter().map(|c| !launched && c.contains(flight.at(from_tick).x)).collect();
 
         for tick in from_tick..=last {
             let at = flight.at(tick);
@@ -1045,7 +1046,7 @@ impl Game {
     /// Follows a projectile through the weather to what it hits. Force marks it; Mirror sends it
     /// back (its sideways speed and wind reversed); Tornado holds it, then flings it back up.
     /// `from_tick` is in `flight`'s own ticks, and `offset` is the shot's elapsed ticks at
-    /// `flight`'s tick 0.
+    /// `flight`'s tick 0; both 0 is a launch (see `fly_sensing`).
     #[must_use]
     pub fn track(&self, flight: Flight, from_tick: u32, offset: u32) -> Track {
         self.track_sensing(flight, from_tick, offset, Senses::ALL)
@@ -1062,9 +1063,11 @@ impl Game {
         };
         // Where to fly on from; a Force beam moves it on without starting a new leg.
         let mut cursor = from_tick;
+        let mut launched = from_tick == 0 && offset == 0;
         let mut forced = false;
         loop {
-            let impact = self.fly_sensing(&leg.flight, cursor, senses);
+            let impact = self.fly_sensing(&leg.flight, cursor, launched, senses);
+            launched = false;
             leg.to = impact.tick;
             let column = match impact.contact {
                 Contact::Column(index) if legs.len() < MAX_LEGS => self.weather.columns.get(usize::from(index)).copied(),
@@ -1636,6 +1639,24 @@ mod unit {
         let track = game.track(flight, 0, 0);
         assert_eq!(track.legs.len(), 2);
         assert!(track.legs[1].flight.velocity.x < 0.0 && track.impact.at.x < 600.0, "{track:?}");
+    }
+
+    #[test]
+    fn a_mirror_sends_back_a_shot_fired_from_inside_its_beam() {
+        // The beam spans 320 to 360, and the muzzle stands at about 334.
+        let game = with_column(WeatherKind::Mirror, 340);
+        let flight = game.launch(0, 25, 2.0).unwrap();
+        assert!(game.weather.columns[0].contains(flight.origin.x), "{flight:?}");
+        let track = game.track(flight, 0, 0);
+        assert_eq!(track.legs.len(), 2, "{track:?}");
+        assert!(track.legs[1].flight.velocity.x < 0.0, "{track:?}");
+    }
+
+    #[test]
+    fn force_marks_a_shot_fired_from_inside_its_beam() {
+        let game = with_column(WeatherKind::Force, 340);
+        let flight = game.launch(0, 25, 2.0).unwrap();
+        assert!(game.track(flight, 0, 0).forced);
     }
 
     #[test]

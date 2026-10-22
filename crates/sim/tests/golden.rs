@@ -30,7 +30,7 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         51,
         0x84c1_a385_0145_7872,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 101, 0x4ef2_0c93_4e51_5777),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 101, 0xa588_204d_b585_e0ad),
     ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 197, 0xe011_32dc_5600_ae36),
     (
         "duel_big_bomb",

@@ -279,7 +279,7 @@
         "seat": 2,
         "shot": "S1",
         "aim": 32,
-        "power": 77,
+        "power": 0,
         "time": 307
       }
     },
@@ -374,7 +374,7 @@
         "seat": 1,
         "shot": "S2",
         "aim": 32,
-        "power": 35,
+        "power": 34,
         "time": 992
       }
     },
@@ -406,7 +406,7 @@
         "seat": 2,
         "shot": "S1",
         "aim": 32,
-        "power": 73,
+        "power": 14,
         "time": 1266
       }
     },

@@ -51,3 +51,5 @@ why the version moved the way it did.
 ### Fixed
 
 - A shot's power above four bars no longer decodes, so a client can't fire one.
+- A shot fired from inside a weather column is caught by it: a Mirror sends it back, Force boosts
+  it, a Tornado flings it up. It used to pass through.
