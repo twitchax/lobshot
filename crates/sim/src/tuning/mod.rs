@@ -6,6 +6,7 @@
 pub mod bot;
 pub mod coilback;
 pub mod drops;
+pub mod herdhound;
 pub mod hookclaw;
 pub mod items;
 pub mod lanternwing;

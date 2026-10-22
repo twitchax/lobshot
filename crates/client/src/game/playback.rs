@@ -1,6 +1,6 @@
 //! Showing what happened. Each accepted event's effects become a short scene, in stages (a Dual's
-//! second shot, a drop at the turn's end): shells, strands, beacons and drops fly their legs in real
-//! time, blasts carve the terrain art as they land, bolts strike, numbers rise, mobiles fall,
+//! second shot, a drop at the turn's end): shells, strands, beacons, guides and drops fly their legs
+//! in real time, blasts carve the terrain art as they land, bolts strike, numbers rise, mobiles fall,
 //! teleport and trade places, and the turn passes when it's all over. Scenes play one at a time, in
 //! order, on the schedule in `lobshot_protocol::pacing`, which the server waits out before starting
 //! the next turn's clock.
@@ -155,8 +155,9 @@ enum Cue {
     SuddenDeath(SuddenDeathKind),
 }
 
-/// Something flying its path: a shell, a beacon, a falling drop, or one strand of a helix, which
-/// winds about the path (amplitude, hertz and phase, for `ballistics::helix_point`).
+/// Something flying its path: a shell, a beacon, a guide, a falling drop, or one strand of a helix,
+/// which winds about the path (amplitude, hertz and phase, for `ballistics::helix_point`). It shows
+/// once its first leg starts: Herdhound's guides and missiles leave the warhead mid-flight.
 struct Flyer {
     legs: Vec<Leg>,
     strand: Option<(f64, f64, f64)>,
@@ -199,7 +200,8 @@ fn ticks(count: u32) -> f32 {
 }
 
 /// Where a flyer is `seconds` into its stage, following its legs (holding still between legs
-/// while a tornado spins it), and winding about them if it's a strand.
+/// while a tornado spins it), and winding about them if it's a strand; `None` before its first leg
+/// starts.
 fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Option<SimVec2> {
     // A clock reading in seconds, back to whole ticks.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -211,12 +213,23 @@ fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Opti
             None => leg.flight.at(local),
         };
         match tick.checked_sub(leg.offset) {
-            Some(local) if local <= leg.to => return Some(point(local.max(leg.from))),
+            Some(local) if local < leg.from => return last,
+            Some(local) if local <= leg.to => return Some(point(local)),
             Some(_) => last = Some(point(leg.to)),
-            None => return last.or(Some(point(leg.from))),
+            None => return last,
         }
     }
     last
+}
+
+/// How far into its stage an effect's path starts, in seconds, if it has one.
+fn first_leg_start(effect: &Effect) -> Option<f32> {
+    match effect {
+        Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Guide { legs, .. } | Effect::Dropped { legs, .. } => {
+            legs.first().map(|leg| ticks(leg.offset + leg.from))
+        }
+        _ => None,
+    }
 }
 
 fn enqueue(mut played: MessageReader<Played>, mut timeline: ResMut<Timeline>) {
@@ -270,6 +283,8 @@ fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) ->
             }
         }
         Effect::Beacon { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x7f, 0xf0, 0xff), 16.0)),
+        // Herdhound's whistle: small and bright, where its missiles are headed.
+        Effect::Guide { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0xff, 0xe2, 0x6b), 7.0)),
         Effect::Dropped { drop, legs, .. } if !legs.is_empty() => {
             let sprite = Sprite {
                 image: props.server.load(lobshot_assets::drop_path(drop.kind)),
@@ -361,6 +376,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         Effect::Fired { .. }
         | Effect::Helix { .. }
         | Effect::Beacon { .. }
+        | Effect::Guide { .. }
         | Effect::Dropped { .. }
         | Effect::Walked { .. }
         | Effect::WindChanged(_)
@@ -387,9 +403,11 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
     }
     for (effect, at) in played.effects.into_iter().zip(schedule.at) {
         let launched = take_off(&effect, at, props, commands);
-        // Shells, strands and beacons leave a cannon; a drop falls quietly.
-        if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) {
-            cues.push((at, Cue::Sound(Sound::Fire)));
+        // Shells, strands and beacons leave a cannon, as their first leg starts (a missile bursts
+        // out of a warhead mid-flight); a drop falls quietly, and a guide rides the warhead's.
+        let quiet = launched.is_empty() || matches!(effect, Effect::Dropped { .. } | Effect::Guide { .. });
+        if let Some(start) = first_leg_start(&effect).filter(|_| !quiet) {
+            cues.push((at + start, Cue::Sound(Sound::Fire)));
         }
         flyers.extend(launched);
         cue(effect, at, &mut cues);
@@ -658,6 +676,21 @@ mod unit {
         assert_eq!(at(1.5), legs[0].flight.at(second), "held between legs, as a tornado holds it");
         assert_eq!(at(2.5), legs[1].flight.at(second / 2));
         assert_eq!(at(9.0), legs[1].flight.at(second), "stopped at the end");
+    }
+
+    #[test]
+    fn a_flyer_shows_once_its_first_leg_starts() {
+        // A missile bursting out of Herdhound's warhead a second into the stage.
+        let second = TICKS_PER_SECOND;
+        let legs = [leg(0, second, second)];
+        assert_eq!(flyer_at(&legs, None, 0.5), None, "not out yet");
+        assert_eq!(flyer_at(&legs, None, 1.5), Some(legs[0].flight.at(second / 2)));
+        let late = Effect::Fired { seat: 0, legs: legs.to_vec() };
+        assert_eq!(first_leg_start(&late), Some(1.0), "it sounds as it bursts out");
+        // A path carried on from another's tick, as a guide carries on its warhead's flight.
+        let carried = [leg(second, 2 * second, 0)];
+        assert_eq!(flyer_at(&carried, None, 0.5), None);
+        assert_eq!(flyer_at(&carried, None, 1.5), Some(carried[0].flight.at(3 * second / 2)));
     }
 
     #[test]

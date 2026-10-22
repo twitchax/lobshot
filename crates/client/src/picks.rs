@@ -112,6 +112,7 @@ pub fn role(mobile: Option<MobileKind>) -> &'static str {
         Some(MobileKind::Hookclaw) => "A boomerang crab. Wind bends its shots into hooks.",
         Some(MobileKind::Sparkhorn) => "A shielded beetle. Its shells call bolts from the sky.",
         Some(MobileKind::Marblemole) => "A mine-cart mole. Its marbles bounce and roll into pits.",
+        Some(MobileKind::Herdhound) => "A sheepdog mech. Its missiles loop, then home on its whistle.",
         None => "Any of them: the room picks when the game starts.",
     }
 }

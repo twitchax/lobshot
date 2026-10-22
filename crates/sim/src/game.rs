@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, herdhound, hookclaw, lanternwing, marblemole, sparkhorn,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -55,11 +55,12 @@ pub enum MobileKind {
     Hookclaw,
     Sparkhorn,
     Marblemole,
+    Herdhound,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
+    pub const ALL: [Self; 6] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Herdhound];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -83,6 +84,7 @@ impl MobileKind {
             Self::Hookclaw => &hookclaw::MOBILE,
             Self::Sparkhorn => &sparkhorn::MOBILE,
             Self::Marblemole => &marblemole::MOBILE,
+            Self::Herdhound => &herdhound::MOBILE,
         }
     }
 }
@@ -461,6 +463,13 @@ pub enum Effect {
     SuddenDeath {
         kind: SuddenDeathKind,
     },
+    /// Herdhound's guide: a marker that flies on along the shot's path from where its warhead
+    /// opened, hurting and carving nothing. `legs` start at that tick; the missiles (each a
+    /// `Fired` from the same tick) home on it.
+    Guide {
+        seat: u8,
+        legs: Vec<Leg>,
+    },
 }
 
 /// What a projectile touched.
@@ -493,6 +502,15 @@ pub struct Track {
     /// The last leg and the leg's own tick at impact, to carry on from (Coilback's S2).
     pub last: Leg,
     pub last_tick: u32,
+}
+
+/// A projectile followed up to a stage tick (`Game::track_until`).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Course {
+    pub track: Track,
+    /// It reached the bound still flying: `track.impact` is where it was then (contact `Gone`),
+    /// and it carries on from `track.last` at its own tick `track.last_tick`.
+    pub flying: bool,
 }
 
 /// What a projectile stops at, beyond leaving the map. Weather columns always act on it.
@@ -1012,9 +1030,18 @@ impl Game {
     /// OB's weathers act on any projectile they haven't touched. Otherwise only entering a column
     /// counts, so a fresh leg out of one, or a shot flying on, isn't redirected again at once.
     pub(crate) fn fly_sensing(&self, flight: &Flight, from_tick: u32, launched: bool, senses: Senses) -> Impact {
+        let last = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
+        self.fly_within(flight, from_tick, last, launched, senses).unwrap_or(Impact {
+            tick: last,
+            at: flight.at(last),
+            contact: Contact::Gone,
+        })
+    }
+
+    /// `fly_sensing` up to the flight's own tick `last`: `None` if it is still flying there.
+    fn fly_within(&self, flight: &Flight, from_tick: u32, last: u32, launched: bool, senses: Senses) -> Option<Impact> {
         let width = f64::from(self.terrain.width());
         let height = f64::from(self.terrain.height());
-        let last = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
         let targets = if senses.mobiles { self.hit_frames() } else { Vec::new() };
         let columns = &self.weather.columns;
         let mut inside: Vec<bool> = columns.iter().map(|c| !launched && c.contains(flight.at(from_tick).x)).collect();
@@ -1022,34 +1049,30 @@ impl Game {
         for tick in from_tick..=last {
             let at = flight.at(tick);
             if at.x < 0.0 || at.x >= width || at.y >= height {
-                return Impact { tick, at, contact: Contact::Gone };
+                return Some(Impact { tick, at, contact: Contact::Gone });
             }
             if let Some(&(seat, _)) = targets.iter().find(|(_, frame)| frame.contains(at)) {
-                return Impact { tick, at, contact: Contact::Mobile(seat) };
+                return Some(Impact { tick, at, contact: Contact::Mobile(seat) });
             }
             // In range: x is inside the map, and y is below it or above the bottom.
             #[allow(clippy::cast_possible_truncation)]
             if senses.terrain && self.terrain.is_solid(at.x.floor() as i32, at.y.floor() as i32) {
-                return Impact { tick, at, contact: Contact::Terrain };
+                return Some(Impact { tick, at, contact: Contact::Terrain });
             }
             for (index, column) in columns.iter().enumerate() {
                 let now = column.contains(at.x);
                 if now && !inside[index] {
                     let index = u8::try_from(index).unwrap_or(u8::MAX);
-                    return Impact {
+                    return Some(Impact {
                         tick,
                         at,
                         contact: Contact::Column(index),
-                    };
+                    });
                 }
                 inside[index] = now;
             }
         }
-        Impact {
-            tick: last,
-            at: flight.at(last),
-            contact: Contact::Gone,
-        }
+        None
     }
 
     /// Every living mobile's hitbox, by seat, for collision loops.
@@ -1073,6 +1096,13 @@ impl Game {
 
     /// `track`, stopping only at what `senses` names.
     pub(crate) fn track_sensing(&self, flight: Flight, from_tick: u32, offset: u32, senses: Senses) -> Track {
+        self.track_until(flight, from_tick, offset, senses, u32::MAX).track
+    }
+
+    /// `track_sensing`, only as far as stage tick `until`: a projectile that steers (Herdhound's
+    /// missiles) is followed a stretch at a time, through the weather like any other.
+    pub(crate) fn track_until(&self, flight: Flight, from_tick: u32, offset: u32, senses: Senses, until: u32) -> Course {
+        let longest = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
         let mut legs = Vec::new();
         let mut leg = Leg {
             flight,
@@ -1085,8 +1115,29 @@ impl Game {
         let mut launched = from_tick == 0 && offset == 0;
         let mut marks = Marks::default();
         loop {
-            let impact = self.fly_sensing(&leg.flight, cursor, launched, senses);
+            // A Tornado's hold can start the next leg past the bound: it is still spinning there.
+            let Some(bound) = until.checked_sub(leg.offset) else {
+                let at = leg.flight.at(cursor);
+                return Course {
+                    track: Track {
+                        legs,
+                        impact: Impact { tick: until, at, contact: Contact::Gone },
+                        marks,
+                        last: leg,
+                        last_tick: cursor,
+                    },
+                    flying: true,
+                };
+            };
+            let last = longest.min(bound);
+            let found = self.fly_within(&leg.flight, cursor, last, launched, senses);
             launched = false;
+            let flying = found.is_none() && bound < longest;
+            let impact = found.unwrap_or(Impact {
+                tick: last,
+                at: leg.flight.at(last),
+                contact: Contact::Gone,
+            });
             leg.to = impact.tick;
             let column = match impact.contact {
                 Contact::Column(index) if legs.len() < MAX_LEGS => self.weather.columns.get(usize::from(index)).copied(),
@@ -1096,12 +1147,15 @@ impl Game {
                 legs.push(leg);
                 let global = Impact { tick: impact.tick + leg.offset, ..impact };
                 let contact = if matches!(impact.contact, Contact::Column(_)) { Contact::Gone } else { impact.contact };
-                return Track {
-                    legs,
-                    impact: Impact { contact, ..global },
-                    marks,
-                    last: leg,
-                    last_tick: impact.tick,
+                return Course {
+                    track: Track {
+                        legs,
+                        impact: Impact { contact, ..global },
+                        marks,
+                        last: leg,
+                        last_tick: impact.tick,
+                    },
+                    flying,
                 };
             };
             // A Random column acts as what it hides.
@@ -1272,7 +1326,7 @@ impl Game {
         let paths: Vec<&Leg> = effects[from..]
             .iter()
             .flat_map(|effect| match effect {
-                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } => legs.as_slice(),
+                Effect::Fired { legs, .. } | Effect::Helix { legs, .. } | Effect::Beacon { legs, .. } | Effect::Dropped { legs, .. } | Effect::Guide { legs, .. } => legs.as_slice(),
                 _ => &[],
             })
             .collect();
@@ -1805,6 +1859,33 @@ mod unit {
         let entry = track.legs[0].to;
         assert_eq!(track.legs[1].offset, entry + TICKS_PER_SECOND, "held one second");
         assert!(track.legs[1].flight.velocity.y < 0.0 && track.legs[1].flight.velocity.x > 0.0, "{track:?}");
+    }
+
+    #[test]
+    fn a_bounded_track_stops_on_the_whole_path_still_flying() {
+        let game = duel(800);
+        let flight = game.launch(0, 45, 2.4).unwrap();
+        let whole = game.track(flight, 0, 0);
+        let course = game.track_until(flight, 0, 0, Senses::ALL, 1000);
+        assert!(course.flying);
+        assert_eq!((course.track.last_tick, course.track.impact.tick), (1000, 1000));
+        assert_eq!(course.track.impact.at, whole.legs[0].flight.at(1000));
+        // Past where it lands, it lands as the whole track does.
+        let landed = game.track_until(flight, 0, 0, Senses::ALL, whole.impact.tick + 10);
+        assert!(!landed.flying);
+        assert_eq!(landed.track, whole);
+    }
+
+    #[test]
+    fn a_bounded_track_ends_inside_a_tornado_s_hold() {
+        let game = with_column(WeatherKind::Tornado, 600);
+        let flight = game.launch(0, 45, 2.4).unwrap();
+        let whole = game.track(flight, 0, 0);
+        let entry = whole.legs[0].to;
+        let course = game.track_until(flight, 0, 0, Senses::ALL, entry + 100);
+        assert!(course.flying);
+        assert_eq!(course.track.legs, whole.legs[..1], "the leg after the hold hasn't started");
+        assert_eq!((course.track.last, course.track.last_tick), (Leg { to: 0, ..whole.legs[1] }, 0), "it carries on from the fling");
     }
 
     #[test]

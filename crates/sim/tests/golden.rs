@@ -46,6 +46,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         33,
         0x3229_6916_11f1_63ed,
     ),
+    (
+        "roster_herdhound",
+        include_str!("golden/roster_herdhound.json"),
+        include_bytes!("golden/roster_herdhound.bin"),
+        55,
+        0x5c46_70b1_0701_2a71,
+    ),
 ];
 
 #[test]
@@ -99,6 +106,24 @@ fn golden_games_play_every_m3_rule() {
     );
     assert!(MobileKind::ALL.iter().all(|mobile| mobiles.contains(mobile)), "mobiles that fired: {mobiles:?}");
     assert!(locked && dropped, "SS locked: {locked}; a drop landed: {dropped}");
+}
+
+#[test]
+fn roster_herdhound_fires_every_shot() {
+    let &(_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_herdhound").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let mut shots = Vec::new();
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            if let Effect::Volley { seat, shot } = effect
+                && game.players()[usize::from(seat)].mobile == MobileKind::Herdhound
+            {
+                shots.push(shot);
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "Herdhound fired {shots:?}");
 }
 
 // ── Recording ────────────────────────────────────────────────────────────────
@@ -156,6 +181,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("brawl_4v4", play(brawl_4v4(), &winds)),
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
+        ("roster_herdhound", play(roster_herdhound(), &winds)),
     ]
 }
 
@@ -270,6 +296,26 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Herdhound (Kalsiddon's behavior) in a 1v1 on hills in wind: its S1, S2 and SS.
+fn roster_herdhound() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Herdhound, 420, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Coilback, 1380, Facing::Left, &[]),
+        ],
+        order: vec![0, 1],
+        wind: Wind::new(8, 140).unwrap(),
+        sudden_death: None,
     }
 }
 

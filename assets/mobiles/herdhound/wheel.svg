@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="-9 -9 18 18">
+  <!-- Herdhound's wheel: a pull-toy wheel with a rubber tyre and a paw-print hub. Origin = axle;
+       spins (the toe pads make rotation readable). -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.49" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linecap="round">
+    <!-- Ring shading only: it spins, and a baked light would spin with it. -->
+    <circle r="7.6" fill="#3e3c52"/>
+    <circle r="6.6" fill="#5a5870"/>
+    <circle r="5.4" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle r="4.3" fill="#c93a44"/>
+    <!-- paw print: a big pad and three toes -->
+    <ellipse cy="1.2" rx="1.9" ry="1.5" fill="#ffd6ea" stroke="#2a1a2e" stroke-width="0.5"/>
+    <g fill="#ffd6ea" stroke="#2a1a2e" stroke-width="0.5">
+      <circle cx="-2.1" cy="-1.3" r="0.95"/>
+      <circle cy="-2.3" r="0.95"/>
+      <circle cx="2.1" cy="-1.3" r="0.95"/>
+    </g>
+  </g>
+</svg>

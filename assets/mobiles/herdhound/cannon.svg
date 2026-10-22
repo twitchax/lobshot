@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="40" viewBox="-12 -20 48 40">
+  <!-- Herdhound's head: a sheepdog's shaggy mop on a steel neck joint, the fringe hanging over its
+       eyes, a square muzzle with a big black nose, a slate ear, and a woolly missile held in its
+       steel jaw. The head lifts to aim; the missile leaves from its mouth. Origin = pivot (the
+       neck joint); drawn at aim 0 (pointing +x). Muzzle = (27, 0), the missile's middle. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- the mop: a round head of locks -->
+    <path id="mop" d="M 20.6,-2.2 Q 21.8,1.8 17.8,2.8 Q 16.8,6.8 12.8,5.6 Q 10.0,8.6 7.2,5.6 Q 3.2,6.8 2.2,2.8 Q -1.8,1.8 -0.6,-2.2 Q -3.6,-5.0 -0.6,-7.8 Q -1.8,-11.8 2.2,-12.8 Q 3.2,-16.8 7.2,-15.6 Q 10.0,-18.6 12.8,-15.6 Q 16.8,-16.8 17.8,-12.8 Q 21.8,-11.8 20.6,-7.8 Q 23.6,-5.0 20.6,-2.2 Z"/>
+    <clipPath id="mopClip"><use href="#mop"/></clipPath>
+    <path id="snout" d="M 14,-9.4 H 26 Q 30.8,-9.4 30.8,-5.6 V -3.2 Q 30.8,-0.2 27.6,-0.2 L 14,1.4 Z"/>
+    <clipPath id="snoutClip"><use href="#snout"/></clipPath>
+    <path id="ear" d="M 4.6,-11.6 C 1.6,-11.2 0.4,-8.4 0.6,-5 C 0.8,-2.6 1.2,-0.6 2.2,0.4 Q 3,-0.8 3.6,0.6 Q 4.6,-0.4 5.2,0.4 Q 6.2,-2 6.2,-5 C 6.2,-7.8 6.6,-10 4.6,-11.6 Z"/>
+    <clipPath id="earClip"><use href="#ear"/></clipPath>
+    <!-- the woolly missile: a fleece ball, scalloped -->
+    <path id="fleece" d="M 27,-4.6 Q 29.4,-5.6 30.6,-3.4 Q 32.8,-2.2 31.8,0.2 Q 32.6,2.8 30.2,3.8 Q 28.8,5.8 26.6,4.6 Q 24,5.4 23.4,3 Q 21.4,1.4 22.8,-0.8 Q 22.6,-3.6 25,-3.8 Q 25.6,-5.2 27,-4.6 Z"/>
+    <clipPath id="fleeceClip"><use href="#fleece"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- steel neck joint -->
+    <circle r="5" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 5,0 A 5 5 0 0 1 -5,0 A 5.4 3.6 0 0 0 5,0 Z" fill="#3e3c52"/>
+
+    <!-- the steel lower jaw: the launch rail the missile rides out on -->
+    <path d="M 11,1.4 L 24,2 Q 26,2.2 25.8,4 L 25.2,5.8 Q 24.6,7 23,6.8 L 12.4,6.2 Q 10.4,6 10.4,4 Z" fill="#8a88a6" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 11.2,4.8 L 25.2,5.2 L 24.8,6.1 Q 24.3,6.8 23,6.8 L 12.4,6.2 Q 11.2,6.1 11.2,4.8 Z" fill="#5a5870"/>
+    <path d="M 12.4,2.8 L 23,3.2" stroke="#b4b2cc" stroke-width="0.7" fill="none"/>
+    <circle cx="14.6" cy="4.2" r="0.6" fill="#2e2c40"/>
+    <circle cx="20.4" cy="4.4" r="0.6" fill="#2e2c40"/>
+
+    <!-- the square muzzle, under the mop's fringe -->
+    <use href="#snout" fill="#f6f0e2" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#snoutClip)">
+      <path d="M 12,-3.4 L 30,-4.4 V 2 H 12 Z" fill="#ddd0b8"/>
+      <path d="M 19,-8.2 Q 23,-8.8 26,-8.2" stroke="#ffffff" stroke-width="1" fill="none"/>
+    </g>
+    
+
+    <!-- the mop: an outline pass, then the fill, shaded away from the light -->
+    <use href="#mop" stroke="#2a1a2e" stroke-width="1.8"/>
+    <use href="#mop" fill="#f6f0e2"/>
+    <g clip-path="url(#mopClip)">
+      <path d="M -6,0 C 2,3.6 12,3.6 24,-0.6 V 12 H -6 Z" fill="#ddd0b8"/>
+      <path d="M -6,4.4 C 2,7 10,7 24,3 V 12 H -6 Z" fill="#b8a688"/>
+      <path d="M -1.6,-9 Q 0.4,-14.6 6,-16.2" stroke="#ffffff" stroke-width="1.4" fill="none"/>
+      <!-- locks, and the fringe hanging over its eyes -->
+      <path d="M 9.6,-14.6 Q 11.6,-10.6 11,-6.4 M 13.6,-13.4 Q 16,-9.4 15.6,-5 M 17.2,-11 Q 19.2,-7.6 18.8,-3.8 M 1.8,-1 Q 3.2,1.4 2.6,3.6 M 8.4,0.4 Q 9.8,2.8 9.2,5 M 13.8,-0.4 Q 15.2,2 14.6,4.2" stroke="#ddd0b8" stroke-width="0.8" fill="none"/>
+    </g>
+    <!-- an eye glinting under the fringe -->
+    <path d="M 16.6,-3.2 Q 17.8,-4.6 19,-3.2" stroke="#2a1a2e" stroke-width="1.1" fill="none"/>
+    <circle cx="18.2" cy="-3.7" r="0.4" fill="#ffffff"/>
+    <!-- slate ear in the mop -->
+    <use href="#ear" fill="#8a88a6" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#earClip)">
+      <path d="M 4,-7.4 C 4.6,-4.6 4.4,-1.8 3.6,1 H 7 V -7.4 Z" fill="#6c6a86"/>
+      <path d="M 2.8,-9.6 C 1.6,-8 1.2,-5.8 1.4,-3.6" stroke="#b4b2cc" stroke-width="0.8" fill="none"/>
+    </g>
+
+    <!-- the woolly missile in its jaws: fleece, a sheep's dark face for a nose cone, red fins -->
+    <path d="M 22.8,-2.8 L 19.6,-5.2 L 21.4,-1.2 Z M 22.8,2.8 L 19.6,5.2 L 21.4,1.2 Z" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.6"/>
+    <use href="#fleece" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#fleeceClip)">
+      <path d="M 21,1.4 Q 26,4 33,0.6 V 7 H 21 Z" fill="#ddd0b8"/>
+      <path d="M 24,-2 Q 25,-1 24.6,0.4 M 26.4,1.6 Q 27.6,2.4 27.2,3.6" stroke="#ddd0b8" stroke-width="0.6" fill="none"/>
+    </g>
+    <ellipse cx="30.4" cy="1" rx="1.7" ry="2.2" fill="#3e3c52" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="30.9" cy="0.2" r="0.45" fill="#ffffff"/>
+    <path d="M 29.4,-0.6 L 28.4,-1.8" stroke="#3e3c52" stroke-width="1"/>
+
+    <!-- big black button nose, over the missile it holds -->
+    <ellipse cx="30" cy="-6.6" rx="3.8" ry="3" fill="#2e2c40" stroke="#2a1a2e" stroke-width="0.7"/>
+    <ellipse cx="28.8" cy="-7.8" rx="1.4" ry="0.8" fill="#8a88a6"/>
+  </g>
+</svg>

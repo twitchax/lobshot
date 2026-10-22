@@ -31,6 +31,10 @@ const CBCHUI: [(MobileKind, f64); 5] = [
     (MobileKind::Marblemole, 2.33),
 ];
 
+/// Kalsiddon's power for 60 degrees one screen away in zero wind, in cbchui-style shooting: 2.65
+/// (CR-kal) and 2.7 (CR-kal30). Herdhound is fitted midway, so both hold.
+const KAL_ONE_SCREEN: [f64; 2] = [2.65, 2.7];
+
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
 /// shot.
 const BOOMER_HOOK: (i16, u8, f64) = (70, 10, 0.45);
@@ -164,6 +168,15 @@ fn formula_cbchui_fixed_power_by_mobile() {
 }
 
 #[test]
+fn formula_kalsiddon_60_degrees_lands_one_screen() {
+    // CR-kal, CR-kal30: Herdhound's gravity puts 60 degrees one screen away at both sources' power.
+    let power = ideal_power(&duel_of(MobileKind::Herdhound, 800), 60, tuned_for(MobileKind::Herdhound, Wind::default()));
+    for bars in KAL_ONE_SCREEN {
+        assert_bars("Kalsiddon one screen", power, bars);
+    }
+}
+
+#[test]
 fn formula_boomer_hooks_with_the_wind() {
     // UC-boomer: Hookclaw's wind sensitivity saves it about 0.45 bars with 10 wind behind a
     // 70-degree, one-screen shot.
@@ -233,8 +246,9 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
-/// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
+/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui) and Herdhound's (CR-kal),
+/// and Hookclaw's wind sensitivity on top of its gravity (UC-boomer), are written straight into
+/// their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
 /// acceptance tests (and re-record the golden replays if the constants moved).
@@ -255,6 +269,11 @@ fn tool_fit() {
             println!("{mobile:?} wind sensitivity: {sensitivity:.2}");
         }
     }
+
+    let kal = f64::midpoint(KAL_ONE_SCREEN[0], KAL_ONE_SCREEN[1]);
+    let gravity = fit_gravity(MobileKind::Herdhound, kal);
+    rewrite("herdhound.rs", "GRAVITY", &format!("{gravity:.1}"));
+    println!("Herdhound gravity: {gravity:.1}");
 
     let game = duel(800);
     let gravity = fit_gravity(MobileKind::Coilback, 2.45);
@@ -289,6 +308,21 @@ fn tool_fit() {
         ("plain throw 45 deg, 1/2 screen", 45, 400, 1.33),
     ] {
         println!("{name}: model {:.2}, table {says}", ideal_power(&duel(distance), aim, calm));
+    }
+    // CR-kal's other Banpao-style, fixed-70 and cbchui figures for Kalsiddon, against Herdhound's fit.
+    let kal_duel = |distance| duel_of(MobileKind::Herdhound, distance);
+    let kal_calm = tuned_for(MobileKind::Herdhound, Wind::default());
+    for (name, aim, distance, says) in [
+        ("Kal Banpao 80 deg, 1/2 screen", 80, 400, 3.1),
+        ("Kal Banpao 75 deg, 3/4 screen", 75, 600, 3.15),
+        ("Kal Banpao 70 deg, 1 screen", 70, 800, 3.2),
+        ("Kal Banpao 60 deg, 1 1/2 screens", 60, 1200, 3.25),
+        ("Kal fixed 70, 1/2 screen", 70, 400, 2.25),
+        ("Kal fixed 70, 3/4 screen", 70, 600, 2.75),
+        ("Kal fixed 70, 1 1/2 screens", 70, 1200, 3.9),
+        ("Kal cbchui 75 deg, 1/2 screen", 75, 400, 2.55),
+    ] {
+        println!("{name}: model {:.2}, CR-kal {says}", ideal_power(&kal_duel(distance), aim, kal_calm));
     }
     let lob = flight(&duel(800), 80, ideal_power(&duel(800), 80, calm), calm);
     let target = target_center(&duel(800));
