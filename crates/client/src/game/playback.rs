@@ -144,7 +144,7 @@ enum Cue {
     Bounce {
         at: SimVec2,
     },
-    /// Marblemole's SS grinding through a mobile.
+    /// Marblemole's SS grinding through a mobile, or Sudsotter's suds.
     Spark {
         seat: u8,
     },

@@ -13,6 +13,7 @@ pub mod marblemole;
 pub mod score;
 pub mod sparkhorn;
 pub mod spoutpot;
+pub mod sudsotter;
 pub mod tuskrack;
 pub mod weather;
 

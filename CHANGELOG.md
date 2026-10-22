@@ -46,6 +46,9 @@ why the version moved the way it did.
 - Tuskrack (M5), a walrus on a tank-sled with a fireworks rack: S1 four rockets rippling off the
   rack, S2 a bundle of grenades that bursts into three pairs, SS nine rockets. Climbing is now per
   mobile, and Tuskrack climbs poorly.
+- Sudsotter (M5), an otter in a bathtub buggy: sponges that fly through mobiles, stick, and walk
+  the ground (S1 left, S2 right), climbing walls, before they go off; SS suds that hurt whoever
+  they touch as they walk. The weather leaves its shots' damage alone.
 - Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column

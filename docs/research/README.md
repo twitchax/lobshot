@@ -2,12 +2,15 @@
 
 The sources behind lobshot's rules and look, gathered on 2026-10-19. `sim::tuning` tags every
 number with a source key (`[SW-mds]`, `[CR-mob]`, `[DB-mob]`, ...); the keys are defined in the
-Sources sections at the end of `mechanics.md` and `weather.md`.
+Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's own note.
 
 | File | What it holds |
 |---|---|
 | [`mechanics.md`](mechanics.md) | GunBound and DragonBound mechanics from public sources: delay, angles, power, wind, the roster, damage, items, movement, modes, art direction. Marks every contradiction and single-source claim. |
 | [`weather.md`](weather.md) | Every GunBound weather under its three sets of names (Meteor is Wind), the per-map weather weights, and the rules for Electricity, Lock, Moon, Weakness, Random and Thor. Gathered on 2026-10-21. |
+| [`spoutpot.md`](spoutpot.md) | Turtle (Spoutpot): StrategyWiki's entry and Creedo's Turtle guide, with its fork, skybomb and timebomb tables. |
+| [`tuskrack.md`](tuskrack.md) | Bigfoot (Tuskrack): its spreads, ripples and bursts, and the inferred shot weight. |
+| [`sudsotter.md`](sudsotter.md) | J.Frog (Sudsotter): Creedo's frog guide, its walking shots and its weather-proofing. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |
 | [`physics-fit.md`](physics-fit.md) | How the ballistics were fitted to the community aiming formulas, which formulas are acceptance tests, and why the rest are not. |

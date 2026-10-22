@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -57,11 +57,21 @@ pub enum MobileKind {
     Marblemole,
     Spoutpot,
     Tuskrack,
+    Sudsotter,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 7] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Spoutpot, Self::Tuskrack];
+    pub const ALL: [Self; 8] = [
+        Self::Coilback,
+        Self::Lanternwing,
+        Self::Hookclaw,
+        Self::Sparkhorn,
+        Self::Marblemole,
+        Self::Spoutpot,
+        Self::Tuskrack,
+        Self::Sudsotter,
+    ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -87,6 +97,7 @@ impl MobileKind {
             Self::Marblemole => &marblemole::MOBILE,
             Self::Spoutpot => &spoutpot::MOBILE,
             Self::Tuskrack => &tuskrack::MOBILE,
+            Self::Sudsotter => &sudsotter::MOBILE,
         }
     }
 }
@@ -303,7 +314,8 @@ pub enum Effect {
     /// Marblemole's S2) has one `Fired` each. A bouncing marble's legs run bounce to bounce, and a
     /// marble at rest has a leg with no velocity or acceleration. A projectile born in flight
     /// (Spoutpot's SS balls, after the blob's own `Fired`) or fired late (Tuskrack's rockets,
-    /// rippling off the rack) starts at its first leg's offset.
+    /// rippling off the rack) starts at its first leg's offset. A walking blob (Sudsotter's) has a
+    /// leg with no acceleration for each straight run of its walk, and a resting one at its end.
     Fired {
         seat: u8,
         legs: Vec<Leg>,
@@ -391,8 +403,8 @@ pub enum Effect {
         at: Vec2,
         tick: u32,
     },
-    /// Marblemole's SS passed through `seat` from tick `from` to `to`, hurting it all the while;
-    /// its damage follows.
+    /// Marblemole's SS passed through `seat` from tick `from` to `to`, or Sudsotter's suds stayed
+    /// within reach of it, hurting it all the while; its damage follows.
     Pierced {
         seat: u8,
         from: u32,
@@ -518,7 +530,7 @@ pub struct Track {
 /// What a projectile stops at, beyond leaving the map. Weather columns always act on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Senses {
-    /// Living mobiles (Marblemole's SS passes through them).
+    /// Living mobiles (Marblemole's SS and Sudsotter's sponges pass through them).
     pub mobiles: bool,
     /// Solid ground (a helix's center passes through it; only its strands collide).
     pub terrain: bool,
@@ -1855,6 +1867,14 @@ mod unit {
         assert!((plain + 50..=plain + 100).contains(&dealt), "a level 1 beam on top of {plain}: {dealt}");
         assert_eq!(game.weather.skyeye.xp, u32::try_from(dealt - plain).unwrap(), "only the beam's damage counts");
         assert!(beams(&shoot(&mut calm.clone(), 0, Shot::S1, 35, power)).is_empty(), "no beam when Skyeye isn't up");
+    }
+
+    #[test]
+    fn skyeye_leaves_a_weatherproof_mobiles_shots_alone() {
+        let mut game = under(duel_of(MobileKind::Sudsotter, MobileKind::Coilback, 800), WeatherKind::Skyeye);
+        let effects = shoot(&mut game, 0, Shot::S1, 45, Power::nearest(2.0));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Exploded { .. })), "the sponge went off: {effects:?}");
+        assert!(beams(&effects).is_empty(), "{effects:?}");
     }
 
     #[test]

@@ -976,6 +976,11 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Tuskrack => {
             "Fires spreads of light projectiles, each its own blast, so long shots scatter and close ones pile up. S1 is four missiles leaving the rack one after another, the last two down the same line into one deep crater; S2 a bundle of six grenades that bursts into three pairs a beat after the muzzle (all six go off at once if it strikes first); SS nine missiles, and those that strike a mobile carve nothing. A heavy shot with a narrow aim; it moves far but climbs poorly.".to_owned()
         }
+        MobileKind::Sudsotter => format!(
+            "Fires sponges that fly through mobiles, stick where they land and walk along the ground, climbing walls and clinging under ledges, then go off {} s after landing wherever they are: S1's walk left on screen, S2's right, whichever way you face (about {:.0} px on level ground). SS is a blob of suds that walks the way it was moving as it landed, hurting every mobile it passes near, most on a small island it circles; a direct hit only pops it. The weather leaves its damage alone.",
+            tuning::sudsotter::SPONGE_FUSE_SECONDS.value,
+            tuning::sudsotter::WALK_SPEED.value * tuning::sudsotter::SPONGE_FUSE_SECONDS.value
+        ),
     }
 }
 

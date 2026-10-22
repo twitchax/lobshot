@@ -60,6 +60,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         52,
         0xa672_10b3_49f2_844f,
     ),
+    (
+        "roster_sudsotter",
+        include_str!("golden/roster_sudsotter.json"),
+        include_bytes!("golden/roster_sudsotter.bin"),
+        54,
+        0x930c_0ab5_df8b_027a,
+    ),
 ];
 
 #[test]
@@ -172,6 +179,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("duel_ss_death", play(duel_ss_death(), &winds)),
         ("roster_spoutpot", play(roster_spoutpot(), &winds)),
         ("roster_tuskrack", play(roster_tuskrack(), &winds)),
+        ("roster_sudsotter", play(roster_sudsotter(), &winds)),
     ]
 }
 
@@ -319,6 +327,26 @@ fn roster_tuskrack() -> Setup {
         seats: vec![armed(Team::A, MobileKind::Tuskrack, 440, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(12, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Sudsotter's sponges walking the hills, and its suds, in wind.
+fn roster_sudsotter() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Sudsotter, 440, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Coilback, 1420, Facing::Left, &[]),
+        ],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
     }
 }

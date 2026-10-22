@@ -22,14 +22,16 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle).
-const CBCHUI: [(MobileKind, f64); 6] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle). J.Frog came after
+/// the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
+const CBCHUI: [(MobileKind, f64); 7] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
     (MobileKind::Sparkhorn, 2.30),
     (MobileKind::Marblemole, 2.33),
     (MobileKind::Spoutpot, 2.39),
+    (MobileKind::Sudsotter, 2.10),
 ];
 
 /// CR-fixed gives Bigfoot's power as "??". DBR's per-mobile shot weights (`ax`, clone, unverified)
@@ -215,6 +217,16 @@ fn formula_inferred_power_by_mobile() {
         let bars = inferred_cbchui(weight);
         assert_bars(&format!("inferred {mobile:?}"), ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())), bars);
     }
+}
+
+#[test]
+fn formula_sudsotter_holds_creedos_other_frog_powers() {
+    // CR-frog, unfitted: cbchui-style "1.95 (half screen shots)" at 75 degrees, and Banpao-style
+    // "between 2.5 and 2.6 bars" at 60 degrees, 1.5 screens ("untested").
+    let (mobile, calm) = (MobileKind::Sudsotter, tuned_for(MobileKind::Sudsotter, Wind::default()));
+    assert_bars("frog cbchui half screen", ideal_power(&duel_of(mobile, 400), 75, calm), 1.95);
+    let banpao = ideal_power(&duel_of(mobile, 1200), 60, calm);
+    assert!((2.5 - TOLERANCE_BARS..=2.6 + TOLERANCE_BARS).contains(&banpao), "frog banpao: needs {banpao:.3} bars");
 }
 
 #[test]

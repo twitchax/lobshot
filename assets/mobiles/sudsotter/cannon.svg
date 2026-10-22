@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="18" viewBox="-7 -9 44 18">
+  <!-- Sudsotter's bath tap: a brass spout on a cross-handled valve, a soap sponge squeezing out of
+       its mouth on a puff of suds. Origin = pivot (the valve); drawn at aim 0 (pointing +x).
+       Muzzle = (28, 0), the sponge. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the spout: a brass pipe flaring to its mouth -->
+    <path d="M 2,-2.4 H 16 Q 19,-2.4 20.4,-4 H 22.4 V 4 H 20.4 Q 19,2.4 16,2.4 H 2 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 2.4,1 H 16 Q 19,1 20.6,2.6 H 22 V 3.6 H 20.4 Q 19,2.4 16,2.4 H 2.4 Z" fill="#b9822c"/>
+    <path d="M 3.4,-1.2 H 15.6" stroke="#fff3b0" stroke-width="0.9"/>
+    <rect x="9" y="-3.2" width="2" height="6.4" rx="0.6" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.6"/>
+    <!-- suds puffing from the mouth -->
+    <g stroke="#2a1a2e" stroke-width="0.6">
+      <circle cx="23.2" cy="-2.6" r="1.8" fill="#ffffff"/>
+      <circle cx="23.4" cy="2.8" r="1.6" fill="#ffffff"/>
+    </g>
+    <!-- the sponge: where it leaves -->
+    <rect x="24" y="-3.6" width="8.4" height="7.2" rx="1.8" fill="#ffe14d" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 24.6,1.6 Q 28,3.6 31.8,1.6 V 2.4 Q 31.8,3.6 30.6,3.6 H 25.8 Q 24.6,3.6 24.6,2.4 Z" fill="#e9b949"/>
+    <g fill="#b9822c"><circle cx="26.2" cy="-1.4" r="0.6"/><circle cx="29.2" cy="-2" r="0.5"/><circle cx="30.4" cy="0.6" r="0.6"/><circle cx="27.6" cy="1" r="0.5"/></g>
+    <path d="M 25.2,-2.6 Q 26.4,-3.2 27.6,-2.8" stroke="#fffbe0" stroke-width="0.8" fill="none"/>
+    <!-- the valve: a brass hub and its cross handle -->
+    <circle r="4.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 4.4,0 A 4.4 4.4 0 0 1 -4.4,0 A 4.8 3.2 0 0 0 4.4,0 Z" fill="#b9822c"/>
+    <path d="M -5.6,-0.9 H 5.6 M 0,-5.6 V 5.6" stroke="#2a1a2e" stroke-width="2.6"/>
+    <path d="M -5,-0.9 H 5 M 0,-5 V 5" stroke="#f6f0e2" stroke-width="1.2"/>
+    <circle r="1.6" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M -3,-1.8 A 3.4 3.4 0 0 1 -1.2,-3.2" stroke="#fff3b0" stroke-width="0.8" fill="none"/>
+  </g>
+</svg>

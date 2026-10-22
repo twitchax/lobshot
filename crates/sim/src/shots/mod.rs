@@ -1,11 +1,12 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
-//! helix strands (`helix`) and bouncing balls (`bounce`).
+//! helix strands (`helix`), bouncing balls (`bounce`) and blobs that walk the ground (`crawl`).
 
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
+mod crawl;
 mod helix;
 mod hookclaw;
 mod lanternwing;
@@ -13,6 +14,7 @@ mod marblemole;
 pub(crate) mod skyeye;
 mod sparkhorn;
 mod spoutpot;
+mod sudsotter;
 mod tuskrack;
 
 use crate::{
@@ -125,7 +127,7 @@ impl Gun<'_> {
             };
             bolt::zap(game, &strike, &thunder, effects);
         }
-        if game.weather().is(WeatherKind::Skyeye) {
+        if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
             skyeye::beam(game, impact.at, impact.tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
         }
     }
@@ -170,6 +172,25 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Marblemole => marblemole::fire(game, &gun, shot, effects),
         MobileKind::Spoutpot => spoutpot::fire(game, &gun, shot, effects),
         MobileKind::Tuskrack => tuskrack::fire(game, &gun, shot, effects),
+        MobileKind::Sudsotter => sudsotter::fire(game, &gun, shot, effects),
+    }
+}
+
+/// Whether the weather leaves `seat`'s shots alone, Skyeye's beam included (Sudsotter's,
+/// `tuning::sudsotter::WEATHER_PROOF`); the weather columns' marks are its own shot module's to drop.
+fn weatherproof(game: &Game, seat: u8) -> bool {
+    game.players()
+        .get(usize::from(seat))
+        .is_some_and(|player| player.mobile == MobileKind::Sudsotter && crate::tuning::sudsotter::WEATHER_PROOF.value)
+}
+
+/// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
+/// for SearchBot's aim pass (Sudsotter's shots walk on from there). `target` is where the bot wants
+/// it.
+pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
+    match game.players().get(usize::from(seat))?.mobile {
+        MobileKind::Coilback | MobileKind::Lanternwing | MobileKind::Hookclaw | MobileKind::Sparkhorn | MobileKind::Marblemole | MobileKind::Spoutpot | MobileKind::Tuskrack => None,
+        MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }
 

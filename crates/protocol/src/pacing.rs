@@ -367,6 +367,21 @@ mod unit {
     }
 
     #[test]
+    fn a_walking_sponge_goes_off_as_its_walk_ends_and_the_scene_waits_for_it() {
+        let effects = shot_by(MobileKind::Sudsotter, Shot::S1);
+        let Some(Effect::Fired { legs, .. }) = effects.iter().find(|e| matches!(e, Effect::Fired { .. })) else {
+            panic!("no shot: {effects:?}")
+        };
+        let landed = legs.iter().find(|leg| leg.flight.accel == Vec2::ZERO).map(|leg| leg.offset).unwrap();
+        let walk = flight_seconds(legs) - ticks_to_seconds(landed);
+        assert!((walk - 3.0).abs() < 1e-3, "it walks 3 s: {walk}");
+        let schedule = schedule(&effects);
+        let blast = effects.iter().position(|e| matches!(e, Effect::Exploded { .. })).unwrap();
+        assert_eq!(schedule.at[blast], flight_seconds(legs), "it goes off where its path ends");
+        assert!(schedule.end > schedule.at[blast]);
+    }
+
+    #[test]
     fn every_effect_of_a_real_game_is_scheduled_in_order_within_the_scene() {
         // An M3 shot of every kind, from a real game: nothing is scheduled past its scene's end.
         for mobile in MobileKind::ALL {
