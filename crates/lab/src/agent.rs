@@ -942,6 +942,9 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Marblemole => {
             "S1 is the weakest shot in the game; S2 four marbles that bounce, roll and go off; SS a ball that passes through mobiles, hurting each the whole time it touches, then blows up on the ground.".to_owned()
         }
+        MobileKind::Tuskrack => {
+            "Fires spreads of light projectiles, each its own blast, so long shots scatter and close ones pile up. S1 is four missiles leaving the rack one after another, the last two down the same line into one deep crater; S2 a bundle of six grenades that bursts into three pairs a beat after the muzzle (all six go off at once if it strikes first); SS nine missiles, and those that strike a mobile carve nothing. A heavy shot with a narrow aim; it moves far but climbs poorly.".to_owned()
+        }
     }
 }
 

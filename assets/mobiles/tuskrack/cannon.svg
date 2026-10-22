@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="42" height="22" viewBox="-11 -16 42 22">
+  <!-- Tuskrack's rocket rack: a red fireworks crate with three rockets in its tubes, noses out and
+       stepped like the aim, fuses trailing from the back. It swivels on its bottom rocket's line,
+       so the crate rides above the walrus at every aim. Origin = pivot (the swivel bolt); drawn at
+       aim 0 (pointing +x). Muzzle = (28, 0), the bottom rocket's nose. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <rect id="crate" x="-3" y="-12.8" width="21.4" height="15.6" rx="1.8"/>
+    <clipPath id="crateClip"><use href="#crate"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- fuses trailing from the back, one lit -->
+    <path d="M -2.8,-3.2 C -4.6,-3 -5.2,-1.6 -6.4,-0.8" stroke="#2a1a2e" stroke-width="1.8" fill="none"/>
+    <path d="M -2.8,-3.2 C -4.6,-3 -5.2,-1.6 -6.4,-0.8" stroke="#e8b07a" stroke-width="0.8" fill="none"/>
+    <path d="M -2.8,-8.6 C -4.4,-8.8 -4.8,-7.2 -5.8,-6.4" stroke="#2a1a2e" stroke-width="1.8" fill="none"/>
+    <path d="M -2.8,-8.6 C -4.4,-8.8 -4.8,-7.2 -5.8,-6.4" stroke="#e8b07a" stroke-width="0.8" fill="none"/>
+    <path transform="translate(-6.6,-5.8)" d="M 0,-2.6 L 0.6,-0.8 L 2.4,-0.8 L 1,0.3 L 1.5,2.1 L 0,1 L -1.5,2.1 L -1,0.3 L -2.4,-0.8 L -0.6,-0.8 Z" fill="#ffe14d" stroke="#2a1a2e" stroke-width="0.5"/>
+
+    <!-- the rockets, noses out of their tubes: violet on cyan, pink on gold, gold on pink -->
+    <g stroke="#2a1a2e" stroke-width="0.7">
+      <rect x="17.4" y="-12.4" width="4.6" height="4.6" rx="0.6" fill="#5ce1ff"/>
+      <path d="M 21.8,-12.6 L 26,-10.1 L 21.8,-7.6 Z" fill="#9b6bff"/>
+      <rect x="17.4" y="-7.4" width="5.4" height="4.8" rx="0.6" fill="#ff5fa8"/>
+      <path d="M 22.6,-7.6 L 27,-5 L 22.6,-2.4 Z" fill="#ffe14d"/>
+      <rect x="17.4" y="-2.4" width="6" height="4.8" rx="0.6" fill="#ffe14d"/>
+      <path d="M 23.2,-2.6 L 28,0 L 23.2,2.6 Z" fill="#ff5fa8"/>
+    </g>
+    <path d="M 19.8,-12.4 V -7.8 M 20.2,-7.4 V -2.6 M 20.6,-2.4 V 2.4 M 22,-2.4 V 2.4" stroke="#ffffff" stroke-width="0.9"/>
+    <g fill="#ffffff"><circle cx="23" cy="-10.8" r="0.55"/><circle cx="23.8" cy="-5.8" r="0.55"/><circle cx="24.4" cy="-1" r="0.6"/></g>
+
+    <!-- the crate: red boards, gold straps, a star, the tube mouths in its face -->
+    <use href="#crate" fill="#d94a3c" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#crateClip)">
+      <path d="M -4,-2 H 19 V 4 H -4 Z" fill="#a8332a"/>
+      <path d="M -4,-7.4 H 19" stroke="#a8332a" stroke-width="0.8"/>
+      <path d="M -1.6,-11.4 H 15.6" stroke="#ff8a7a" stroke-width="1.1"/>
+      <path d="M 1.8,-14 V 4 M 13.2,-14 V 4" stroke="#b9822c" stroke-width="2.6"/>
+      <path d="M 1.8,-14 V 4 M 13.2,-14 V 4" stroke="#e9b949" stroke-width="1.4"/>
+    </g>
+    <path transform="translate(7.6,-5.6)" d="M 0,-3.6 L 1,-1.2 L 3.4,-1.1 L 1.5,0.5 L 2.2,2.9 L 0,1.5 L -2.2,2.9 L -1.5,0.5 L -3.4,-1.1 L -1,-1.2 Z" fill="#ffe14d" stroke="#2a1a2e" stroke-width="0.6"/>
+    <rect x="16.2" y="-12.4" width="2.4" height="14.8" rx="0.8" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 16.8,-11.2 V 1.2" stroke="#8a88a6" stroke-width="0.6"/>
+    <!-- swivel bolt -->
+    <circle r="2.8" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle r="1.1" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.5"/>
+    <path d="M -1.9,-1 A 2.2 2.2 0 0 1 -0.7,-2.1" stroke="#b4b2cc" stroke-width="0.8" fill="none"/>
+  </g>
+</svg>

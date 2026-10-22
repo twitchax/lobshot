@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="20" viewBox="-37 -18 46 20">
+  <!-- Tuskrack's snow track: a short tread belt under the sled's tail; the front rides a ski.
+       Origin = ground contact center of the whole sled (= rig.ron body frame). Static; the road
+       wheels spin on top. Lugs are a dashed stroke on the belt outline, so they wrap the ends. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)">
+    <rect x="-34" y="-15.4" width="40.8" height="15" rx="7.5" fill="none" stroke="#3d3450" stroke-width="3" stroke-dasharray="2.2 2"/>
+    <rect x="-34" y="-15.4" width="40.8" height="15" rx="7.5" fill="#4a4060"/>
+    <rect x="-31.6" y="-13" width="36" height="10.2" rx="5.1" fill="#2e2540"/>
+    <path d="M -27,-14.3 H 0" stroke="#8a7ca6" stroke-width="1" stroke-linecap="round"/>
+  </g>
+</svg>

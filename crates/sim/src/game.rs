@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, hookclaw, lanternwing, marblemole, sparkhorn, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -55,11 +55,12 @@ pub enum MobileKind {
     Hookclaw,
     Sparkhorn,
     Marblemole,
+    Tuskrack,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 5] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole];
+    pub const ALL: [Self; 6] = [Self::Coilback, Self::Lanternwing, Self::Hookclaw, Self::Sparkhorn, Self::Marblemole, Self::Tuskrack];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
     /// either side of its feet, whichever way it faces, and how tall it stands. The widest and
@@ -83,6 +84,7 @@ impl MobileKind {
             Self::Hookclaw => &hookclaw::MOBILE,
             Self::Sparkhorn => &sparkhorn::MOBILE,
             Self::Marblemole => &marblemole::MOBILE,
+            Self::Tuskrack => &tuskrack::MOBILE,
         }
     }
 }
@@ -297,7 +299,8 @@ pub enum Effect {
     },
     /// One projectile's whole path, leg by leg. A volley of several projectiles (Hookclaw's and
     /// Marblemole's S2) has one `Fired` each. A bouncing marble's legs run bounce to bounce, and a
-    /// marble at rest has a leg with no velocity or acceleration.
+    /// marble at rest has a leg with no velocity or acceleration. One fired late (Tuskrack's
+    /// rockets, rippling off the rack) leaves when its first leg starts.
     Fired {
         seat: u8,
         legs: Vec<Leg>,
@@ -1074,6 +1077,18 @@ impl Game {
 
     /// `track`, stopping only at what `senses` names.
     pub(crate) fn track_sensing(&self, flight: Flight, from_tick: u32, offset: u32, senses: Senses) -> Track {
+        self.follow(flight, from_tick, offset, from_tick == 0 && offset == 0, senses)
+    }
+
+    /// `track` for a projectile launched `offset` ticks into its stage (one of a ripple off a rack):
+    /// a column it starts inside catches it at once, as one does any shot it starts inside.
+    pub(crate) fn track_launched(&self, flight: Flight, offset: u32) -> Track {
+        self.follow(flight, 0, offset, true, Senses::ALL)
+    }
+
+    /// `track_sensing`, where `launched` says whether `flight` is a projectile leaving the barrel
+    /// (`fly_sensing`).
+    fn follow(&self, flight: Flight, from_tick: u32, offset: u32, launched: bool, senses: Senses) -> Track {
         let mut legs = Vec::new();
         let mut leg = Leg {
             flight,
@@ -1083,7 +1098,7 @@ impl Game {
         };
         // Where to fly on from; a column that only marks it moves it on without starting a new leg.
         let mut cursor = from_tick;
-        let mut launched = from_tick == 0 && offset == 0;
+        let mut launched = launched;
         let mut marks = Marks::default();
         loop {
             let impact = self.fly_sensing(&leg.flight, cursor, launched, senses);

@@ -199,7 +199,8 @@ fn ticks(count: u32) -> f32 {
 }
 
 /// Where a flyer is `seconds` into its stage, following its legs (holding still between legs
-/// while a tornado spins it), and winding about them if it's a strand.
+/// while a tornado spins it), and winding about them if it's a strand. `None` before it leaves (a
+/// rocket rippling off its rack after the first).
 fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Option<SimVec2> {
     // A clock reading in seconds, back to whole ticks.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -213,7 +214,7 @@ fn flyer_at(legs: &[Leg], strand: Option<(f64, f64, f64)>, seconds: f32) -> Opti
         match tick.checked_sub(leg.offset) {
             Some(local) if local <= leg.to => return Some(point(local.max(leg.from))),
             Some(_) => last = Some(point(leg.to)),
-            None => return last.or(Some(point(leg.from))),
+            None => return last,
         }
     }
     last
@@ -282,6 +283,19 @@ fn take_off(effect: &Effect, at: f32, props: &Props, commands: &mut Commands) ->
     }
     flyers
 }
+
+/// How long after its effect a launch leaves the barrel: a rocket rippling off its rack waits for
+/// its first leg.
+fn leaves(effect: &Effect) -> f32 {
+    match effect {
+        Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } => legs.first().map_or(0.0, |leg| ticks(leg.offset + leg.from)),
+        _ => 0.0,
+    }
+}
+
+/// The smallest blast a scene shows: one that carves no crater (an SS rocket striking a mobile)
+/// still flashes.
+const LEAST_PUFF_RADIUS: f64 = 12.0;
 
 /// The cues an effect at `at` adds to its scene.
 fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
@@ -389,7 +403,7 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
         let launched = take_off(&effect, at, props, commands);
         // Shells, strands and beacons leave a cannon; a drop falls quietly.
         if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. }) {
-            cues.push((at, Cue::Sound(Sound::Fire)));
+            cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire)));
         }
         flyers.extend(launched);
         cue(effect, at, &mut cues);
@@ -476,7 +490,7 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
             }
             // Blast radii are tens of pixels.
             #[allow(clippy::cast_possible_truncation)]
-            let size = (radius * 2.4) as f32;
+            let size = (radius.max(LEAST_PUFF_RADIUS) * 2.4) as f32;
             commands.spawn(puff(dot, at, size, Color::srgb_u8(0xff, 0xb3, 0x47), 0.45));
         }
         Cue::Damage { seat, amount } => {
@@ -658,6 +672,17 @@ mod unit {
         assert_eq!(at(1.5), legs[0].flight.at(second), "held between legs, as a tornado holds it");
         assert_eq!(at(2.5), legs[1].flight.at(second / 2));
         assert_eq!(at(9.0), legs[1].flight.at(second), "stopped at the end");
+    }
+
+    #[test]
+    fn a_rocket_fired_late_waits_unseen_and_sounds_as_it_leaves() {
+        let second = TICKS_PER_SECOND;
+        let legs = [leg(0, second, second / 2)];
+        assert_eq!(flyer_at(&legs, None, 0.25), None, "still on the rack");
+        assert_eq!(flyer_at(&legs, None, 0.5), Some(legs[0].flight.at(0)));
+        assert_eq!(flyer_at(&legs, None, 1.0), Some(legs[0].flight.at(second / 2)));
+        assert_eq!(leaves(&Effect::Fired { seat: 0, legs: legs.to_vec() }), 0.5);
+        assert_eq!(leaves(&Effect::Fired { seat: 0, legs: vec![leg(0, second, 0)] }), 0.0);
     }
 
     #[test]

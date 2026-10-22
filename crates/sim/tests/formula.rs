@@ -31,6 +31,39 @@ const CBCHUI: [(MobileKind, f64); 5] = [
     (MobileKind::Marblemole, 2.33),
 ];
 
+/// CR-fixed gives Bigfoot's power as "??". DBR's per-mobile shot weights (`ax`, clone, unverified)
+/// track the chart's powers as their square roots (docs/research/mechanics.md, 2.3): every mobile
+/// both give, as (`ax`, chart power): Boomer, JD, Lightning, Ice, Grub, Aduka, Mage, Turtle, Armor,
+/// A.Sate, Raon, Trico, Nak.
+const AX_AND_CBCHUI: [(f64, f64); 13] = [
+    (62.5, 2.25),
+    (62.5, 2.30),
+    (65.0, 2.30),
+    (62.5, 2.33),
+    (61.0, 2.33),
+    (65.5, 2.35),
+    (71.5, 2.38),
+    (73.5, 2.39),
+    (73.5, 2.45),
+    (76.0, 2.50),
+    (73.5, 2.50),
+    (84.0, 2.65),
+    (82.0, 2.70),
+];
+
+/// The mobiles whose counterpart the chart leaves out, with its DBR shot weight: Bigfoot's 88. Each
+/// is fitted to the power that weight implies (`inferred_cbchui`).
+const INFERRED: [(MobileKind, f64); 1] = [(MobileKind::Tuskrack, 88.0)];
+
+/// The cbchui power a DBR shot weight of `ax` implies: the least-squares fit of the chart's powers
+/// to the square roots of the weights, over `AX_AND_CBCHUI`.
+fn inferred_cbchui(ax: f64) -> f64 {
+    let (products, squares) = AX_AND_CBCHUI
+        .iter()
+        .fold((0.0, 0.0), |(products, squares), &(weight, bars)| (products + bars * weight.sqrt(), squares + weight));
+    products / squares * ax.sqrt()
+}
+
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
 /// shot.
 const BOOMER_HOOK: (i16, u8, f64) = (70, 10, 0.45);
@@ -164,6 +197,26 @@ fn formula_cbchui_fixed_power_by_mobile() {
 }
 
 #[test]
+fn formula_shot_weight_predicts_the_chart() {
+    // The inference behind `INFERRED`: DBR's weights put every charted mobile within a tenth of a
+    // bar of its CR-fixed power, the heaviest (Trico, Nak) included.
+    for (weight, bars) in AX_AND_CBCHUI {
+        let predicted = inferred_cbchui(weight);
+        assert!((predicted - bars).abs() <= 0.1, "ax {weight}: predicts {predicted:.3}, the chart says {bars}");
+    }
+}
+
+#[test]
+fn formula_inferred_power_by_mobile() {
+    // Each mobile the chart leaves out lands 60 degrees one screen away at the power its shot weight
+    // implies.
+    for (mobile, weight) in INFERRED {
+        let bars = inferred_cbchui(weight);
+        assert_bars(&format!("inferred {mobile:?}"), ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())), bars);
+    }
+}
+
+#[test]
 fn formula_boomer_hooks_with_the_wind() {
     // UC-boomer: Hookclaw's wind sensitivity saves it about 0.45 bars with 10 wind behind a
     // 70-degree, one-screen shot.
@@ -233,15 +286,17 @@ fn rewrite(file: &str, name: &str, value: &str) {
     std::fs::write(&path, text.replacen(line, &format!("{prefix}{value};"), 1)).unwrap();
 }
 
-/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), and Hookclaw's wind
-/// sensitivity on top of its gravity (UC-boomer), are written straight into their tuning files;
+/// Derives the fitted constants. The four M3 mobiles' gravities (cbchui), the inferred mobiles'
+/// (`INFERRED`), and Hookclaw's wind sensitivity on top of its gravity (UC-boomer), are written
+/// straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
 /// acceptance tests (and re-record the golden replays if the constants moved).
 #[test]
 #[ignore = "a tool, not a test: rewrites the fitted constants"]
 fn tool_fit() {
-    for (mobile, bars) in CBCHUI.into_iter().skip(1) {
+    let inferred = INFERRED.map(|(mobile, weight)| (mobile, inferred_cbchui(weight)));
+    for (mobile, bars) in CBCHUI.into_iter().skip(1).chain(inferred) {
         let gravity = fit_gravity(mobile, bars);
         let file = format!("{}.rs", mobile.tuning().name.to_lowercase());
         rewrite(&file, "GRAVITY", &format!("{gravity:.1}"));

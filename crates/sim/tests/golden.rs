@@ -46,6 +46,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         33,
         0x3229_6916_11f1_63ed,
     ),
+    (
+        "roster_tuskrack",
+        include_str!("golden/roster_tuskrack.json"),
+        include_bytes!("golden/roster_tuskrack.bin"),
+        55,
+        0xe77f_d1cb_4976_28bc,
+    ),
 ];
 
 #[test]
@@ -99,6 +106,24 @@ fn golden_games_play_every_m3_rule() {
     );
     assert!(MobileKind::ALL.iter().all(|mobile| mobiles.contains(mobile)), "mobiles that fired: {mobiles:?}");
     assert!(locked && dropped, "SS locked: {locked}; a drop landed: {dropped}");
+}
+
+#[test]
+fn golden_roster_games_fire_every_shot() {
+    // A `roster_` game shows off its first seat's mobile: S1, S2 and SS all fire.
+    for &(name, json, ..) in GOLDEN.iter().filter(|(name, ..)| name.starts_with("roster_")) {
+        let log = Log::from_json(json).unwrap();
+        let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+        let mut shots = Vec::new();
+        for event in &log.events {
+            for effect in game.apply(*event).unwrap() {
+                if let Effect::Volley { seat: 0, shot } = effect {
+                    shots.push(shot);
+                }
+            }
+        }
+        assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{name}: seat 0 fired {shots:?}");
+    }
 }
 
 // ── Recording ────────────────────────────────────────────────────────────────
@@ -156,6 +181,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("brawl_4v4", play(brawl_4v4(), &winds)),
         ("duel_big_bomb", play(duel_big_bomb(), &winds)),
         ("duel_ss_death", play(duel_ss_death(), &winds)),
+        ("roster_tuskrack", play(roster_tuskrack(), &winds)),
     ]
 }
 
@@ -270,6 +296,23 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+    }
+}
+
+/// Tuskrack (PRD-0006 T-001): its ripples of rockets and its bursting grenades, on hills in wind.
+fn roster_tuskrack() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Tuskrack, 440, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(12, 140).unwrap(),
+        sudden_death: None,
     }
 }
 
