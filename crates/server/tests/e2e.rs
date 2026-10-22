@@ -148,8 +148,8 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
 /// hash after every event. Bots play at once and turns start at once, since no one watches.
 ///
 /// Sudden death is set up, and checked to start at turn 40 when the game gets that far, but not
-/// required: whether it does is chance. Normal bots on `flat`, spawns shuffled, run a median 43
-/// turns and pass turn 40 in about 70% of games (`lobshot_sim::bot`'s `tool_length`, 128 seeds).
+/// required: whether it does is chance. Normal bots on `flat`, spawns shuffled, run a median 45
+/// turns and pass turn 40 in about 80% of games (`lobshot_lab`'s `tool_length`, 128 seeds).
 /// The sim's golden replays (`brawl_4v4`, `duel_big_bomb`, `duel_ss_death`) play each kind through.
 #[tokio::test(flavor = "multi_thread")]
 async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {

@@ -3965,7 +3965,14 @@ dependencies = [
 name = "lobshot-lab"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
+ "lobshot-assets",
+ "lobshot-protocol",
+ "lobshot-sim",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
  "tempfile",
  "tracing",
  "tracing-subscriber",

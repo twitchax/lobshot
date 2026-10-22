@@ -13,12 +13,22 @@ publish = false
 name = "lobshot-lab"
 path = "src/bin.rs"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
+lobshot-sim.workspace = true
+lobshot-protocol.workspace = true
+lobshot-assets.workspace = true
+anyhow.workspace = true
 clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+pretty_assertions.workspace = true
 tempfile.workspace = true
 
 [lints]

@@ -208,6 +208,19 @@ dependencies = ["install-trunk"]
 command = "cargo"
 args = ["xtask", "dist"]
 
+[tasks.balance]
+# A balance run (PRD-0005): every pair of mobiles, 1v1 between Normal bots, on every map in
+# `assets/gen` (`cargo make art`). Release, since a run plays thousands of games; flags pass
+# through, e.g. `cargo make balance --level hard --games 50`.
+command = "cargo"
+args = ["run", "--release", "--package", "lobshot-lab", "--", "balance", "${@}"]
+
+[tasks.balance-gate]
+# The balance gate (`DESIGN.md`, "Bots and the lab"): fails when a matchup's win rate leaves
+# 35-65%. Not in `ci` until the roster passes about five mobiles (M5); with fewer it flaps.
+command = "cargo"
+args = ["run", "--release", "--package", "lobshot-lab", "--", "balance", "--gate", "${@}"]
+
 [tasks.run]
 # Serves whatever `dist/` holds; `cargo make dev` rebuilds it first.
 command = "cargo"

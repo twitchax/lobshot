@@ -2,7 +2,7 @@
 //! around it (`DESIGN.md`, "Bots and the lab"): it misreads the wind before it searches, as
 //! people misjudge the wind more than the angle, then its hands miss the aim and power it found.
 //! No source describes GunBound's bots, so every number is a pick, set so a 4v4 of Normal bots
-//! lasts about as long as a GunBound 4v4 (`bot::tool_length`).
+//! lasts about as long as a GunBound 4v4 (`lobshot_lab`'s `tool_length`).
 
 use super::{Tuned, picked};
 use crate::units::Centis;
@@ -29,7 +29,7 @@ pub const HARD: Noise = Noise {
 };
 
 /// A friend who knows the game. The spreads are as large as a person's plausibly are: smaller ones
-/// leave a 4v4 shorter still, and these stop lengthening it much (`bot::tool_length`), since on a
+/// leave a 4v4 shorter still, and these stop lengthening it much (`lobshot_lab`'s `tool_length`), since on a
 /// crowded map most misses still hurt someone.
 pub const NORMAL: Noise = Noise {
     power_steps: picked(5, "A quarter bar: slice shots slip, and drag shots jitter (GF-tiro, CR-using)."),

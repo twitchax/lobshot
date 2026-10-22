@@ -346,13 +346,11 @@ mod unit {
 
     use super::*;
     use crate::{
-        drops::{Drop, DropKind},
         game::{
-            Effect, MobileKind, Roll, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
+            Effect, MobileKind, Seat, Setup, SuddenDeath, SuddenDeathKind, Team,
             testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, start},
         },
         map::MapRef,
-        weather::{Forecast, WeatherKind},
     };
 
     #[test]
@@ -494,111 +492,6 @@ mod unit {
             let began = std::time::Instant::now();
             let events = plan(&game, 0, Level::Normal, 7).unwrap();
             println!("{mobile:?}: {:?} for {events:?}", began.elapsed());
-        }
-    }
-
-    /// One 4v4 of `level` bots as a server room plays it: the server's `flat` map and its spawns,
-    /// shuffled as the server shuffles them, Coilbacks with the bot loadout, max wind 26, Double at
-    /// 40, every roll from `seed`, the dead spinning whenever they may, and a pass when a plan
-    /// leaves the turn open. Returns the turns played, and the shots fired and how many hurt an
-    /// enemy.
-    fn room_game(level: Level, seed: u64) -> (i64, u32, u32) {
-        let mut spawns = [200, 1400, 500, 1100, 350, 1250, 650, 950];
-        let mut rolls = XorShift::new(seed);
-        let mut roll = |below: u32| u32::try_from(rolls.next_u64() % u64::from(below)).unwrap();
-        for i in (1..spawns.len()).rev() {
-            spawns.swap(i, usize::try_from(roll(u32::try_from(i + 1).unwrap())).unwrap());
-        }
-        let seats = (0..8)
-            .map(|i| Seat {
-                team: if i % 2 == 0 { Team::A } else { Team::B },
-                mobile: MobileKind::Coilback,
-                spawn_x: spawns[i],
-                facing: if spawns[i] < 800 { Facing::Right } else { Facing::Left },
-                items: LOADOUT,
-            })
-            .collect();
-        let setup = Setup {
-            map: MapRef::Flat { width: 1600, height: 900, ground: 700 },
-            seats,
-            order: (0..8).collect(),
-            wind: Wind::new(u8::try_from(roll(27)).unwrap(), u16::try_from(roll(360)).unwrap()).unwrap(),
-            sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 40 }),
-        };
-        let mut game = Game::new(&setup, &crate::map::NoAssets).unwrap();
-        let (mut shots, mut hits) = (0, 0);
-        for _ in 0..4000 {
-            while let Some(owed) = game.pending_roll() {
-                let event = match owed {
-                    Roll::Weather { width } => Event::Weather(Forecast {
-                        kind: WeatherKind::ALL[usize::try_from(roll(4)).unwrap()],
-                        x: i32::try_from(roll(width)).unwrap(),
-                    }),
-                    Roll::Wind => Event::Wind(Wind::new(u8::try_from(roll(27)).unwrap(), u16::try_from(roll(360)).unwrap()).unwrap()),
-                    Roll::Drop { width } => Event::Drop(Drop {
-                        kind: DropKind::ALL[usize::try_from(roll(6)).unwrap()],
-                        x: i32::try_from(roll(width)).unwrap(),
-                    }),
-                };
-                game.apply(event).unwrap();
-            }
-            if let Some(dead) = (0..8).find(|&s| game.can_spin(s)) {
-                game.apply(Event::Spin { seat: dead }).unwrap();
-                continue;
-            }
-            let Phase::Turn { seat } = game.phase() else { break };
-            let (team, turn) = (game.players()[usize::from(seat)].team, game.turns());
-            for event in plan(&game, seat, level, u64::from(roll(u32::MAX))).unwrap_or_default() {
-                if game.turns() != turn {
-                    break;
-                }
-                let effects = game.apply(event).unwrap();
-                if matches!(event, Event::Shoot { .. }) {
-                    shots += 1;
-                    let mine = effects.iter().take_while(|e| !matches!(e, Effect::Dropped { .. }));
-                    let hurt = mine.filter_map(|e| {
-                        if let Effect::Damaged { seat, .. } | Effect::Shielded { seat, .. } = *e {
-                            Some(seat)
-                        } else {
-                            None
-                        }
-                    });
-                    hits += u32::from(hurt.into_iter().any(|hit| game.players()[usize::from(hit)].team != team));
-                }
-            }
-            if game.turns() == turn {
-                game.apply(Event::Pass { seat, time: Centis(500) }).unwrap();
-            }
-        }
-        (game.turns(), shots, hits)
-    }
-
-    /// Plays 128 room games per level, in parallel, and prints how long they ran and how often a
-    /// shot hurt an enemy. Run in release: `cargo test -p lobshot-sim --release --lib -- --ignored
-    /// --nocapture tool_length`.
-    #[test]
-    #[ignore = "a tool, not a test: prints game lengths and hit rates by level"]
-    fn tool_length() {
-        const GAMES: u64 = 128;
-        for level in [Level::Hard, Level::Normal, Level::Easy] {
-            let games: Vec<(i64, u32, u32)> = std::thread::scope(|scope| {
-                let running: Vec<_> = (1..=GAMES).map(|seed| scope.spawn(move || room_game(level, seed * 7919))).collect();
-                running.into_iter().map(|game| game.join().unwrap()).collect()
-            });
-            let mut turns: Vec<i64> = games.iter().map(|game| game.0).collect();
-            turns.sort_unstable();
-            let (shots, hits) = games.iter().fold((0, 0), |(s, h), game| (s + game.1, h + game.2));
-            let past = turns.iter().filter(|&&t| t > 40).count();
-            let at = |share: usize| turns[turns.len() * share / 4];
-            println!(
-                "{level:?}: median {} turns (quartiles {} to {}, range {} to {}), past turn 40 in {past}/{GAMES}, {hits} of {shots} shots hurt an enemy ({:.0}%)",
-                at(2),
-                at(1),
-                at(3),
-                turns[0],
-                turns[turns.len() - 1],
-                f64::from(hits) * 100.0 / f64::from(shots)
-            );
         }
     }
 
