@@ -826,7 +826,7 @@
     },
     {
       "Weather": {
-        "kind": "Electricity",
+        "kind": "Tornado",
         "x": 2057,
         "hides": null
       }
@@ -1013,7 +1013,7 @@
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Skyeye",
         "x": 1391,
         "hides": null
       }
@@ -1200,7 +1200,7 @@
     },
     {
       "Weather": {
-        "kind": "Balm",
+        "kind": "Drain",
         "x": 725,
         "hides": null
       }

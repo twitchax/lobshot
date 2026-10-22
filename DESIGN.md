@@ -108,7 +108,11 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   3% of max HP as their turn starts, Bionic mobiles 6% (NAMU, WP06). A Random column (80 px, OB)
   hides one of the five column weathers, rolled with its forecast: a shot passing through meets
   what it hides, and the column shows it from then on. SearchBot and the lab's trace plan as if a
-  hidden column weren't there (`Game::as_seen`).
+  hidden column weren't there (`Game::as_seen`). Skyeye (GunBound's Thor) is a satellite over
+  the middle of the map, as high as bolts start: while it is up, each projectile that lands calls
+  its beam toward the landing, and the first mobile or ground in the beam's way takes it (radius 25,
+  OB). It levels up with the damage its beams deal, all game (GF-lee and GF-vgg's thresholds); a
+  level 1 beam deals 50 to 100 (CR-aduka), scaled by GF-vgg's averages to 100 to 200 at level 6.
 - **Turn order** is GunBound's delay system: base + shot + item + 10 per second of turn time
   (Turtle 12). The lowest accumulated delay moves next.
 
@@ -219,7 +223,7 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   tangle, town rooftops, tall tower, floating islands, sparse starfield, long flat sea, practice
   slope, dragon's-back ridge, city), each with A/B variants. A map is terrain geometry that produces
   both the art and the collision mask (the mask comes from the land path only), a background SVG,
-  and a RON file (spawn points, Thor position).
+  and a RON file (spawn points; Skyeye needs none, as it hovers over the middle).
 - **Effects** (explosions, trails, particles, weather) are Bevy code, not art files.
 - **The spike's output is the first content:** Coilback (a snail-shell bell-mortar) carries Armor's
   behavior, Tidewall is the floating-islands map, Pip is the first rider. The spike's record is in

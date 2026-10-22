@@ -21,7 +21,7 @@ use lobshot_sim::{
     referee::{self, Entrant, XorShift},
     tuning,
     units::{Facing, Power},
-    weather::WeatherKind,
+    weather::{Skyeye, WeatherKind},
 };
 
 use crate::{
@@ -419,6 +419,18 @@ pub struct WeatherView {
     /// What comes next, front first; the front arrives in `turns_until_next` turns.
     pub coming: Vec<WeatherSpot>,
     pub turns_until_next: u32,
+    /// The satellite that beams down while Skyeye is up.
+    pub skyeye: SkyeyeView,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct SkyeyeView {
+    /// 1 to 6: it levels up with the damage its beams deal, all game.
+    pub level: u8,
+    pub xp: u32,
+    /// Where it hovers (above the map's top, so `y` is negative).
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -538,6 +550,15 @@ fn view(session: &Session, happened: &[Happened]) -> View {
             columns: weather.columns.iter().map(|c| WeatherSpot { kind: c.kind, x: c.x }).collect(),
             coming: weather.queue.iter().map(|f| WeatherSpot { kind: f.kind, x: f.x }).collect(),
             turns_until_next: weather.turns_left,
+            skyeye: {
+                let at = Skyeye::at(game.terrain().width());
+                SkyeyeView {
+                    level: weather.skyeye.level(),
+                    xp: weather.skyeye.xp,
+                    x: at.x,
+                    y: at.y,
+                }
+            },
         },
         sudden_death: session.host.log().setup.sudden_death.map(|sd| SuddenDeathView {
             kind: sd.kind.name(),
@@ -606,8 +627,8 @@ fn map_view(game: &Game, map: &MapRef) -> MapView {
         let glyph = match column.kind {
             WeatherKind::Force => 'F',
             WeatherKind::Mirror => 'M',
-            // Wind, Lock and Balm never stand as columns.
-            WeatherKind::Tornado | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => 'T',
+            // Wind, Lock, Balm and Skyeye never stand as columns.
+            WeatherKind::Tornado | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Skyeye => 'T',
             WeatherKind::Electricity => 'E',
             WeatherKind::Drain => 'D',
             WeatherKind::Random => '?',
@@ -805,6 +826,7 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::WeatherChanged { columns, now, .. } => match now {
             Some(WeatherKind::Lock) => " Lock came up: no items, and no shields regenerate.".to_owned(),
             Some(WeatherKind::Balm) => " Balm came up: everyone heals as their turn starts.".to_owned(),
+            Some(WeatherKind::Skyeye) => " Skyeye came up: its beam follows every projectile that lands.".to_owned(),
             _ if columns.is_empty() => " The weather cleared.".to_owned(),
             _ => {
                 let standing: Vec<String> = columns.iter().map(|c| format!("{:?} at x={}", c.kind, c.x)).collect();
@@ -812,6 +834,9 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
             }
         },
         Effect::Revealed { kind, x } => format!(" The Random column at x={x} was {kind:?}."),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::Beam { to, .. } => format!(" Skyeye's beam struck at x={}, y={}.", to.x.round() as i32, to.y.round() as i32),
+        Effect::SkyeyeLevel { level } => format!(" Skyeye reached level {level}."),
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
@@ -915,7 +940,10 @@ hides, and it shows that from then on (`trace` can't see what it hides). A Wind 
 the wind. Lock and Balm cover the whole map while
 they last (`weather.now`): under Lock no one may use an item, shields stop regenerating and SS
 comes back twice as fast; under Balm each player heals {BALM}% of max HP as their turn starts
-(Bionic mobiles double). The view lists what is coming.
+(Bionic mobiles double). While Skyeye is up, a satellite above the middle of the map
+(`weather.skyeye`) beams down toward wherever each projectile lands: whoever or whatever is in the
+beam's way takes it, you included. Its beams level it up (1 to 6) with the damage they deal, all
+game. The view lists what is coming.
 
 ## SS, sudden death, the slot machine
 
@@ -1295,6 +1323,22 @@ mod unit {
             now: Some(WeatherKind::Lock),
         };
         assert_eq!(effect_line(&names, &lock), " Lock came up: no items, and no shields regenerate.");
+    }
+
+    #[test]
+    fn the_view_shows_skyeye_and_the_log_its_beams() {
+        let mut session = Session::new(&flat(1), &maps()).unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert_eq!((view.weather.skyeye.level, view.weather.skyeye.x), (1, f64::from(session.game().terrain().width()) / 2.0));
+        let names = Names { game: session.game(), you: 0 };
+        let beam = Effect::Beam {
+            from: lobshot_sim::units::Vec2::new(900.0, -100.0),
+            to: lobshot_sim::units::Vec2::new(812.4, 455.6),
+            tick: 0,
+            level: 1,
+        };
+        assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
+        assert!(rules().contains("While Skyeye is up"));
     }
 
     #[test]

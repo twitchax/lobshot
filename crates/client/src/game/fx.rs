@@ -109,6 +109,8 @@ struct Bolt {
     left: f32,
     /// Picks its zigzag, so it holds its shape while it's lit.
     seed: u32,
+    /// Skyeye's beam, at this level: straight, and whiter the higher it is (WP06).
+    beam: Option<u8>,
 }
 
 impl Bolts {
@@ -117,8 +119,31 @@ impl Bolts {
         // Seeded by where it runs, so bolts in a row zigzag differently.
         let bits = from.x.to_bits() ^ to.x.to_bits().rotate_left(21) ^ to.y.to_bits().rotate_left(42);
         let seed = u32::try_from(bits % u64::from(u32::MAX)).unwrap_or(1);
-        self.0.push(Bolt { from, to, left: BOLT_SECONDS, seed });
+        self.0.push(Bolt {
+            from,
+            to,
+            left: BOLT_SECONDS,
+            seed,
+            beam: None,
+        });
     }
+
+    /// Skyeye's beam from the satellite to where it struck, at `level`.
+    pub fn beam(&mut self, from: SimVec2, to: SimVec2, level: u8) {
+        self.0.push(Bolt {
+            from,
+            to,
+            left: BOLT_SECONDS,
+            seed: 0,
+            beam: Some(level),
+        });
+    }
+}
+
+/// A beam's color at `level`: green at level 1, white by the top (WP06).
+fn beam_color(level: u8, glow: f32) -> Color {
+    let white = (f32::from(level.saturating_sub(1)) / 5.0).clamp(0.0, 1.0);
+    Color::srgba(0.45 + 0.55 * white, 1.0, 0.5 + 0.5 * white, glow)
 }
 
 /// The bolt's zigzag: `SEGMENTS` steps from `from` to `to`, each joint pushed sideways by up to
@@ -153,6 +178,14 @@ fn draw_bolts(mut bolts: ResMut<Bolts>, time: Res<Time>, mut gizmos: Gizmos) {
     });
     for bolt in &bolts.0 {
         let glow = (bolt.left / BOLT_SECONDS).clamp(0.0, 1.0);
+        if let Some(level) = bolt.beam {
+            let (from, to) = (world(bolt.from), world(bolt.to));
+            // Three strokes side by side read as a fat beam.
+            for offset in [-1.5, 0.0, 1.5] {
+                gizmos.line_2d(from + Vec2::X * offset, to + Vec2::X * offset, beam_color(level, glow));
+            }
+            continue;
+        }
         let points = zigzag(world(bolt.from), world(bolt.to), bolt.seed);
         gizmos.linestrip_2d(points.iter().copied(), Color::srgba(1.0, 0.95, 0.55, glow));
         // A second, offset stroke reads as a thicker bolt.

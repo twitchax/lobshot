@@ -1,12 +1,15 @@
 //! The weather queue (GunBound's moondisk): five upcoming weathers, the front one activating every
 //! N turns, where N is the number of players (SW-weather). Column weathers (Force, Mirror, Tornado,
-//! Electricity, Drain) stand on the map where the server rolled them; Wind rerolls the wind; Lock
-//! and Balm hold over the whole map until the next weather comes up. The server rolls every
+//! Electricity, Drain, Random) stand on the map where the server rolled them; Wind rerolls the
+//! wind; Lock, Balm and Skyeye hold over the whole map until the next weather comes up. The server rolls every
 //! new queue entry and every new wind; the sim only says when one is owed (`Game::pending_roll`).
 
 use serde::{Deserialize, Serialize};
 
-use crate::tuning::{DRAIN_DAMAGE, FORCE_DAMAGE, WEATHER_QUEUE, column_width};
+use crate::{
+    tuning::{DRAIN_DAMAGE, FORCE_DAMAGE, SKY, WEATHER_QUEUE, column_width, weather::SKYEYE_LEVELS},
+    units::Vec2,
+};
 
 /// A weather.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -32,11 +35,14 @@ pub enum WeatherKind {
     /// A column hiding one of `HIDDEN`: a shot passing through meets what it hides, and the column
     /// shows it from then on (DB-play, OB).
     Random,
+    /// The satellite over the middle of the map beams down wherever a projectile lands
+    /// (GunBound's Thor).
+    Skyeye,
 }
 
 impl WeatherKind {
     /// Every kind the server may roll, in a fixed order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Wind,
         Self::Force,
         Self::Mirror,
@@ -46,6 +52,7 @@ impl WeatherKind {
         Self::Lock,
         Self::Balm,
         Self::Random,
+        Self::Skyeye,
     ];
     /// What a Random column may hide: the column weathers, never Wind, Lock or Balm (OB).
     pub const HIDDEN: [Self; 5] = [Self::Force, Self::Tornado, Self::Electricity, Self::Drain, Self::Mirror];
@@ -55,7 +62,7 @@ impl WeatherKind {
     pub fn is_column(self) -> bool {
         match self {
             Self::Force | Self::Mirror | Self::Tornado | Self::Electricity | Self::Drain | Self::Random => true,
-            Self::Wind | Self::Lock | Self::Balm => false,
+            Self::Wind | Self::Lock | Self::Balm | Self::Skyeye => false,
         }
     }
 }
@@ -178,6 +185,33 @@ pub struct Weather {
     pub wind_owed: bool,
     /// The weather that came up last: it holds until the next one does.
     pub now: Option<WeatherKind>,
+    /// The satellite, and what its beams have dealt so far.
+    pub skyeye: Skyeye,
+}
+
+/// GunBound's Thor: a satellite high over the middle of the map that beams down where projectiles
+/// land while its weather is up. It levels up with the damage its own beams deal, all game long
+/// (GF-lee, GF-max).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Skyeye {
+    /// The damage its beams have dealt.
+    pub xp: u32,
+}
+
+impl Skyeye {
+    /// Its level, 1 to `SKYEYE_LEVELS`' length + 1.
+    #[must_use]
+    pub fn level(self) -> u8 {
+        let passed = SKYEYE_LEVELS.value.iter().filter(|&&threshold| self.xp > threshold).count();
+        u8::try_from(passed + 1).unwrap_or(u8::MAX)
+    }
+
+    /// Where it hovers over a map `width` px wide: above the middle, as high as bolts strike from
+    /// (NAMU, SW-weather).
+    #[must_use]
+    pub fn at(width: u32) -> Vec2 {
+        Vec2::new(f64::from(width) / 2.0, -SKY.value)
+    }
 }
 
 impl Weather {
@@ -244,7 +278,7 @@ impl Marks {
             WeatherKind::Force => self.forced = true,
             WeatherKind::Drain => self.drained = true,
             WeatherKind::Electricity => self.charged = true,
-            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random => return false,
+            WeatherKind::Wind | WeatherKind::Mirror | WeatherKind::Tornado | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random | WeatherKind::Skyeye => return false,
         }
         true
     }
@@ -359,6 +393,13 @@ mod unit {
         let picks: Vec<WeatherKind> = (0..3).map(|roll| odds.pick(roll)).collect();
         assert_eq!(picks, [WeatherKind::Force, WeatherKind::Force, WeatherKind::Lock]);
         assert_eq!(odds.weight(WeatherKind::Wind), 0);
+    }
+
+    #[test]
+    fn skyeye_levels_up_past_each_threshold() {
+        let levels: Vec<u8> = [0, 200, 201, 700, 701, 6800, 6801, 100_000].map(|xp| Skyeye { xp }.level()).to_vec();
+        assert_eq!(levels, [1, 1, 2, 2, 3, 5, 6, 6], "GF-vgg: level 1 is 0 to 200 recorded, level 6 from 6801");
+        assert_eq!(Skyeye::at(1800), Vec2::new(900.0, -SKY.value));
     }
 
     #[test]

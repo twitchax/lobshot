@@ -287,7 +287,7 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Skyeye",
         "x": 1701,
         "hides": null
       }
@@ -326,7 +326,7 @@
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Wind",
         "x": 290,
         "hides": null
       }
@@ -365,7 +365,7 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
+        "kind": "Force",
         "x": 679,
         "hides": null
       }
@@ -401,7 +401,7 @@
     },
     {
       "Weather": {
-        "kind": "Tornado",
+        "kind": "Mirror",
         "x": 1068,
         "hides": null
       }
@@ -440,7 +440,7 @@
     },
     {
       "Weather": {
-        "kind": "Electricity",
+        "kind": "Tornado",
         "x": 1457,
         "hides": null
       }
@@ -478,15 +478,9 @@
       }
     },
     {
-      "Wind": {
-        "strength": 3,
-        "direction": 270
-      }
-    },
-    {
       "Weather": {
-        "kind": "Lock",
-        "x": 435,
+        "kind": "Electricity",
+        "x": 46,
         "hides": null
       }
     },
@@ -502,7 +496,7 @@
         "seat": 1,
         "shot": "S1",
         "aim": 45,
-        "power": 10,
+        "power": 9,
         "time": 1266
       }
     },
@@ -518,83 +512,8 @@
         "seat": 0,
         "shot": "S2",
         "aim": 29,
-        "power": 1,
+        "power": 2,
         "time": 1403
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Balm",
-        "x": 824,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Pass": {
-        "seat": 1,
-        "time": 2000
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 29,
-        "power": 1,
-        "time": 1677
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Random",
-        "x": 1213,
-        "hides": "Electricity"
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "S2",
-        "aim": 45,
-        "power": 0,
-        "time": 314
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 29,
-        "power": 0,
-        "time": 451
       }
     }
   ]

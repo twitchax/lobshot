@@ -273,7 +273,7 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Skyeye",
         "x": 1501,
         "hides": null
       }

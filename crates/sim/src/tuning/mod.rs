@@ -155,8 +155,8 @@ pub fn column_width(kind: crate::weather::WeatherKind) -> f64 {
     match kind {
         WeatherKind::Tornado => TORNADO_WIDTH.value,
         WeatherKind::Random => RANDOM_WIDTH.value,
-        // Wind, Lock and Balm never stand as columns.
-        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm => BEAM_WIDTH.value,
+        // Wind, Lock, Balm and Skyeye never stand as columns.
+        WeatherKind::Force | WeatherKind::Mirror | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Skyeye => BEAM_WIDTH.value,
     }
 }
 

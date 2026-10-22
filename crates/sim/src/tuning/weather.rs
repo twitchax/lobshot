@@ -2,14 +2,47 @@
 //! 0 to 3 for each weather (GF-tiro); GF-vgg lists the 2004 weights, and each lobshot map takes the
 //! weights of the GunBound map whose archetype it is built on (`DESIGN.md`, "Art").
 
-use super::{Tuned, cited, picked};
+use super::{DamageRange, Tuned, WeaponType, cited, fitted, picked};
 use crate::{
     map::MapRef,
     weather::{Odds, WeatherKind},
 };
 
+// ── Skyeye (GunBound's Thor) ─────────────────────────────────────────────────
+
+/// The damage Skyeye's beams must have dealt for each level past the first: level 2 from 201,
+/// level 6 from 6801 (GF-lee, GF-vgg). CONTRADICTION: GF-tiro gives 250 / 750 / 1750 / 2500, OB
+/// 800 / 1400 / 2000 / 2400 / 3000; CR-aduka says the designers raised them after Aduka's upgrade
+/// and allows a seventh level.
+pub const SKYEYE_LEVELS: Tuned<[u32; 5]> = cited([200, 700, 1800, 3900, 6800], &["GF-lee", "GF-vgg"]);
+
+/// One beam's damage at each level (`DamageRange`: dead center, then at the hitbox's edge).
+pub const SKYEYE_DAMAGE: Tuned<[DamageRange; 6]> = fitted(
+    [
+        DamageRange { min: 50, max: 100 },
+        DamageRange { min: 58, max: 117 },
+        DamageRange { min: 67, max: 133 },
+        DamageRange { min: 83, max: 167 },
+        DamageRange { min: 92, max: 183 },
+        DamageRange { min: 100, max: 200 },
+    ],
+    &["CR-aduka", "GF-vgg"],
+    "A weather beam deals 50 to 100 at first (CR-aduka); each level scales that by GF-vgg's average \
+     for the level over level 1's (150, 175, 200, 250, 275, 300), which track Aduka's three-beam S2 \
+     in CR-aduka (about 150, 180, then 220 to 250). CONTRADICTION: GF-tiro has about 200 by level \
+     5, GF-max 350 at level 6, OB 40 + 20 a level.",
+);
+
+/// How far a beam's blast reaches and digs where it strikes.
+pub const SKYEYE_BLAST: Tuned<f64> = cited(25.0, &["OB"]);
+
+pub const SKYEYE_WEAPON: Tuned<WeaponType> = picked(WeaponType::Laser, "The sources call it Thor's laser (CR-aduka).");
+
+/// How long after a projectile lands its beam strikes, in seconds.
+pub const SKYEYE_DELAY_SECONDS: Tuned<f64> = picked(0.2, "Every shot is followed instantly by a hit (CR-aduka); a beat keeps the two readable.");
+
 /// A GunBound map's 2004 weights, in GF-vgg's order: Force, Tornado, Electricity, Wind, Moon
-/// (Balm), Item Lock (Lock) and Thor. Thor's weight waits for the Thor weather.
+/// (Balm), Item Lock (Lock) and Thor (Skyeye).
 type Moondisk = [u8; 7];
 
 /// Mine corridors (Glintvein A).
@@ -61,7 +94,7 @@ pub fn odds(map: &MapRef) -> Odds {
         MapRef::Asset { name, variant, .. } => moondisk(name, variant).unwrap_or(DUMMY_SLOPES.value),
         MapRef::Flat { .. } | MapRef::Hills { .. } => DUMMY_SLOPES.value,
     };
-    let [force, tornado, electricity, wind, balm, lock, _thor] = row;
+    let [force, tornado, electricity, wind, balm, lock, skyeye] = row;
     Odds::new(|kind| match kind {
         WeatherKind::Wind => wind,
         WeatherKind::Force => force,
@@ -69,6 +102,7 @@ pub fn odds(map: &MapRef) -> Odds {
         WeatherKind::Electricity => electricity,
         WeatherKind::Lock => lock,
         WeatherKind::Balm => balm,
+        WeatherKind::Skyeye => skyeye,
         WeatherKind::Mirror | WeatherKind::Drain | WeatherKind::Random => LATER.value,
     })
 }

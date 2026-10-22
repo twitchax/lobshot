@@ -136,6 +136,11 @@ enum Cue {
         from: SimVec2,
         to: SimVec2,
     },
+    Beam {
+        from: SimVec2,
+        to: SimVec2,
+        level: u8,
+    },
     Bounce {
         at: SimVec2,
     },
@@ -292,6 +297,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
             cues.push((at, Cue::Sound(Sound::Blast)));
         }
         Effect::Bolt { from, to, .. } => cues.push((at, Cue::Bolt { from, to })),
+        Effect::Beam { from, to, level, .. } => cues.push((at, Cue::Beam { from, to, level })),
         Effect::Bounced { at: point, .. } => cues.push((at, Cue::Bounce { at: point })),
         // Scheduled at its end; it sparks from its start.
         Effect::Pierced { seat, from, to } => {
@@ -367,6 +373,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::Forecast(_)
         | Effect::WeatherChanged { .. }
         | Effect::Revealed { .. }
+        | Effect::SkyeyeLevel { .. }
         | Effect::Spun { .. }
         | Effect::DropRolled { .. } => {}
     }
@@ -519,6 +526,7 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
             adjust(views, seat, |shown| shown.foot = to.world());
         }
         Cue::Bolt { from, to } => hands.bolts.strike(from, to),
+        Cue::Beam { from, to, level } => hands.bolts.beam(from, to, level),
         Cue::Bounce { at } => {
             commands.spawn(puff(dot, at, 16.0, Color::srgb_u8(0xc9, 0xa8, 0x7c), 0.35));
         }

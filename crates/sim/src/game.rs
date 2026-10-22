@@ -30,7 +30,7 @@ use crate::{
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
-    weather::{Column, Forecast, Marks, Odds, Weather, WeatherKind},
+    weather::{Column, Forecast, Marks, Odds, Skyeye, Weather, WeatherKind},
 };
 
 /// The most players a room seats: 4v4.
@@ -450,6 +450,18 @@ pub enum Effect {
         seat: u8,
         drop: Drop,
         legs: Vec<Leg>,
+    },
+    /// Skyeye's beam ran from the satellite (`from`) to what it struck (`to`) at `tick`, at
+    /// `level`; its blast's `Exploded` and damage follow.
+    Beam {
+        from: Vec2,
+        to: Vec2,
+        tick: u32,
+        level: u8,
+    },
+    /// Skyeye reached `level`.
+    SkyeyeLevel {
+        level: u8,
     },
     /// A projectile passed through the Random column at `x`: it shows `kind`, what it hid, from now
     /// on.
@@ -1128,9 +1140,9 @@ impl Game {
                     },
                     ticks(TORNADO_HOLD_SECONDS.value),
                 )),
-                // Marked above. Wind, Lock and Balm never stand as columns, and a Random one always
-                // hides another kind; were one there, it would do nothing.
-                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random => {
+                // Marked above. Wind, Lock, Balm and Skyeye never stand as columns, and a Random
+                // one always hides another kind; were one there, it would do nothing.
+                WeatherKind::Force | WeatherKind::Electricity | WeatherKind::Drain | WeatherKind::Wind | WeatherKind::Lock | WeatherKind::Balm | WeatherKind::Random | WeatherKind::Skyeye => {
                     cursor = impact.tick + 1;
                     continue;
                 }
@@ -1336,6 +1348,10 @@ impl Game {
             let bionic = tuning.armor.value == ArmorClass::Bionic;
             self.heal(seat, BALM_HEAL_PERCENT.value * if bionic { BALM_BIONIC_FACTOR.value } else { 1 }, effects);
         }
+    }
+
+    pub(crate) fn skyeye_mut(&mut self) -> &mut Skyeye {
+        &mut self.weather.skyeye
     }
 
     /// The game as a player sees it, for searching shots ahead (SearchBot, the lab's trace): a
@@ -1725,6 +1741,42 @@ mod unit {
         let coilback = game.players[0].tuning().hp.value;
         pass_until(&mut game, 0);
         assert_eq!(game.players[0].hp, 500 + coilback * 3 / 100, "healed once, as its turn started");
+    }
+
+    fn beams(effects: &[Effect]) -> Vec<(Vec2, Vec2, u8)> {
+        effects
+            .iter()
+            .filter_map(|e| if let Effect::Beam { from, to, level, .. } = *e { Some((from, to, level)) } else { None })
+            .collect()
+    }
+
+    #[test]
+    fn under_skyeye_a_beam_follows_each_landing_from_the_satellite() {
+        let calm = duel(800);
+        let power = direct_hit_power(&calm, 35);
+        let plain = damage_to(&shoot(&mut calm.clone(), 0, Shot::S1, 35, power), 1);
+        let mut game = under(calm.clone(), WeatherKind::Skyeye);
+        let effects = shoot(&mut game, 0, Shot::S1, 35, power);
+        let fired = beams(&effects);
+        assert_eq!(fired.len(), 1, "{effects:?}");
+        let (from, to, level) = fired[0];
+        assert_eq!((from, level), (Skyeye::at(2400), 1));
+        assert!(to.distance(game.players()[1].center()) < 40.0, "it struck the target: {to:?}");
+        let dealt = damage_to(&effects, 1);
+        assert!((plain + 50..=plain + 100).contains(&dealt), "a level 1 beam on top of {plain}: {dealt}");
+        assert_eq!(game.weather.skyeye.xp, u32::try_from(dealt - plain).unwrap(), "only the beam's damage counts");
+        assert!(beams(&shoot(&mut calm.clone(), 0, Shot::S1, 35, power)).is_empty(), "no beam when Skyeye isn't up");
+    }
+
+    #[test]
+    fn skyeye_levels_up_on_the_damage_its_beams_deal() {
+        let calm = duel(800);
+        let power = direct_hit_power(&calm, 35);
+        let mut game = under(calm, WeatherKind::Skyeye);
+        game.weather.skyeye.xp = 195;
+        let effects = shoot(&mut game, 0, Shot::S1, 35, power);
+        assert!(effects.contains(&Effect::SkyeyeLevel { level: 2 }), "{effects:?}");
+        assert_eq!(game.weather.skyeye.level(), 2);
     }
 
     fn random_hiding(hides: WeatherKind, x: i32) -> Column {

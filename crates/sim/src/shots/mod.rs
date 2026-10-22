@@ -10,6 +10,7 @@ mod helix;
 mod hookclaw;
 mod lanternwing;
 mod marblemole;
+pub(crate) mod skyeye;
 mod sparkhorn;
 
 use crate::{
@@ -21,9 +22,10 @@ use crate::{
     tuning::{
         BIG_BOMB_CRATER, BOLT_CRATER, BOLT_DELAY_SECONDS, BOLT_REACH, DamageRange, MobileTuning,
         items::{DAMAGE_BOOST, DIG_CRATER, THUNDER_DAMAGE, THUNDER_WEAPON},
+        weather::SKYEYE_DELAY_SECONDS,
     },
     units::{Power, Vec2, ticks},
-    weather::Marks,
+    weather::{Marks, WeatherKind},
 };
 
 /// What rides on one turn's shots: the armed item, sudden death, and who splash has already hit.
@@ -97,9 +99,10 @@ impl Gun<'_> {
     }
 
     /// A projectile lands: `blast` goes off, direct on a mobile it struck, carving a crater of
-    /// `crater` (widened by the salvo), and a bolt follows if Thunder is armed or the projectile
-    /// passed through Electricity (one bolt either way: the item is the weather, GF-tiro). A
-    /// projectile that left the map does nothing.
+    /// `crater` (widened by the salvo); a bolt follows if Thunder is armed or the projectile
+    /// passed through Electricity (one bolt either way: the item is the weather, GF-tiro), and
+    /// Skyeye's beam if it is up (one a projectile, GF-tiro). A projectile that left the map does
+    /// nothing.
     pub fn land(&self, game: &mut Game, blast: &Blast, crater: f64, impact: &Impact, marks: Marks, effects: &mut Vec<Effect>) {
         let direct = match impact.contact {
             Contact::Gone | Contact::Column(_) => return,
@@ -119,6 +122,9 @@ impl Gun<'_> {
                 boost: 1.0,
             };
             bolt::zap(game, &strike, &thunder, effects);
+        }
+        if game.weather().is(WeatherKind::Skyeye) {
+            skyeye::beam(game, impact.at, impact.tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
         }
     }
 

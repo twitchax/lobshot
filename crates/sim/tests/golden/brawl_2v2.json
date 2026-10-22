@@ -360,7 +360,7 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Skyeye",
         "x": 1101,
         "hides": null
       }
@@ -431,7 +431,7 @@
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Wind",
         "x": 1490,
         "hides": null
       }
@@ -499,7 +499,7 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
+        "kind": "Force",
         "x": 1879,
         "hides": null
       }
@@ -589,7 +589,7 @@
     },
     {
       "Weather": {
-        "kind": "Drain",
+        "kind": "Electricity",
         "x": 646,
         "hides": null
       }
@@ -682,9 +682,9 @@
     },
     {
       "Weather": {
-        "kind": "Random",
+        "kind": "Balm",
         "x": 1813,
-        "hides": "Electricity"
+        "hides": null
       }
     },
     {
@@ -771,15 +771,9 @@
       }
     },
     {
-      "Wind": {
-        "strength": 6,
-        "direction": 30
-      }
-    },
-    {
       "Weather": {
-        "kind": "Tornado",
-        "x": 969,
+        "kind": "Wind",
+        "x": 580,
         "hides": null
       }
     },
@@ -795,7 +789,7 @@
         "seat": 3,
         "shot": "S1",
         "aim": 32,
-        "power": 68,
+        "power": 67,
         "time": 732
       }
     },
@@ -806,8 +800,8 @@
     },
     {
       "Drop": {
-        "kind": "Calm",
-        "x": 1358
+        "kind": "Chest",
+        "x": 969
       }
     },
     {
@@ -833,8 +827,8 @@
     },
     {
       "Drop": {
-        "kind": "Reverse",
-        "x": 1747
+        "kind": "Calm",
+        "x": 1358
       }
     },
     {
@@ -849,7 +843,7 @@
         "seat": 3,
         "shot": "S1",
         "aim": 32,
-        "power": 68,
+        "power": 67,
         "time": 1006
       }
     },
@@ -870,8 +864,14 @@
       }
     },
     {
+      "Wind": {
+        "strength": 20,
+        "direction": 95
+      }
+    },
+    {
       "Weather": {
-        "kind": "Lock",
+        "kind": "Electricity",
         "x": 2136,
         "hides": null
       }
@@ -888,491 +888,8 @@
         "seat": 3,
         "shot": "S2",
         "aim": 32,
-        "power": 36,
+        "power": 59,
         "time": 1280
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Hammer",
-        "x": 125
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Pass": {
-        "seat": 0,
-        "time": 2000
-      }
-    },
-    {
-      "Spin": {
-        "seat": 1
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Bolt",
-        "x": 514
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S1",
-        "aim": 32,
-        "power": 36,
-        "time": 1554
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S2",
-        "aim": 32,
-        "power": 74,
-        "time": 1691
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Wind",
-        "x": 903,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 13,
-        "time": 328
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Calm",
-        "x": 1292
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 32,
-        "power": 80,
-        "time": 465
-      }
-    },
-    {
-      "Spin": {
-        "seat": 1
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Reverse",
-        "x": 1681
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S2",
-        "aim": 32,
-        "power": 80,
-        "time": 602
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S1",
-        "aim": 32,
-        "power": 13,
-        "time": 739
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Tornado",
-        "x": 2070,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Pass": {
-        "seat": 3,
-        "time": 2000
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Hammer",
-        "x": 59
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S2",
-        "aim": 32,
-        "power": 34,
-        "time": 1013
-      }
-    },
-    {
-      "Spin": {
-        "seat": 1
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Bolt",
-        "x": 448
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S1",
-        "aim": 32,
-        "power": 61,
-        "time": 1150
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 32,
-        "power": 34,
-        "time": 1287
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Lock",
-        "x": 837,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S2",
-        "aim": 32,
-        "power": 18,
-        "time": 1424
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Calm",
-        "x": 1226
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 80,
-        "time": 1561
-      }
-    },
-    {
-      "Spin": {
-        "seat": 1
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Reverse",
-        "x": 1615
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S1",
-        "aim": 32,
-        "power": 19,
-        "time": 1698
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Pass": {
-        "seat": 0,
-        "time": 2000
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Wind",
-        "x": 2004,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 52,
-        "time": 472
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Hammer",
-        "x": 2393
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 32,
-        "power": 53,
-        "time": 609
-      }
-    },
-    {
-      "Spin": {
-        "seat": 1
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Bolt",
-        "x": 382
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S2",
-        "aim": 32,
-        "power": 53,
-        "time": 746
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 32,
-        "power": 53,
-        "time": 883
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Tornado",
-        "x": 771,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 32,
-        "power": 80,
-        "time": 1020
-      }
-    },
-    {
-      "Spin": {
-        "seat": 2
-      }
-    },
-    {
-      "Drop": {
-        "kind": "Calm",
-        "x": 1160
-      }
-    },
-    {
-      "Walk": {
-        "seat": 3,
-        "facing": "Left",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 3,
-        "shot": "S2",
-        "aim": 32,
-        "power": 79,
-        "time": 1157
       }
     }
   ]

@@ -9,7 +9,7 @@ use lobshot_sim::{
     game::{Effect, Game, Shot, SsState},
     items::Item,
     units::Vec2 as SimVec2,
-    weather::WeatherKind,
+    weather::{Weather, WeatherKind},
 };
 
 use super::{
@@ -400,15 +400,17 @@ fn weather_look(kind: WeatherKind) -> (&'static str, Color) {
         WeatherKind::Lock => ("L", Color::srgb_u8(0x8a, 0x8f, 0x98)),
         WeatherKind::Balm => ("B", Color::srgb_u8(0xb8, 0xe6, 0xc9)),
         WeatherKind::Random => ("?", Color::srgb_u8(0xe0, 0xe0, 0xe0)),
+        WeatherKind::Skyeye => ("S", Color::srgb_u8(0x9c, 0xf2, 0xa8)),
     }
 }
 
 /// What a weather that holds over the whole map does, while it is up; columns show on the map.
-fn weather_label(now: Option<WeatherKind>) -> &'static str {
-    match now {
-        Some(WeatherKind::Lock) => "Lock: no items",
-        Some(WeatherKind::Balm) => "Balm: heals each turn",
-        _ => "",
+fn weather_label(weather: &Weather) -> String {
+    match weather.now {
+        Some(WeatherKind::Lock) => "Lock: no items".to_owned(),
+        Some(WeatherKind::Balm) => "Balm: heals each turn".to_owned(),
+        Some(WeatherKind::Skyeye) => format!("Skyeye Lv {}: beams on every landing", weather.skyeye.level()),
+        _ => String::new(),
     }
 }
 
@@ -453,7 +455,7 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
             },
             Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
             Readout::Sudden => String::new(),
-            Readout::Weather => weather_label(game.predicted.weather().now).to_owned(),
+            Readout::Weather => weather_label(game.predicted.weather()),
         };
         if **text != value {
             **text = value;
@@ -976,11 +978,19 @@ mod unit {
     }
 
     #[test]
-    fn lock_and_balm_say_what_they_do() {
-        assert_eq!(weather_label(Some(WeatherKind::Lock)), "Lock: no items");
-        assert_eq!(weather_label(Some(WeatherKind::Balm)), "Balm: heals each turn");
-        assert_eq!(weather_label(Some(WeatherKind::Force)), "", "a column shows on the map");
-        assert_eq!(weather_label(None), "");
+    fn lock_balm_and_skyeye_say_what_they_do() {
+        let up = |now: Option<WeatherKind>, xp: u32| {
+            weather_label(&Weather {
+                now,
+                skyeye: lobshot_sim::weather::Skyeye { xp },
+                ..Weather::default()
+            })
+        };
+        assert_eq!(up(Some(WeatherKind::Lock), 0), "Lock: no items");
+        assert_eq!(up(Some(WeatherKind::Balm), 0), "Balm: heals each turn");
+        assert_eq!(up(Some(WeatherKind::Skyeye), 900), "Skyeye Lv 3: beams on every landing");
+        assert_eq!(up(Some(WeatherKind::Force), 0), "", "a column shows on the map");
+        assert_eq!(up(None, 0), "");
     }
 
     #[test]

@@ -41,10 +41,12 @@ why the version moved the way it did.
   map and reports the win-rate matrix, damage per delay, turns to kill and hit rates, with a
   35-65% gate (`cargo make balance-gate`, not yet in CI); `lobshot-lab play` and `lobshot-lab mcp`
   let an LLM agent play a seat; `docs/playtests/` holds the report format.
-- Five more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
+- Six more weathers (M5): Electricity calls the Thunder item's bolt where a shot through it lands;
   Drain (GunBound's Weakness) halves shots through it; Lock bars items, stops shields and speeds SS
   up; Balm (GunBound's Moon) heals everyone a little each turn; Random hides one of the column
-  weathers until a shot passes through it. GunBound Classic's Meteor is Wind, which lobshot has.
+  weathers until a shot passes through it; Skyeye's satellite beams down wherever a projectile
+  lands, and levels up with the damage it deals. GunBound Classic's Meteor is Wind, which lobshot
+  has. Each map rolls weather by its GunBound archetype's odds.
 
 ### Changed
 

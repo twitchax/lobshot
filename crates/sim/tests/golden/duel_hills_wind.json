@@ -219,7 +219,7 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
+        "kind": "Skyeye",
         "x": 1501,
         "hides": null
       }
@@ -258,7 +258,7 @@
     },
     {
       "Weather": {
-        "kind": "Force",
+        "kind": "Wind",
         "x": 1890,
         "hides": null
       }
@@ -297,7 +297,7 @@
     },
     {
       "Weather": {
-        "kind": "Mirror",
+        "kind": "Force",
         "x": 279,
         "hides": null
       }
@@ -333,7 +333,7 @@
     },
     {
       "Weather": {
-        "kind": "Tornado",
+        "kind": "Mirror",
         "x": 668,
         "hides": null
       }

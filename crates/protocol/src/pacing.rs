@@ -99,7 +99,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 busy = busy.max(stage.base + ticks_to_seconds(last));
                 stage.base
             }
-            Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
+            Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::Beam { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
             Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
             Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
@@ -123,6 +123,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             | Effect::Forecast(_)
             | Effect::WeatherChanged { .. }
             | Effect::Revealed { .. }
+            | Effect::SkyeyeLevel { .. }
             | Effect::ItemUsed { .. }
             | Effect::SsLocked { .. }
             | Effect::Spun { .. }
