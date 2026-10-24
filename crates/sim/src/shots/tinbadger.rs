@@ -381,6 +381,33 @@ mod unit {
     }
 
     #[test]
+    fn ss_walks_under_a_floating_mobile() {
+        // Kitewyrm floats over the ground walkers, the big beetle as the mines (SW-mob, CR-blood):
+        // landed short of it, the beetle walks on under it and goes off at its fuse.
+        let mut game = duel_of(MobileKind::Tinbadger, MobileKind::Kitewyrm, 800);
+        let kite = game.players()[1].center().x;
+        let power = (0..=Power::MAX.twentieths())
+            .map(|t| Power::from_twentieths(t).unwrap())
+            .find(|power| {
+                let track = game.track(game.launch(0, Shot::Ss, 45, power.bars()).unwrap(), 0, 0);
+                track.impact.contact == Contact::Terrain && (kite - 120.0..kite - 60.0).contains(&track.impact.at.x)
+            })
+            .expect("a landing short of the kite");
+        let effects = shoot(&mut game, 0, Shot::Ss, 45, power);
+        let legs = fired(&effects)[0];
+        let landed = legs.iter().find(|leg| leg.flight.accel == Vec2::ZERO).unwrap().offset;
+        let Some(&Effect::Exploded { tick, at, .. }) = effects.iter().find(|e| matches!(e, Effect::Exploded { .. })) else {
+            panic!()
+        };
+        assert!(at.x > kite + 60.0, "past it: {at:?}");
+        assert_eq!(
+            tick - landed,
+            ticks(SS_FUSE_SECONDS.value) / ticks(1.0 / SS_WALK_SPEED.value) * ticks(1.0 / SS_WALK_SPEED.value),
+            "at its fuse"
+        );
+    }
+
+    #[test]
     fn ss_goes_off_on_a_mine_in_its_way_and_sets_it_off() {
         // CR-icy: "A target is not just a player, it can be another Raon mine".
         let mut game = duel(1600);
