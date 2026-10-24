@@ -12,6 +12,7 @@ pub mod hookclaw;
 pub mod items;
 pub mod lanternwing;
 pub mod marblemole;
+pub mod modes;
 pub mod score;
 pub mod sparkhorn;
 pub mod spoutpot;

@@ -26,14 +26,23 @@
 //! Difficulty is error around the search (`tuning::bot`): the bot misreads the wind before it
 //! searches, then misses the aim and power it found. Both come from a seed the server rolls, so
 //! a bot's turn is still a pure function of its inputs.
+//!
+//! Dead, it plays the mode's objective (`while_dead`): it spins its slot machine (Solo), or picks
+//! where to drop back in (Score, `respawn`): on firm ground, at a fair range from an enemy, with
+//! shots at one from there.
+
+use std::cmp::Reverse;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     game::{Contact, Death, Effect, Event, Game, Impact, Phase, Player, Shot},
     items::{Item, Loadout},
+    mode,
+    movement::Footing,
     referee::XorShift,
     shots,
+    terrain::Terrain,
     tuning::{self, AimRange, Barrel, bot::Noise},
     units::{Centis, Facing, Power, Vec2, Wind},
 };
@@ -53,6 +62,25 @@ const WALK_PARTS: u16 = 3;
 
 /// What a kill is worth on top of its damage, in damage.
 const KILL_VALUE: f64 = 300.0;
+
+/// A dead bot looks for a drop point every this many pixels across the map.
+const DROP_STEP: usize = 40;
+
+/// The range it would like to drop in at from the nearest enemy, in pixels: three quarters of a
+/// screen, far enough that a miss doesn't splash itself and near enough for a plain lob.
+const DROP_RANGE: i32 = 600;
+
+/// Firm ground has ground within `BRINK_DROP` px below the feet in every column `BRINK` px either
+/// way: no gap, cliff or map edge to slide or be blasted off.
+const BRINK: i32 = 40;
+const BRINK_DROP: i32 = 30;
+
+/// It fires a coarse grid of shots from this many of the spots nearest its range, each every
+/// `DROP_AIM_STEP` degrees and `DROP_POWER_STEP` power steps, to see which has the most shots at an
+/// enemy.
+const SHORTLIST: usize = 4;
+const DROP_AIM_STEP: usize = 5;
+const DROP_POWER_STEP: usize = 4;
 
 /// How well the bot reads the wind and how steady its hands are (`tuning::bot`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -121,6 +149,75 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         time: Centis(0),
     });
     Some(events)
+}
+
+/// What a dead bot does now, on anyone's turn, when the game lets it: spins its slot machine
+/// (Solo), or picks where to drop back in (Score, `respawn`). Every host plays its dead bots by it.
+#[must_use]
+pub fn while_dead(game: &Game, seat: u8) -> Option<Event> {
+    if game.can_spin(seat) {
+        Some(Event::Spin { seat })
+    } else if game.can_respawn(seat) {
+        respawn(game, seat)
+    } else {
+        None
+    }
+}
+
+/// Where a dead bot drops back in, as `Event::Respawn`: of columns every `DROP_STEP` px, where a
+/// drop would land in the wind as it is on firm ground (`firm`), the `SHORTLIST` nearest
+/// `DROP_RANGE` from the nearest enemy; of those, the one with the most shots at an enemy from
+/// there, then the nearest that range. `None` when it can't come back now, or nowhere is firm.
+#[must_use]
+pub fn respawn(game: &Game, seat: u8) -> Option<Event> {
+    if !game.can_respawn(seat) {
+        return None;
+    }
+    let seen = game.as_seen();
+    let team = seen.players().get(usize::from(seat))?.team;
+    let enemies: Vec<i32> = seen.players().iter().filter(|p| p.alive && p.team != team).map(|p| p.footing.x).collect();
+    let width = usize::try_from(seen.terrain().width()).ok()?;
+    let mut spots: Vec<(i32, i32, Footing)> = (DROP_STEP / 2..width)
+        .step_by(DROP_STEP)
+        .filter_map(|x| {
+            let x = i32::try_from(x).ok()?;
+            let footing = mode::fall(&seen, x).1.filter(|&footing| firm(seen.terrain(), footing))?;
+            let range = enemies.iter().map(|enemy| (enemy - footing.x).abs()).min()?;
+            Some(((range - DROP_RANGE).abs(), x, footing))
+        })
+        .collect();
+    spots.sort_unstable_by_key(|&(off, x, _)| (off, x));
+    spots.truncate(SHORTLIST);
+    let (_, x, _) = spots.into_iter().max_by_key(|&(off, x, footing)| (shots_from(&seen, seat, footing), Reverse(off), Reverse(x)))?;
+    Some(Event::Respawn { seat, x })
+}
+
+/// Whether `footing` is firm ground to land on: every column `BRINK` px either way has ground
+/// within `BRINK_DROP` px below the feet, so it isn't at the brink of a gap or the map's edge.
+fn firm(terrain: &Terrain, footing: Footing) -> bool {
+    (-BRINK..=BRINK).all(|dx| (footing.y..=footing.y + BRINK_DROP).any(|y| terrain.is_solid(footing.x + dx, y)))
+}
+
+/// How many of a coarse grid of S1 shots `seat` could fire from `footing`, back on its feet and
+/// facing the nearest enemy, strike an enemy: how well placed the spot is.
+fn shots_from(game: &Game, seat: u8, footing: Footing) -> usize {
+    let mut scratch = game.clone();
+    mode::stand(&mut scratch, seat, footing);
+    let me = scratch.players[usize::from(seat)];
+    let Some(target) = scratch.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs()) else {
+        return 0;
+    };
+    scratch.players[usize::from(seat)].facing = facing_toward(&me, target);
+    let range = Shot::S1.tuning(me.tuning()).aim.value;
+    let grid = (range.min..=range.max)
+        .step_by(DROP_AIM_STEP)
+        .flat_map(|aim| (0..=Power::MAX.twentieths()).step_by(DROP_POWER_STEP).map(move |power| (aim, power)));
+    grid.filter(|&(aim, power)| {
+        scratch
+            .launch(seat, Shot::S1, aim, f64::from(power) / 20.0)
+            .is_some_and(|flight| matches!(scratch.track(flight, 0, 0).impact.contact, Contact::Mobile(hit) if scratch.players()[usize::from(hit)].team != me.team))
+    })
+    .count()
 }
 
 /// Where the bot shoots from, and its best shot there.
@@ -480,6 +577,7 @@ mod unit {
             testing::{answer_rolls, damage_to, duel, duel_of, duel_setup, game_on, seat, start},
         },
         map::MapRef,
+        mode::Mode,
         terrain::Terrain,
     };
 
@@ -644,6 +742,7 @@ mod unit {
                 order: (0..8).collect(),
                 wind: Wind::new(18, 120).unwrap(),
                 sudden_death: None,
+                mode: Mode::Solo,
             };
             let game = start(&setup);
             let began = std::time::Instant::now();
@@ -701,6 +800,91 @@ mod unit {
         assert!(draws.iter().all(|d| (-3..=3).contains(d)));
         assert!((-3..=3).all(|v| draws.contains(&v)), "every value comes up");
         assert_eq!(within(&mut XorShift::new(5), 0), 0);
+    }
+}
+
+#[cfg(test)]
+mod dead {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::{
+        game::{
+            MobileKind, Team,
+            testing::{answer_rolls, game_in, seat},
+        },
+        mode::Mode,
+    };
+
+    /// Gaps in the ground: one off the map just right of seat 0 (x = 300), and one where a bot would
+    /// most like to drop, `DROP_RANGE` short of the enemy at x = 1700.
+    const GAPS: [std::ops::Range<i32>; 2] = [330..350, 1060..1130];
+
+    fn gapped() -> Terrain {
+        Terrain::from_fn(2400, 600, |x, y| {
+            let x = i32::try_from(x).unwrap();
+            y >= 500 && !GAPS.iter().any(|gap| gap.contains(&x))
+        })
+        .unwrap()
+    }
+
+    /// A `mode` 2v2 on `gapped` ground in which seat 0 has just walked off into the first gap.
+    fn after_a_death(mode: Mode) -> Game {
+        let seats = vec![
+            seat(Team::A, MobileKind::Coilback, 300, Facing::Right),
+            seat(Team::B, MobileKind::Coilback, 1700, Facing::Left),
+            seat(Team::A, MobileKind::Coilback, 600, Facing::Right),
+            seat(Team::B, MobileKind::Coilback, 2100, Facing::Left),
+        ];
+        let mut game = game_in(mode, gapped(), seats);
+        game.apply(Event::Walk {
+            seat: 0,
+            facing: Facing::Right,
+            steps: 60,
+        })
+        .unwrap();
+        answer_rolls(&mut game);
+        assert!(!game.players()[0].alive);
+        game
+    }
+
+    #[test]
+    fn a_dead_bot_drops_in_on_firm_ground_with_a_shot_at_an_enemy() {
+        let game = after_a_death(Mode::Score);
+        let Some(Event::Respawn { seat: 0, x }) = respawn(&game, 0) else { panic!("no pick") };
+        let footing = mode::fall(&game, x).1.expect("it lands");
+        assert_eq!(footing.y, 500, "on the ground");
+        for gap in GAPS {
+            assert!(footing.x < gap.start - BRINK || footing.x >= gap.end + BRINK, "x = {} at the brink of {gap:?}", footing.x);
+        }
+        assert!(shots_from(&game, 0, footing) > 0, "a shot at an enemy from x = {}", footing.x);
+        let mut game = game;
+        assert!(game.apply(Event::Respawn { seat: 0, x }).is_ok());
+    }
+
+    #[test]
+    fn firm_ground_has_ground_all_round_and_the_brink_does_not() {
+        let terrain = gapped();
+        let at = |x| Footing { x, y: 500 };
+        assert!(firm(&terrain, at(900)));
+        assert!(!firm(&terrain, at(GAPS[1].start - 10)), "at a gap's edge");
+        assert!(!firm(&terrain, at(10)), "at the map's edge");
+        assert!(firm(&terrain, at(GAPS[1].end + BRINK)));
+    }
+
+    #[test]
+    fn the_dead_spin_in_solo_and_pick_a_drop_point_in_score() {
+        let solo = after_a_death(Mode::Solo);
+        assert_eq!(while_dead(&solo, 0), Some(Event::Spin { seat: 0 }));
+        assert_eq!(respawn(&solo, 0), None);
+        let mut score = after_a_death(Mode::Score);
+        assert!(matches!(while_dead(&score, 0), Some(Event::Respawn { seat: 0, .. })));
+        assert_eq!(while_dead(&score, 1), None, "the living do nothing");
+        let pick = while_dead(&score, 0).unwrap();
+        score.apply(pick).unwrap();
+        assert_eq!(while_dead(&score, 0), None, "once picked, it waits");
     }
 }
 
@@ -770,6 +954,7 @@ mod over_a_hill {
         game::{Effect, MobileKind, Seat, Setup, Team, testing::answer_rolls},
         items::Loadout,
         map::{MapRef, NoAssets},
+        mode::Mode,
         units::Wind,
     };
 
@@ -805,6 +990,7 @@ mod over_a_hill {
                 order: vec![1, 0],
                 wind: Wind::new(24, direction).unwrap(),
                 sudden_death: None,
+                mode: Mode::Solo,
             };
             let mut game = Game::new(&setup, &NoAssets).unwrap();
             answer_rolls(&mut game);

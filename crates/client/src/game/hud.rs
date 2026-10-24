@@ -1,20 +1,23 @@
 //! The HUD, in GunBound's functional layout: weather queue, wind dial and turn timer (with the
-//! sudden-death countdown) across the top; turn list, shots, items, angle, power bar and move bar
-//! along the bottom; chat above the turn list; the aim arc, with its true-angle wedge, around your
-//! mobile. Once you're dead, the slot machine stands beside the controls.
+//! sudden-death countdown and, in Score, each team's lives) across the top; turn list, shots,
+//! items, angle, power bar and move bar along the bottom; chat above the turn list; the aim arc,
+//! with its true-angle wedge, around your mobile. Once you're dead, the slot machine stands beside
+//! the controls, or in Score, where you'll drop back in and when; drops and drop points coming
+//! down are marked on the map.
 
-use bevy::{ecs::system::SystemParam, prelude::*, ui::InteractionDisabled};
+use bevy::{ecs::system::SystemParam, picking::Pickable, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
-    drops::DropKind,
-    game::{Effect, Game, Shot, SsState},
+    drops::{DropKind, Falling},
+    game::{Effect, Shot, SsState, Team},
     items::Item,
+    mode::{DropPoint, Respawn},
     units::Vec2 as SimVec2,
     weather::{Weather, WeatherKind},
 };
 
 use super::{
     GameRoot,
-    input::{Controls, item_key_label, my_turn},
+    input::{Controls, MapPointer, item_key_label, my_turn},
     playback::{Ending, Herald, Outcome, TurnClock},
     world,
     world::{MobileView, Shown, current_seat, depth},
@@ -84,8 +87,21 @@ struct ReelStatus;
 /// A label over a drop on its way down.
 #[derive(Component)]
 struct DropMarker;
+/// The row of team lives, shown in a mode that counts them.
+#[derive(Component)]
+struct PointsRow;
+/// A team's lives.
+#[derive(Component)]
+struct PointsText(Team);
+/// Where a dead player in Score drops back in, and when.
+#[derive(Component)]
+struct RespawnPanel;
+#[derive(Component)]
+struct RespawnStatus;
 
 fn build(mut commands: Commands, server: Res<AssetServer>, mut cache: ResMut<ImageCache>) {
+    // The HUD's see-through layout nodes let the pointer through to the map, where a dead player
+    // in Score picks a drop point (`input::MapPointer`); its panels and buttons don't.
     let root = commands
         .spawn((
             GameRoot,
@@ -96,15 +112,19 @@ fn build(mut commands: Commands, server: Res<AssetServer>, mut cache: ResMut<Ima
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
             },
+            Pickable::IGNORE,
         ))
         .id();
     commands.entity(root).with_children(|hud| {
-        hud.spawn(Node {
-            justify_content: JustifyContent::SpaceBetween,
-            align_items: AlignItems::FlexStart,
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        })
+        hud.spawn((
+            Node {
+                justify_content: JustifyContent::SpaceBetween,
+                align_items: AlignItems::FlexStart,
+                padding: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
         .with_children(top_bar);
         hud.spawn((
             Banner,
@@ -112,14 +132,18 @@ fn build(mut commands: Commands, server: Res<AssetServer>, mut cache: ResMut<Ima
                 align_self: AlignSelf::Center,
                 ..default()
             },
-            children![text("", 30.0, theme::ACCENT)],
+            Pickable::IGNORE,
+            children![(text("", 30.0, theme::ACCENT), Pickable::IGNORE)],
         ));
-        hud.spawn(Node {
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(10.0)),
-            row_gap: Val::Px(6.0),
-            ..default()
-        })
+        hud.spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(10.0)),
+                row_gap: Val::Px(6.0),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
         .with_children(|bottom| bottom_bar(bottom, &server, &mut cache));
     });
 }
@@ -171,6 +195,20 @@ fn top_bar(top: &mut ChildSpawnerCommands) {
         clock.spawn((Readout::Turn, text("", 15.0, theme::TEXT)));
         clock.spawn((Readout::Sudden, text("", 13.0, theme::MUTED)));
         clock.spawn((Readout::Weather, text("", 13.0, theme::MUTED)));
+        clock.spawn((
+            PointsRow,
+            Node {
+                column_gap: Val::Px(8.0),
+                align_items: AlignItems::Center,
+                display: Display::None,
+                ..default()
+            },
+            children![
+                text("Lives", 13.0, theme::MUTED),
+                (PointsText(Team::A), text("", 15.0, team_color(Team::A))),
+                (PointsText(Team::B), text("", 15.0, team_color(Team::B))),
+            ],
+        ));
     });
 }
 
@@ -194,13 +232,17 @@ fn bottom_bar(bottom: &mut ChildSpawnerCommands, server: &AssetServer, cache: &m
             flex_direction: FlexDirection::Column,
             ..default()
         },
+        Pickable::IGNORE,
     ));
     bottom
-        .spawn(Node {
-            column_gap: Val::Px(10.0),
-            align_items: AlignItems::FlexEnd,
-            ..default()
-        })
+        .spawn((
+            Node {
+                column_gap: Val::Px(10.0),
+                align_items: AlignItems::FlexEnd,
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
         .with_children(|row| {
             row.spawn((
                 TurnList,
@@ -228,6 +270,26 @@ fn bottom_bar(bottom: &mut ChildSpawnerCommands, server: &AssetServer, cache: &m
                 }),
             ))
             .with_children(|machine| slot_machine_parts(machine, server, cache));
+            row.spawn((
+                RespawnPanel,
+                panel(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: Val::Px(4.0),
+                    width: Val::Px(150.0),
+                    display: Display::None,
+                    ..default()
+                }),
+                children![
+                    text("Drop back in", 15.0, theme::ACCENT),
+                    (
+                        RespawnStatus,
+                        text("", 12.0, theme::TEXT),
+                        TextLayout::justify(Justify::Center),
+                        Node { max_width: Val::Px(130.0), ..default() },
+                    ),
+                ],
+            ));
         });
 }
 
@@ -814,13 +876,13 @@ struct Machine<'w, 's> {
     statuses: Query<'w, 's, &'static mut Text, With<ReelStatus>>,
 }
 
-/// Shows the slot machine while this player is dead (as shown) and the game is on. Spin works
-/// whenever the sim allows it, on anyone's turn.
+/// Shows the slot machine while this player is dead (as shown) in a mode that has one, and the
+/// game is on. Spin works whenever the sim allows it, on anyone's turn.
 fn slot_machine(game: Option<Res<Match>>, session: Res<Session>, mut machine: Machine, mut commands: Commands) {
     let Some(game) = game else { return };
     let seat = session.my_seat();
     let dead = seat.is_some_and(|seat| machine.views.iter().any(|(view, shown)| view.seat == seat && !shown.alive));
-    let up = dead && current_seat(&game).is_some();
+    let up = dead && game.predicted.mode().slot_machine() && current_seat(&game).is_some();
     let display = if up { Display::Flex } else { Display::None };
     for mut node in &mut machine.panels {
         if node.display != display {
@@ -859,31 +921,40 @@ fn slot_machine(game: Option<Res<Match>>, session: Res<Session>, mut machine: Ma
     }
 }
 
-/// A drop on its way down: what, its column, and the turns until it lands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Something on its way down a column: a slot machine's drop, or a mobile dropping back in. What
+/// it is, its column, and the turns until it lands.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Incoming {
-    kind: DropKind,
+    what: String,
     x: i32,
     turns: u32,
 }
 
-/// The drops falling now, from the sim.
-fn incoming(game: &Game) -> Vec<Incoming> {
-    game.drops()
-        .iter()
-        .map(|falling| Incoming {
-            kind: falling.drop.kind,
-            x: falling.drop.x,
-            turns: u32::try_from(falling.lands - game.turns()).unwrap_or(0),
+/// What's coming down after `turns` turns, from the sim: the slot machines' drops, then the dead
+/// who picked where to drop back in, each named by `name`.
+fn incoming(drops: &[Falling], respawns: &[Respawn], turns: i64, name: impl Fn(u8) -> String) -> Vec<Incoming> {
+    let left = |lands: i64| u32::try_from(lands - turns).unwrap_or(0);
+    let drops = drops.iter().map(|falling| Incoming {
+        what: falling.drop.kind.name().to_owned(),
+        x: falling.drop.x,
+        turns: left(falling.lands),
+    });
+    let respawns = respawns.iter().filter_map(|respawn| {
+        let DropPoint { x, lands } = respawn.pick?;
+        Some(Incoming {
+            what: format!("{} drops", name(respawn.seat)),
+            x,
+            turns: left(lands),
         })
-        .collect()
+    });
+    drops.chain(respawns).collect()
 }
 
 /// Marks each incoming drop's column, with what it is and the turns until it lands just over the
 /// ground there.
-fn drop_markers(game: Option<Res<Match>>, markers: Query<Entity, With<DropMarker>>, mut shown: Local<Vec<Incoming>>, mut gizmos: Gizmos, mut commands: Commands) {
+fn drop_markers(game: Option<Res<Match>>, session: Res<Session>, markers: Query<Entity, With<DropMarker>>, mut shown: Local<Vec<Incoming>>, mut gizmos: Gizmos, mut commands: Commands) {
     let Some(game) = game else { return };
-    let falling = incoming(&game.predicted);
+    let falling = incoming(game.predicted.drops(), game.predicted.respawns(), game.predicted.turns(), |seat| session.seat_name(seat));
     let terrain = game.predicted.terrain();
     let ground = |x: i32| (0..i32::try_from(terrain.height()).unwrap_or(0)).find(|&y| terrain.is_solid(x, y)).unwrap_or(0);
     for drop in &falling {
@@ -902,7 +973,7 @@ fn drop_markers(game: Option<Res<Match>>, markers: Query<Entity, With<DropMarker
         commands.spawn((
             GameRoot,
             DropMarker,
-            Text2d::new(format!("{} in {}", drop.kind.name(), drop.turns)),
+            Text2d::new(format!("{} in {}", drop.what, drop.turns)),
             TextFont {
                 font_size: bevy::text::FontSize::Px(14.0),
                 ..default()
@@ -912,6 +983,75 @@ fn drop_markers(game: Option<Res<Match>>, markers: Query<Entity, With<DropMarker
         ));
     }
     *shown = falling;
+}
+
+/// Each team's lives, in a mode that counts them.
+fn points(game: Option<Res<Match>>, mut rows: Query<&mut Node, With<PointsRow>>, mut texts: Query<(&PointsText, &mut Text)>) {
+    let Some(game) = game else { return };
+    let counted = game.predicted.points(Team::A).is_some();
+    let display = if counted { Display::Flex } else { Display::None };
+    for mut node in &mut rows {
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    for (team, mut text) in &mut texts {
+        let label = game.predicted.points(team.0).map_or_else(String::new, |points| format!("{:?} {points}", team.0));
+        if **text != label {
+            **text = label;
+        }
+    }
+}
+
+/// What the respawn panel says: pick a point, or where and when you drop in.
+fn respawn_status(can_pick: bool, pick: Option<DropPoint>, turns: i64) -> String {
+    match (can_pick, pick) {
+        (true, _) => "Click the map where you'll drop back in. The arrow keys look around.".to_owned(),
+        (false, Some(DropPoint { x, lands })) if lands - turns <= 1 => format!("You drop in at x = {x} as this turn ends."),
+        (false, Some(DropPoint { x, lands })) => format!("You drop in at x = {x} in {} turns.", lands - turns),
+        (false, None) => "You won't drop back in.".to_owned(),
+    }
+}
+
+/// Shows the respawn panel while this player is dead (as shown) in a mode where the dead come back,
+/// and the game is on.
+fn respawn_panel(
+    game: Option<Res<Match>>,
+    session: Res<Session>,
+    views: Query<(&MobileView, &Shown)>,
+    mut panels: Query<&mut Node, With<RespawnPanel>>,
+    mut statuses: Query<&mut Text, With<RespawnStatus>>,
+) {
+    let (Some(game), Some(seat)) = (game, session.my_seat()) else { return };
+    let dead = views.iter().any(|(view, shown)| view.seat == seat && !shown.alive);
+    let up = dead && game.predicted.mode().respawn().is_some() && current_seat(&game).is_some();
+    let display = if up { Display::Flex } else { Display::None };
+    for mut node in &mut panels {
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    if !up {
+        return;
+    }
+    let pick = game.confirmed.respawns().iter().find(|respawn| respawn.seat == seat).and_then(|respawn| respawn.pick);
+    let status = respawn_status(game.confirmed.can_respawn(seat), pick, game.confirmed.turns());
+    for mut text in &mut statuses {
+        if **text != status {
+            (**text).clone_from(&status);
+        }
+    }
+}
+
+/// Where a click would drop this player back in: a line down the column under the pointer.
+fn drop_point_preview(game: Option<Res<Match>>, session: Res<Session>, pointer: Res<MapPointer>, mut gizmos: Gizmos) {
+    let (Some(game), Some(seat), Some(x)) = (game, session.my_seat(), pointer.0) else { return };
+    if !game.confirmed.can_respawn(seat) {
+        return;
+    }
+    let x = f64::from(x) + 0.5;
+    let height = f64::from(game.predicted.terrain().height());
+    gizmos.line_2d(world(SimVec2::new(x, 0.0)), world(SimVec2::new(x, height)), theme::GOOD.with_alpha(0.7));
 }
 
 fn reset(mut used: ResMut<UsedSlot>, mut reel: ResMut<Reel>) {
@@ -938,6 +1078,9 @@ impl Plugin for HudPlugin {
                     (track_used, item_bar).chain(),
                     (spin_reel, slot_machine).chain(),
                     drop_markers,
+                    points,
+                    respawn_panel,
+                    drop_point_preview,
                 )
                     .run_if(in_state(Screen::Game)),
             );
@@ -992,6 +1135,34 @@ mod unit {
         assert_eq!(up(Some(WeatherKind::Skyeye), 900), "Skyeye Lv 3: beams on every landing");
         assert_eq!(up(Some(WeatherKind::Force), 0), "", "a column shows on the map");
         assert_eq!(up(None, 0), "");
+    }
+
+    #[test]
+    fn drops_and_drop_points_are_marked_with_the_turns_until_they_land() {
+        use lobshot_sim::drops::Drop;
+        let drops = [Falling {
+            seat: 1,
+            drop: Drop { kind: DropKind::Hammer, x: 300 },
+            lands: 12,
+        }];
+        let respawns = [
+            Respawn {
+                seat: 2,
+                pick: Some(DropPoint { x: 900, lands: 14 }),
+            },
+            Respawn { seat: 3, pick: None },
+        ];
+        let marked = incoming(&drops, &respawns, 10, |seat| format!("P{seat}"));
+        let shown: Vec<(String, i32, u32)> = marked.into_iter().map(|i| (i.what, i.x, i.turns)).collect();
+        assert_eq!(shown, [("Hammer".to_owned(), 300, 2), ("P2 drops".to_owned(), 900, 4)], "no mark until a point is picked");
+    }
+
+    #[test]
+    fn the_respawn_panel_asks_for_a_point_then_counts_down() {
+        assert!(respawn_status(true, None, 5).starts_with("Click the map"));
+        assert_eq!(respawn_status(false, Some(DropPoint { x: 640, lands: 9 }), 5), "You drop in at x = 640 in 4 turns.");
+        assert_eq!(respawn_status(false, Some(DropPoint { x: 640, lands: 9 }), 8), "You drop in at x = 640 as this turn ends.");
+        assert_eq!(respawn_status(false, None, 5), "You won't drop back in.");
     }
 
     #[test]

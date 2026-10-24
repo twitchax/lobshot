@@ -38,7 +38,7 @@ use tempfile::TempDir;
 use lobshot_assets::Sound;
 use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::create_room;
-use lobshot_sim::game::Team;
+use lobshot_sim::{game::Team, mode::Mode};
 
 use support::{Client, play_out};
 
@@ -192,6 +192,7 @@ async fn e2e_browser_spectator_follows_a_game() {
         turn_seconds: 20,
         random_teams: false,
         sudden_death: None,
+        mode: Mode::Solo,
     }))
     .await;
     host.send(&ClientMsg::AddBot { team: Team::B }).await;

@@ -19,6 +19,7 @@ use lobshot_server::{rate::TOO_FAST, tests};
 use lobshot_sim::{
     game::{Phase, Team},
     items::{Item, Loadout},
+    mode::Mode,
 };
 
 use support::{Client, play_out};
@@ -46,6 +47,7 @@ fn flat() -> ClientMsg {
         turn_seconds: 20,
         random_teams: false,
         sudden_death: None,
+        mode: Mode::Solo,
     })
 }
 

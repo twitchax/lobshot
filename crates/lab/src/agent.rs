@@ -18,6 +18,7 @@ use lobshot_sim::{
     game::{Death, Effect, Event, Game, MobileKind, Phase, Player, Shot, SsState, Team},
     items::Item,
     map::MapRef,
+    mode::Mode,
     referee::{self, Entrant, XorShift},
     tuning,
     units::{Facing, Power},
@@ -47,6 +48,8 @@ pub struct NewGame {
     pub map: Option<String>,
     /// Players a team, 1 to 4 (1 when left out). Your teammates are bots too.
     pub team_size: Option<u8>,
+    /// What the game is played for: solo or score (solo when left out).
+    pub mode: Option<String>,
     /// How well the bots play: easy, normal or hard (normal when left out).
     pub level: Option<String>,
     /// Where the game's rolls start; a fresh one when left out (every view reports it).
@@ -79,8 +82,8 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Fails on a name that isn't a mobile, map or level, a team size outside 1 to 4, or a map
-    /// that can't seat everyone.
+    /// Fails on a name that isn't a mobile, map, level or built mode, a team size outside 1 to 4,
+    /// or a map that can't seat everyone.
     pub fn new(new: &NewGame, maps: &Maps) -> Res<Self> {
         let size = new.team_size.unwrap_or(1);
         ensure!((1..=4).contains(&size), "teams are 1 to 4 players, not {size}");
@@ -89,8 +92,10 @@ impl Session {
         let seed = new.seed.unwrap_or_else(fresh_seed);
         let options = RoomOptions {
             team_size: size,
+            mode: new.mode.as_deref().map(mode).transpose()?.unwrap_or_default(),
             ..RoomOptions::default()
         };
+        options.validate()?;
         let map = new.map.clone().unwrap_or_else(|| options.map.clone());
         let mut dice = XorShift::new(seed);
         let arena = referee::arena(maps.arenas(&map)?, &mut dice)?;
@@ -208,10 +213,10 @@ impl Session {
         Ok(trace(self.game(), you, &effects))
     }
 
-    /// Plays every bot turn up to the agent's next one. A dead agent's slot machine is SearchBot's
-    /// to spin from then on.
+    /// Plays every bot turn up to the agent's next one, or until, dead in Score, it may pick where
+    /// to drop back in. A dead agent's slot machine is SearchBot's to spin from then on.
     fn play_bots(&mut self) -> Res<()> {
-        if !self.game().players()[usize::from(self.you)].alive {
+        if !self.game().players()[usize::from(self.you)].alive && self.game().mode().slot_machine() {
             self.host.hand_to_bot(self.you, self.level);
         }
         self.host.run(TURN_CAP, &mut Vec::new())
@@ -230,6 +235,14 @@ impl Session {
         }
         Ok(happened)
     }
+}
+
+/// A mode by name, any case.
+fn mode(name: &str) -> Res<Mode> {
+    Mode::ALL
+        .into_iter()
+        .find(|mode| mode.name().eq_ignore_ascii_case(name.trim()))
+        .with_context(|| format!("{name:?} isn't a mode: solo or score"))
 }
 
 /// A seed from the clock: an agent's game needn't be reproducible unless it asks for a seed.
@@ -282,7 +295,10 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != me.team);
     let mut damage: Vec<Hurt> = Vec::new();
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
-    for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
+    for effect in effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::Respawned { .. }))
+    {
         match effect {
             Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Guide { legs, .. } | Effect::Orbit { legs, .. } => {
                 if let Some(leg) = legs.last() {
@@ -376,6 +392,14 @@ pub struct View {
     pub players: Vec<PlayerView>,
     /// Slot-machine drops still falling.
     pub drops: Vec<DropView>,
+    /// What the game is played for: `Solo` (the last team standing wins) or `Score` (team lives).
+    pub mode: Mode,
+    /// Each team's points, in a mode that counts them: Score's lives left. Empty in Solo.
+    pub points: Vec<TeamPoints>,
+    /// The dead who may drop back in (Score), with where and when each lands once picked.
+    pub respawns: Vec<RespawnView>,
+    /// You're dead and may pick where to drop back in now, with `{"Respawn": {"x": 600}}`.
+    pub can_respawn: bool,
     /// What you may do, on your turn.
     pub options: Option<Options>,
     /// What happened since you last looked, in order.
@@ -486,6 +510,21 @@ pub struct DropView {
     pub lands_at_turn: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct TeamPoints {
+    pub team: Team,
+    pub points: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct RespawnView {
+    pub seat: u8,
+    /// The column it drops down, once picked; `None` while its player hasn't picked.
+    pub x: Option<i32>,
+    /// It lands when the turn count reaches this.
+    pub lands_at_turn: Option<i64>,
+}
+
 /// What the agent may do this turn.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Options {
@@ -522,12 +561,14 @@ fn view(session: &Session, happened: &[Happened]) -> View {
         Phase::Turn { .. } => (false, None),
     };
     let your_turn = game.phase() == (Phase::Turn { seat: you }) && game.pending_roll().is_none();
+    let can_respawn = game.can_respawn(you);
     let my_team = game.players()[usize::from(you)].team;
     let status = match game.phase() {
         Phase::Over { winner: Some(team) } if team == my_team => "Game over: your team won.".to_owned(),
         Phase::Over { winner: Some(_) } => "Game over: your team lost.".to_owned(),
         Phase::Over { winner: None } => "Game over: a draw.".to_owned(),
         Phase::Turn { .. } if game.turns() >= TURN_CAP => format!("Stopped at the {TURN_CAP}-turn cap."),
+        Phase::Turn { .. } if can_respawn => "You're dead: pick where to drop back in.".to_owned(),
         Phase::Turn { seat } if seat == you => "Your turn.".to_owned(),
         Phase::Turn { seat } => format!("Seat {seat}'s turn."),
     };
@@ -578,6 +619,18 @@ fn view(session: &Session, happened: &[Happened]) -> View {
                 lands_at_turn: f.lands,
             })
             .collect(),
+        mode: game.mode(),
+        points: [Team::A, Team::B].into_iter().filter_map(|team| game.points(team).map(|points| TeamPoints { team, points })).collect(),
+        respawns: game
+            .respawns()
+            .iter()
+            .map(|respawn| RespawnView {
+                seat: respawn.seat,
+                x: respawn.pick.map(|pick| pick.x),
+                lands_at_turn: respawn.pick.map(|pick| pick.lands),
+            })
+            .collect(),
+        can_respawn,
         options: your_turn.then(|| options(game, you)),
         happened: narrate(game, you, happened),
     }
@@ -785,7 +838,7 @@ fn shot_line(names: &Names<'_>, h: &Happened) -> String {
     let mut blasts: Vec<String> = h
         .effects
         .iter()
-        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. }))
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::Respawned { .. }))
         .filter_map(|e| match e {
             Effect::Exploded { at, .. } => {
                 let [x, y] = point(*at);
@@ -850,6 +903,10 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
+        Effect::Points { team, points } => format!(" Team {team:?} has {points} {} left.", if *points == 1 { "life" } else { "lives" }),
+        Effect::RespawnPicked { seat, x, lands } => format!(" {} will drop back in at x={x} as turn {lands} ends.", names.who(*seat)),
+        Effect::Respawned { seat, to: Some(to), .. } => format!(" {} dropped back in at x={}.", names.who(*seat), to.x),
+        Effect::Respawned { seat, to: None, .. } => format!(" {} fell through the map dropping back in: no life lost, but it picks again.", names.who(*seat)),
         Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
         Effect::GameOver { winner } => match winner {
             Some(team) => format!(" Game over: team {team:?} won."),
@@ -864,7 +921,8 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
 pub fn rules() -> String {
     let mut text = RULES
         .replace("{PASS}", &tuning::PASS_DELAY.value.to_string())
-        .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string());
+        .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string())
+        .replace("{RESPAWN}", &tuning::modes::SCORE_RESPAWN_TURNS.value.to_string());
     text.push_str("\n## Mobiles\n");
     for mobile in MobileKind::ALL {
         let t = mobile.tuning();
@@ -959,9 +1017,19 @@ game. The view lists what is coming.
 
 SS is each mobile's special shot: after you fire it, it locks for a few of your turns. Sudden death
 starts at a set turn: Double fires every S1 and S2 twice, Big Bomb makes bigger craters, SS Death
-lets everyone fire SS every turn; items are off from then on. A dead player's slot machine drops
-things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dying or turning
-around); if you die, it is spun for you.
+lets everyone fire SS every turn; items are off from then on. In Solo, a dead player's slot machine
+drops things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dying or
+turning around); if you die, it is spun for you.
+
+## Modes
+
+`mode` says what the game is played for. In Solo you have one life and the last team standing
+wins. In Score each team has lives (`points`): one a player, and one more. Every death costs its
+team one, and a team loses when its lives run out, or when no one of it is standing. A dead player
+picks where to drop back in, whenever they like, with `{\"Respawn\": {\"x\": 600}}` (`can_respawn`
+says when you may): they fall from the sky down that column {RESPAWN} turns later, the wind nudging
+them a little, with full HP and their turn soon after. A drop that misses the ground costs no life,
+but you pick again. There is no slot machine in Score.
 ";
 
 fn about(mobile: MobileKind) -> String {
@@ -1213,6 +1281,62 @@ mod unit {
             "{told:?}"
         );
         assert!(session.act(Action::Pass).is_err(), "nothing to do once it's over");
+    }
+
+    #[test]
+    fn in_score_the_view_counts_lives_and_a_dead_agent_picks_where_to_drop_back_in() {
+        // Ground from y = 700, with a shaft off the map just right of each spawn.
+        let spawns = [200, 900, 1500, 2200];
+        let pits = lobshot_sim::terrain::Terrain::from_fn(2400, 900, |x, y| y >= 700 && !spawns.iter().any(|&s| (s + 10..s + 14).contains(&i32::try_from(x).unwrap()))).unwrap();
+        let root = tempfile::TempDir::new().unwrap();
+        lobshot_assets::tests::write_map_variants(root.path(), "pits", &[("A", &pits, &spawns)]).unwrap();
+        let maps = Maps::new(root.path());
+        let new = NewGame {
+            map: Some("pits".into()),
+            mode: Some("Score".into()),
+            team_size: Some(2),
+            against: Vec::new(),
+            level: Some("easy".into()),
+            ..flat(2)
+        };
+        let mut session = Session::new(&new, &maps).unwrap();
+        let view = session.view(&maps).unwrap();
+        assert_eq!(view.mode, Mode::Score);
+        assert_eq!(view.points, [TeamPoints { team: Team::A, points: 3 }, TeamPoints { team: Team::B, points: 3 }]);
+        assert!(view.your_turn && !view.can_respawn);
+
+        // Into the pit: the bots hand the seat back for its pick before they play on.
+        session.act(Action::Walk { facing: Facing::Right, steps: 30 }).unwrap();
+        let view = session.view(&maps).unwrap();
+        assert!(view.can_respawn, "{}: {:?}", view.status, view.happened);
+        assert_eq!(view.status, "You're dead: pick where to drop back in.");
+        assert!(view.options.is_none() && !view.your_turn);
+        assert!(
+            view.happened.iter().any(|line| line.contains("You died (fell off the map). Team A has 2 lives left.")),
+            "{:?}",
+            view.happened
+        );
+        assert_eq!(view.respawns, [RespawnView { seat: 0, x: None, lands_at_turn: None }]);
+        assert!(session.host.bot(0).is_none(), "the seat stays the agent's");
+        assert!(rules().contains("{\"Respawn\": {\"x\": 600}}"), "the rules say how");
+
+        session.act(Action::Respawn { x: 1200 }).unwrap();
+        let view = session.view(&maps).unwrap();
+        let told = &view.happened;
+        assert!(told.iter().any(|line| line.starts_with("You will drop back in at x=1200 as turn")), "{told:?}");
+        assert!(told.iter().any(|line| line.contains("You dropped back in at x=")), "{}: {told:?}", view.status);
+        assert!(view.your_turn && view.players[0].alive, "{}", view.status);
+        assert_eq!(view.players[0].hp, view.players[0].max_hp);
+    }
+
+    #[test]
+    fn modes_go_by_name_and_only_built_ones_play() {
+        assert_eq!(mode(" score ").unwrap(), Mode::Score);
+        assert_eq!(mode("SOLO").unwrap(), Mode::Solo);
+        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo or score");
+        let tag = NewGame { mode: Some("tag".into()), ..flat(1) };
+        assert_eq!(Session::new(&tag, &maps()).unwrap_err().to_string(), "Tag mode isn't built yet: rooms play Solo or Score");
+        assert_eq!(Session::new(&flat(1), &maps()).unwrap().game().mode(), Mode::Solo, "Solo when left out");
     }
 
     #[test]

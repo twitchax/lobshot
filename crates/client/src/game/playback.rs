@@ -1,7 +1,7 @@
 //! Showing what happened. Each accepted event's effects become a short scene, in stages (a Dual's
 //! second shot, a drop at the turn's end): shells, strands, beacons and drops fly their legs in real
 //! time, blasts carve the terrain art as they land, bolts strike, numbers rise, mobiles fall,
-//! teleport and trade places, and the turn passes when it's all over. Scenes play one at a time, in
+//! teleport, trade places and drop back in from the sky, and the turn passes when it's all over. Scenes play one at a time, in
 //! order, on the schedule in `lobshot_protocol::pacing`, which the server waits out before starting
 //! the next turn's clock.
 
@@ -128,6 +128,13 @@ enum Cue {
         seat: u8,
         to: Footing,
     },
+    /// A dead mobile drops back in (Score): it falls along `legs` and stands at `to`, or falls
+    /// through the map.
+    Respawn {
+        seat: u8,
+        legs: Vec<Leg>,
+        to: Option<Footing>,
+    },
     Swap {
         seat: u8,
         with: u8,
@@ -216,12 +223,28 @@ impl Move {
     }
 }
 
+/// A dead mobile dropping back in: it follows its fall from the sky, then stands where it landed
+/// (or is gone, if it fell through the map).
+struct Descent {
+    seat: u8,
+    legs: Vec<Leg>,
+    to: Option<Footing>,
+    started: f32,
+}
+
+/// The mobiles moving in a scene.
+#[derive(Default)]
+struct Motion {
+    moves: Vec<Move>,
+    descents: Vec<Descent>,
+}
+
 struct Scene {
     elapsed: f32,
     cues: Vec<(f32, Cue)>,
     next: usize,
     flyers: Vec<Flyer>,
-    moves: Vec<Move>,
+    motion: Motion,
     end: f32,
 }
 
@@ -446,6 +469,12 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
             cues.push((at, Cue::Teleport { seat, to }));
             cues.push((at, Cue::Sound(Sound::Land)));
         }
+        Effect::Respawned { seat, legs, to } => {
+            if to.is_some() {
+                cues.push((at + pacing::flight_seconds(&legs), Cue::Sound(Sound::Land)));
+            }
+            cues.push((at, Cue::Respawn { seat, legs, to }));
+        }
         // The schedule puts a swap where the glide ends; the glide starts `FALL_SECONDS` before.
         Effect::Swapped { seat, with } => cues.push(((at - FALL_SECONDS).max(0.0), Cue::Swap { seat, with })),
         Effect::ItemUsed { seat, item, .. } => {
@@ -486,7 +515,9 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::Orbit { .. }
         | Effect::SkyeyeLevel { .. }
         | Effect::Spun { .. }
-        | Effect::DropRolled { .. } => {}
+        | Effect::DropRolled { .. }
+        | Effect::Points { .. }
+        | Effect::RespawnPicked { .. } => {}
     }
 }
 
@@ -537,7 +568,7 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
         cues,
         next: 0,
         flyers,
-        moves: Vec::new(),
+        motion: Motion::default(),
         end: schedule.end,
     }
 }
@@ -586,16 +617,17 @@ fn play(
         if *at > now {
             break;
         }
-        run(cue, now, &mut scene.moves, &dot, &mut views, &mut hands, &mut commands);
+        run(cue, now, &mut scene.motion, &dot, &mut views, &mut hands, &mut commands);
         scene.next += 1;
     }
-    for change in &scene.moves {
+    for change in &scene.motion.moves {
         let t = f64::from(((now - change.started) / FALL_SECONDS).clamp(0.0, 1.0));
         // Falls accelerate, like a drop; swaps glide.
         let down = if change.fall { t * t } else { t };
         let foot = SimVec2::new(change.from.x + (change.to.x - change.from.x) * t, change.from.y + (change.to.y - change.from.y) * down);
         adjust(&mut views, change.seat, |shown| shown.foot = foot);
     }
+    scene.motion.descents.retain(|descent| descend(descent, now, &mut views, &mut hands));
 
     if now >= scene.end && scene.next >= scene.cues.len() {
         timeline.scene = None;
@@ -607,8 +639,65 @@ fn foot_of(views: &Query<(&MobileView, &mut Shown)>, seat: u8) -> Option<SimVec2
     views.iter().find(|(view, _)| view.seat == seat).map(|(_, shown)| shown.foot)
 }
 
+/// Moves a mobile dropping back in to where it is at `now`, the camera following, and stands it
+/// where it landed, whole as the game has it now, once its fall is over. Returns whether it is
+/// still falling.
+fn descend(descent: &Descent, now: f32, views: &mut Query<(&MobileView, &mut Shown)>, hands: &mut Stagehands) -> bool {
+    let since = now - descent.started;
+    if since < pacing::flight_seconds(&descent.legs) {
+        if let Some(at) = flyer_at(&descent.legs, None, since) {
+            adjust(views, descent.seat, |shown| {
+                shown.foot = at;
+                shown.tilt = 0.0;
+                shown.alive = true;
+            });
+            hands.focus.0 = Some(at);
+        }
+        return true;
+    }
+    let whole = hands
+        .game
+        .as_deref()
+        .and_then(|game| game.confirmed.players().get(usize::from(descent.seat)))
+        .map(|player| (player.hp, player.shield));
+    adjust(views, descent.seat, |shown| {
+        shown.alive = descent.to.is_some();
+        if let Some(to) = descent.to {
+            shown.foot = to.world();
+        }
+        if let Some((hp, shield)) = whole.filter(|_| descent.to.is_some()) {
+            (shown.hp, shown.shield) = (hp, shield);
+        }
+    });
+    false
+}
+
+/// Sets a mobile moving at `now`: falling, trading places, or dropping back in.
+fn set_moving(cue: &Cue, now: f32, motion: &mut Motion, views: &Query<(&MobileView, &mut Shown)>) {
+    match *cue {
+        Cue::Fall { seat, to } => {
+            if let Some(from) = foot_of(views, seat) {
+                motion.moves.push(Move::new(seat, from, to.world(), now, true));
+            }
+        }
+        Cue::Swap { seat, with } => {
+            if let (Some(one), Some(other)) = (foot_of(views, seat), foot_of(views, with)) {
+                motion.moves.push(Move::new(seat, one, other, now, false));
+                motion.moves.push(Move::new(with, other, one, now, false));
+            }
+        }
+        Cue::Respawn { seat, ref legs, to } => motion.descents.push(Descent {
+            seat,
+            legs: legs.clone(),
+            to,
+            started: now,
+        }),
+        _ => {}
+    }
+}
+
 /// Plays one cue at `now`.
-fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<(&MobileView, &mut Shown)>, hands: &mut Stagehands, commands: &mut Commands) {
+fn run(cue: &Cue, now: f32, motion: &mut Motion, dot: &Dot, views: &mut Query<(&MobileView, &mut Shown)>, hands: &mut Stagehands, commands: &mut Commands) {
     // Near a seat's mobile, `offset` px from its foot, in Bevy's world space (y up).
     let over = |views: &Query<(&MobileView, &mut Shown)>, seat: u8, offset: Vec2| foot_of(views, seat).map(|foot| world(foot) + offset);
     match *cue {
@@ -641,17 +730,7 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
             }
         }
         Cue::Die { seat } => adjust(views, seat, |shown| shown.alive = false),
-        Cue::Fall { seat, to } => {
-            if let Some(from) = foot_of(views, seat) {
-                moves.push(Move::new(seat, from, to.world(), now, true));
-            }
-        }
-        Cue::Swap { seat, with } => {
-            if let (Some(one), Some(other)) = (foot_of(views, seat), foot_of(views, with)) {
-                moves.push(Move::new(seat, one, other, now, false));
-                moves.push(Move::new(with, other, one, now, false));
-            }
-        }
+        Cue::Fall { .. } | Cue::Swap { .. } | Cue::Respawn { .. } => set_moving(cue, now, motion, views),
         Cue::Teleport { seat, to } => {
             let flash = Color::srgb_u8(0x7f, 0xf0, 0xff);
             if let Some(from) = foot_of(views, seat) {
@@ -825,6 +904,25 @@ mod unit {
         cues.clear();
         cue(Effect::Swapped { seat: 0, with: 2 }, 2.0, &mut cues);
         assert!(matches!(cues[..], [(at, Cue::Swap { seat: 0, with: 2 })] if at == 2.0 - FALL_SECONDS));
+    }
+
+    #[test]
+    fn a_respawn_drops_in_at_its_stage_and_lands_with_a_thud() {
+        let legs = vec![leg(0, TICKS_PER_SECOND, 0)];
+        let mut cues = Vec::new();
+        cue(
+            Effect::Respawned {
+                seat: 2,
+                legs: legs.clone(),
+                to: Some(Footing { x: 5, y: 9 }),
+            },
+            3.0,
+            &mut cues,
+        );
+        assert!(matches!(cues[..], [(landing, Cue::Sound(Sound::Land)), (at, Cue::Respawn { seat: 2, .. })] if landing == 4.0 && at == 3.0));
+        cues.clear();
+        cue(Effect::Respawned { seat: 2, legs, to: None }, 3.0, &mut cues);
+        assert!(matches!(cues[..], [(_, Cue::Respawn { to: None, .. })]), "a drop through the map lands on nothing");
     }
 
     #[test]

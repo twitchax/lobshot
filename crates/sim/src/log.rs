@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Bumped whenever an encoded log from an older build would decode differently.
-pub const WIRE_VERSION: u8 = 3;
+pub const WIRE_VERSION: u8 = 4;
 
 /// A whole game, replayable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,6 +88,7 @@ mod unit {
         game::{MobileKind, Seat, Shot, Team},
         items::Loadout,
         map::{MapRef, NoAssets},
+        mode::Mode,
         units::{Centis, Facing, Power, Wind},
         weather::{Forecast, WeatherKind},
     };
@@ -115,6 +116,7 @@ mod unit {
                 order: vec![1, 0],
                 wind: Wind::new(7, 135).unwrap(),
                 sudden_death: None,
+                mode: Mode::Solo,
             },
             events: [Event::Weather(Forecast::new(WeatherKind::Wind, 0)); 5]
                 .into_iter()
@@ -143,6 +145,18 @@ mod unit {
         assert_eq!(bytes[0], WIRE_VERSION);
         assert_eq!(Log::decode(&bytes).unwrap(), log);
         assert_eq!(Log::from_json(&log.to_json().unwrap()).unwrap(), log);
+    }
+
+    #[test]
+    fn a_score_log_round_trips_and_a_log_from_before_modes_reads_as_solo() {
+        let mut log = log();
+        log.setup.mode = Mode::Score;
+        log.events.push(Event::Respawn { seat: 0, x: 600 });
+        assert_eq!(Log::decode(&log.encode().unwrap()).unwrap(), log);
+        assert_eq!(Log::from_json(&log.to_json().unwrap()).unwrap(), log);
+        let mut old: serde_json::Value = serde_json::from_str(&log.to_json().unwrap()).unwrap();
+        old["setup"].as_object_mut().unwrap().remove("mode");
+        assert_eq!(Log::from_json(&old.to_string()).unwrap().setup.mode, Mode::Solo);
     }
 
     #[test]

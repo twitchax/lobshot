@@ -170,6 +170,7 @@ mod unit {
                 order: (0..8).collect(),
                 wind: Wind::default(),
                 sudden_death: None,
+                mode: lobshot_sim::mode::Mode::Solo,
             };
             Game::new(&setup, &maps).unwrap_or_else(|e| panic!("eight {mobile:?}: {e:#}"));
         }

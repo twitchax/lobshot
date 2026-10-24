@@ -14,6 +14,7 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`herdhound.md`](herdhound.md) | Kalsiddon (Herdhound): its guides and homing missiles, from Creedo's and the official guides. |
 | [`thistleback.md`](thistleback.md) | Trico (Thistleback): its orbiting S2 and nine-blast SS, from the GunBound wiki and OB. |
 | [`sudsotter.md`](sudsotter.md) | J.Frog (Sudsotter): Creedo's frog guide, its walking shots and its weather-proofing. |
+| [`modes-score.md`](modes-score.md) | Score mode: team lives, what a death costs, and how the dead drop back in, with every pick. Gathered on 2026-10-24. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |
 | [`physics-fit.md`](physics-fit.md) | How the ballistics were fitted to the community aiming formulas, which formulas are acceptance tests, and why the rest are not. |

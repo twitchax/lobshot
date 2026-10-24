@@ -22,6 +22,7 @@ use lobshot_server::tests::{INDEX_HTML, create_room, http_get, write_bundle};
 use lobshot_sim::{
     game::{Effect, Event, Game, Phase, SuddenDeath, SuddenDeathKind, Team},
     map::NoAssets,
+    mode::Mode,
 };
 
 use support::{Client, play_out};
@@ -120,6 +121,7 @@ async fn e2e_game_two_clients_play_a_1v1_to_the_end() {
             turn_seconds: 20,
             random_teams: false,
             sudden_death: None,
+            mode: Mode::Solo,
         }))
         .await;
     alice.send(&ClientMsg::Ready(true)).await;
@@ -171,6 +173,7 @@ async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
         turn_seconds: 5,
         random_teams: false,
         sudden_death: Some(sudden_death),
+        mode: Mode::Solo,
     }))
     .await;
     for team in [Team::A, Team::B].repeat(4) {
@@ -208,4 +211,67 @@ async fn e2e_solo_eight_bots_play_a_4v4_with_items_and_sudden_death() {
     if game.turns() > 40 {
         assert_eq!(started, Some(40));
     }
+}
+
+/// PRD-0007 uat-002, Score (T-001): a 2v2 Score game on `flat`, every seat a bot, plays to the end
+/// against the real binary. A spectator replays the log and checks the server's hash after every
+/// event. Deaths cost lives, dead bots pick where to drop back in, and the game ends when a team
+/// is out of lives or has no one standing.
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_modes_score_four_bots_play_a_2v2_to_the_end() {
+    let cwd = TempDir::new().unwrap();
+    let dist = TempDir::new().unwrap();
+    write_bundle(dist.path()).unwrap();
+    let server = start_with(dist.path(), cwd.path(), &["--bot-delay-ms", "0", "--no-playback-wait"]);
+    let addr = server.addr;
+    let code = tokio::task::spawn_blocking(move || create_room(addr)).await.unwrap().unwrap();
+
+    let mut host = Client::connect(addr, &code, true).await;
+    let (host_id, _, _) = host.hello("Host", None).await;
+    host.send(&ClientMsg::Team(None)).await;
+    host.send(&ClientMsg::Configure(RoomOptions {
+        map: "flat".into(),
+        team_size: 2,
+        max_wind: 26,
+        turn_seconds: 5,
+        random_teams: false,
+        sudden_death: None,
+        mode: Mode::Score,
+    }))
+    .await;
+    for team in [Team::A, Team::B].repeat(2) {
+        host.send(&ClientMsg::AddBot { team }).await;
+    }
+    host.recv_until(|msg| matches!(msg, ServerMsg::Room(view) if view.members.iter().filter(|m| m.bot).count() == 4 && view.options.mode == Mode::Score))
+        .await;
+    host.send(&ClientMsg::Start).await;
+
+    let (replica, room) = play_out(&mut host, host_id, None, 0).await;
+    let (game, log) = (replica.game().unwrap(), replica.log().unwrap());
+    assert_eq!(room.stage, Stage::Lobby);
+    assert_eq!(log.setup.mode, Mode::Score);
+    let Phase::Over { winner: Some(winner) } = game.phase() else { panic!("{:?}", game.phase()) };
+    let loser = if winner == Team::A { Team::B } else { Team::A };
+    let standing = game.players().iter().any(|p| p.alive && p.team == loser);
+    assert!(
+        game.points(loser) == Some(0) || !standing,
+        "team {loser:?} lost with {:?} lives and someone standing",
+        game.points(loser)
+    );
+
+    // Replayed: lives went, and the dead dropped back in where they picked.
+    let mut replay = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut lives, mut landed) = (0, 0);
+    for &event in &log.events {
+        for effect in replay.apply(event).unwrap() {
+            match effect {
+                Effect::Points { .. } => lives += 1,
+                Effect::Respawned { to: Some(_), .. } => landed += 1,
+                _ => {}
+            }
+        }
+    }
+    let picks = log.events.iter().filter(|event| matches!(event, Event::Respawn { .. })).count();
+    println!("the Score 2v2 ran {} turns: {lives} lives lost, {picks} drop points picked, {landed} landed", game.turns());
+    assert!(lives >= 2 && picks >= 1, "{lives} lives lost, {picks} picks");
 }

@@ -5,15 +5,24 @@
 
 use std::collections::VecDeque;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{MemberId, RoomCode, RoomView, ServerMsg, Stage};
 use lobshot_sim::{
     game::{Effect, Event, Game, Player, SuddenDeath, SuddenDeathKind, Team},
     log::Log,
     map::{MapAssets, MapRef},
+    mode::Mode,
 };
 
-use crate::{assets::Masks, game::TurnClock, net::Inbound, picks::Picks, sound::SoundLog, ui::ButtonSpots, web};
+use crate::{
+    assets::Masks,
+    game::{MapPointer, TurnClock},
+    net::Inbound,
+    picks::Picks,
+    sound::SoundLog,
+    ui::ButtonSpots,
+    web,
+};
 
 /// Which screen is up.
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -53,6 +62,8 @@ pub struct Session {
     pub practice: bool,
     /// Players per team in practice: 1 (you against a bot) or 2 (you and a bot against two).
     pub practice_team_size: u8,
+    /// What practice is played for: the title steps through the modes rooms play.
+    pub practice_mode: Mode,
     /// The master removed this player (the token is revoked, so there is no rejoining).
     pub kicked: bool,
     /// Who sat where in the current (or just-finished) game, by seat.
@@ -342,15 +353,24 @@ pub fn finish_loading(loading: Option<Res<Loading>>, mut masks: Masks, mut comma
     next.set(Screen::Game);
 }
 
+/// What the page shows besides the game: the sounds, the buttons, and the map under the pointer.
+#[derive(SystemParam)]
+struct PageParts<'w> {
+    sounds: Res<'w, SoundLog>,
+    buttons: Res<'w, ButtonSpots>,
+    pointer: Option<Res<'w, MapPointer>>,
+}
+
 /// Lets the browser smoke test see the screen, the game's progress (applied, and shown), this
-/// player's picks and state, the sounds, and where to click.
-fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, picks: Res<Picks>, clock: Res<TurnClock>, sounds: Res<SoundLog>, buttons: Res<ButtonSpots>) {
+/// player's picks and state, the sounds, where to click, and the map column under the pointer.
+fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Session>, picks: Res<Picks>, clock: Res<TurnClock>, page: PageParts) {
     let seat = session.my_seat();
     let me = game.as_deref().zip(seat).and_then(|(game, seat)| {
         Some(web::Me {
             player: game.player(seat)?,
             ss: game.predicted.ss_state(seat).ok()?,
             can_spin: game.confirmed.can_spin(seat),
+            can_respawn: game.confirmed.can_respawn(seat),
         })
     });
     web::publish(&web::Published {
@@ -361,8 +381,9 @@ fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Se
         picks: &picks,
         me,
         sudden_death: game.as_ref().map(|game| game.sudden_death()),
-        sounds: &sounds,
-        buttons: &buttons,
+        sounds: &page.sounds,
+        buttons: &page.buttons,
+        map_x: page.pointer.and_then(|pointer| pointer.0),
     });
 }
 
@@ -409,6 +430,7 @@ mod unit {
             order: vec![0, 1],
             wind: Wind::default(),
             sudden_death: None,
+            mode: Mode::Solo,
         }
     }
 

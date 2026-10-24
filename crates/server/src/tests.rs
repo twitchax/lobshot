@@ -142,6 +142,8 @@ pub struct Replica {
     log: Option<Log>,
     /// The turn (`Game::turns`) this client already planned.
     planned: Option<i64>,
+    /// How long the log was when this client last picked a drop point.
+    picked: Option<usize>,
 }
 
 impl Replica {
@@ -157,6 +159,7 @@ impl Replica {
                 self.game = Some(log.replay(&NoAssets)?);
                 self.log = Some(log.clone());
                 self.planned = None;
+                self.picked = None;
             }
             ServerMsg::Event { index, event, hash } => {
                 let (Some(game), Some(log)) = (self.game.as_mut(), self.log.as_mut()) else {
@@ -195,6 +198,18 @@ impl Replica {
         self.planned = Some(game.turns());
         Some(events.into_iter().filter_map(action).collect())
     }
+
+    /// Where dead `seat` drops back in (Score), as SearchBot picks it: once until the log grows.
+    /// `None` when it can't pick now.
+    pub fn respawn(&mut self, seat: u8) -> Option<Action> {
+        let (game, log) = (self.game.as_ref()?, self.log.as_ref()?);
+        if self.picked == Some(log.events.len()) {
+            return None;
+        }
+        let pick = bot::respawn(game, seat).and_then(action)?;
+        self.picked = Some(log.events.len());
+        Some(pick)
+    }
 }
 
 /// The action a player sends for a planned event (the server stamps the times).
@@ -206,6 +221,7 @@ pub fn action(event: Event) -> Option<Action> {
         Event::Pass { .. } => Some(Action::Pass),
         Event::UseItem { slot, .. } => Some(Action::Item { slot }),
         Event::Spin { .. } => Some(Action::Spin),
+        Event::Respawn { x, .. } => Some(Action::Respawn { x }),
         Event::Forfeit { .. } | Event::Wind(_) | Event::Weather(_) | Event::Drop(_) => None,
     }
 }

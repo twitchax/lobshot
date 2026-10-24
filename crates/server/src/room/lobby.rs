@@ -155,6 +155,7 @@ mod unit {
     use lobshot_sim::{
         game::{SuddenDeath, SuddenDeathKind},
         items::{Item, Loadout},
+        mode::Mode,
         terrain::Terrain,
         tuning::SUDDEN_DEATH_TURNS,
     };
@@ -274,6 +275,28 @@ mod unit {
         }
         h.send(1, with(None));
         assert_eq!(h.room.view().options.sudden_death, None, "off");
+    }
+
+    #[test]
+    fn a_room_plays_the_modes_built_and_refuses_the_rest() {
+        let mut h = Harness::new();
+        h.join(1, "Master");
+        let with = |mode| {
+            ClientMsg::Configure(RoomOptions {
+                map: "flat".into(),
+                mode,
+                ..RoomOptions::default()
+            })
+        };
+        assert_eq!(h.room.view().options.mode, Mode::Solo, "a new room plays Solo");
+        h.send(1, with(Mode::Score));
+        assert_eq!(h.rejections(1), Vec::<String>::new());
+        assert_eq!(h.room.view().options.mode, Mode::Score);
+        for mode in [Mode::Tag, Mode::Jewel] {
+            h.send(1, with(mode));
+            assert_eq!(h.rejections(1), [format!("{} mode isn't built yet: rooms play Solo or Score", mode.name())]);
+        }
+        assert_eq!(h.room.view().options.mode, Mode::Score, "a refusal changes nothing");
     }
 
     #[test]

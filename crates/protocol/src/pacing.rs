@@ -79,10 +79,10 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
     let mut sudden_death = None;
     for (i, effect) in effects.iter().enumerate() {
         let time = match effect {
-            Effect::Volley { .. } | Effect::Dropped { .. } => {
+            Effect::Volley { .. } | Effect::Dropped { .. } | Effect::Respawned { .. } => {
                 // A new stage waits until the one before has played out, falls included.
                 stage = Stage::starting(if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { stage.base });
-                if let Effect::Dropped { legs, .. } = effect {
+                if let Effect::Dropped { legs, .. } | Effect::Respawned { legs, .. } = effect {
                     // A drop's landing is the stage's blast, for what follows it: a heal, the wind.
                     stage.blast += flight_seconds(legs);
                     stage.last_blast = stage.blast;
@@ -132,7 +132,10 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             | Effect::ItemUsed { .. }
             | Effect::SsLocked { .. }
             | Effect::Spun { .. }
-            | Effect::DropRolled { .. } => stage.base,
+            | Effect::DropRolled { .. }
+            | Effect::RespawnPicked { .. } => stage.base,
+            // A life goes as its mobile dies.
+            Effect::Points { .. } => at.last().copied().unwrap_or(stage.base),
         };
         busy = busy.max(time);
         at.push(time);
@@ -201,6 +204,7 @@ mod unit {
             order: vec![0, 1],
             wind: Wind::new(0, 0).unwrap(),
             sudden_death: None,
+            mode: lobshot_sim::mode::Mode::Solo,
         };
         let mut game = Game::new(&setup, &NoAssets).unwrap();
         while let Some(roll) = game.pending_roll() {
@@ -338,6 +342,46 @@ mod unit {
         assert_eq!(schedule.at[1], stage);
         assert_eq!(schedule.at[2], stage + 1.0 + DAMAGE_AFTER_BLAST, "the chest heals on landing");
         assert_eq!(schedule.end, stage + 1.0 + DAMAGE_AFTER_BLAST + FALL_SECONDS + TAIL_SECONDS);
+    }
+
+    #[test]
+    fn a_respawn_drops_in_once_the_turn_has_played_out_and_a_life_goes_as_its_mobile_dies() {
+        let fall = Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: Vec2::ZERO,
+                velocity: Vec2::ZERO,
+                accel: Vec2::new(0.0, 600.0),
+            },
+            from: 0,
+            to: 2 * TICKS_PER_SECOND,
+            offset: 0,
+        };
+        let effects = vec![
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Damaged { seat: 1, amount: 120 },
+            Effect::Died { seat: 1, death: Death::Blasted },
+            Effect::Points {
+                team: lobshot_sim::game::Team::B,
+                points: 2,
+            },
+            Effect::Respawned {
+                seat: 3,
+                legs: vec![fall],
+                to: Some(Footing { x: 0, y: 1200 }),
+            },
+            Effect::TurnStarted { seat: 3 },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at[3], schedule.at[2], "the life goes with the death");
+        let stage = 1.0 + DEATH_AFTER_BLAST + FALL_SECONDS + TAIL_SECONDS;
+        assert_eq!(schedule.at[4], stage, "the drop waits for the shot to play out");
+        assert_eq!(schedule.end, stage + 2.0 + FALL_SECONDS + TAIL_SECONDS, "and the turn for the drop to land");
+        assert_eq!(super::schedule(&[Effect::RespawnPicked { seat: 3, x: 5, lands: 9 }]).end, 0.0, "a pick is instant");
     }
 
     #[test]

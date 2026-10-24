@@ -13,6 +13,7 @@ use lobshot_protocol::{MemberId, RoomOptions};
 use lobshot_sim::{
     game::{MobileKind, Shot, Team},
     items::Item,
+    mode::Mode,
 };
 
 /// The palette: night-sea panels, warm brass accents, team colors.
@@ -56,6 +57,8 @@ pub enum UiAction {
     Practice,
     /// Practice 2v2: you and a bot against two bots.
     PracticeTeams,
+    /// Practice this mode from now on.
+    PracticeMode(Mode),
     /// The garage: your mobile and items, outside any room.
     Garage,
     /// Back to the title screen (no page load).

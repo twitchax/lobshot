@@ -193,6 +193,9 @@ pub struct Published<'a> {
     pub sudden_death: Option<Sudden>,
     pub sounds: &'a SoundLog,
     pub buttons: &'a ButtonSpots,
+    /// The map column under the pointer, while it points at the map rather than the HUD: where a
+    /// click drops a dead player back in (Score).
+    pub map_x: Option<i32>,
 }
 
 /// This player in the game.
@@ -200,6 +203,8 @@ pub struct Me<'a> {
     pub player: &'a Player,
     pub ss: SsState,
     pub can_spin: bool,
+    /// Dead in Score, it may pick where to drop back in.
+    pub can_respawn: bool,
 }
 
 /// Publishes what the client is doing as `window.lobshot`, for the browser smoke test to watch and
@@ -208,10 +213,11 @@ pub struct Me<'a> {
 /// ```text
 /// { screen, turns, started, seat,
 ///   picks: { mobile: "Coilback" | "Random", loadout: ["Dual", ..] },
-///   me: { mobile, alive, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin } | null,
+///   me: { mobile, alive, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin, can_respawn } | null,
 ///   sudden_death: { kind, in, on } | null,
 ///   sounds: { loaded, played: { blast: 2, .. } },
-///   buttons: [{ action, x, y, enabled }] }
+///   buttons: [{ action, x, y, enabled }],
+///   map_x: 640 | null }
 /// ```
 ///
 /// Items, mobiles and sudden-death kinds are named as `Debug` prints them, the same as in button
@@ -255,6 +261,7 @@ pub fn publish(now: &Published) {
         };
         set(&object, "ss", &ss.into());
         set(&object, "can_spin", &me.can_spin.into());
+        set(&object, "can_respawn", &me.can_respawn.into());
         object.into()
     });
     set(&state, "me", &me);
@@ -299,5 +306,6 @@ pub fn publish(now: &Published) {
         buttons.push(&button);
     }
     set(&state, "buttons", &buttons);
+    set(&state, "map_x", &now.map_x.map_or(JsValue::NULL, JsValue::from));
     set(&window, "lobshot", &state);
 }

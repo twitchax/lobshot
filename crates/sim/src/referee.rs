@@ -12,6 +12,7 @@ use crate::{
     game::{Event, MobileKind, Roll, Seat, Setup, SuddenDeath, Team},
     items::Loadout,
     map::Arena,
+    mode::Mode,
     units::{Centis, Facing, Wind},
     weather::{Forecast, WeatherKind},
 };
@@ -72,14 +73,14 @@ pub fn arena(mut arenas: Vec<Arena>, dice: &mut impl Dice) -> Res<Arena> {
     Ok(arenas.swap_remove(pick))
 }
 
-/// Seats `entrants` on `arena` as a host does: on its spawn columns, shuffled, each mobile facing
-/// the middle; Random picks rolled, so the setup holds what each seat really plays; a turn order
-/// with the teams alternating (`turn_order`); and the opening wind.
+/// Seats `entrants` on `arena` as a host does, to play `mode`: on its spawn columns, shuffled, each
+/// mobile facing the middle; Random picks rolled, so the setup holds what each seat really plays; a
+/// turn order with the teams alternating (`turn_order`); and the opening wind.
 ///
 /// # Errors
 ///
 /// Fails when the arena has fewer spawns than entrants.
-pub fn setup(arena: &Arena, entrants: &[Entrant], max_wind: u8, sudden_death: Option<SuddenDeath>, dice: &mut impl Dice) -> Res<Setup> {
+pub fn setup(arena: &Arena, entrants: &[Entrant], max_wind: u8, sudden_death: Option<SuddenDeath>, mode: Mode, dice: &mut impl Dice) -> Res<Setup> {
     ensure!(
         arena.spawns.len() >= entrants.len(),
         "the map has spawns for only {} players, not {}",
@@ -109,6 +110,7 @@ pub fn setup(arena: &Arena, entrants: &[Entrant], max_wind: u8, sudden_death: Op
         order,
         wind: wind(max_wind, dice),
         sudden_death,
+        mode,
     })
 }
 
@@ -238,7 +240,7 @@ mod unit {
         let arena = field();
         let teams = [Team::A, Team::B, Team::A, Team::B];
         for seed in 0..50 {
-            let setup = setup(&arena, &entrants(&teams), 26, None, &mut XorShift::new(seed)).unwrap();
+            let setup = setup(&arena, &entrants(&teams), 26, None, Mode::Solo, &mut XorShift::new(seed)).unwrap();
             let spawns: BTreeSet<i32> = setup.seats.iter().map(|s| s.spawn_x).collect();
             assert_eq!(spawns.len(), 4);
             assert!(spawns.iter().all(|x| arena.spawns.contains(x)));
@@ -258,7 +260,7 @@ mod unit {
         chosen[0].mobile = Some(MobileKind::Hookclaw);
         let mut rolled = BTreeSet::new();
         for seed in 0..200 {
-            let setup = setup(&arena, &chosen, 0, None, &mut XorShift::new(seed)).unwrap();
+            let setup = setup(&arena, &chosen, 0, None, Mode::Solo, &mut XorShift::new(seed)).unwrap();
             assert_eq!(setup.seats[0].mobile, MobileKind::Hookclaw);
             rolled.insert(format!("{:?}", setup.seats[1].mobile));
         }
@@ -266,10 +268,18 @@ mod unit {
     }
 
     #[test]
+    fn a_setup_carries_its_mode_into_the_game() {
+        let setup = setup(&field(), &entrants(&[Team::A, Team::B, Team::A, Team::B]), 26, None, Mode::Score, &mut XorShift::new(4)).unwrap();
+        assert_eq!(setup.mode, Mode::Score);
+        let game = Game::new(&setup, &NoAssets).unwrap();
+        assert_eq!((game.mode(), game.points(Team::A)), (Mode::Score, Some(3)));
+    }
+
+    #[test]
     fn a_setup_needs_a_spawn_per_entrant() {
         let mut arena = field();
         arena.spawns.truncate(1);
-        assert!(setup(&arena, &entrants(&[Team::A, Team::B]), 26, None, &mut XorShift::new(1)).is_err());
+        assert!(setup(&arena, &entrants(&[Team::A, Team::B]), 26, None, Mode::Solo, &mut XorShift::new(1)).is_err());
     }
 
     #[test]
