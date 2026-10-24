@@ -42,15 +42,15 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use lobshot_assets::{Sound, maps::Maps};
-use lobshot_protocol::{Action, ClientMsg, MemberId, RoomOptions, ServerMsg, Stage};
+use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::{create_room, write_map};
 use lobshot_sim::{
-    game::{Game, MobileKind, Phase, Team},
+    game::{MobileKind, Team},
     mode::Mode,
     terrain::Terrain,
 };
 
-use support::{Client, play_out};
+use support::{Client, pass_out, play_out};
 
 /// How long the page may take to load and the game to get going: the wasm is several MB, and
 /// software rendering in a headless browser is slow.
@@ -325,8 +325,8 @@ const PIT_SPAWNS: [i32; 4] = [200, 600, 1000, 1400];
 const PIT_GAP: i32 = 10;
 const PIT_WIDTH: i32 = 3;
 
-/// How long a passing client waits on its turn before it passes: long enough for the page to show
-/// a dead player's drop point coming down before it lands.
+/// How long a passing client (`support::pass_out`) waits on its turn before it passes: long enough
+/// for the page to show a dead player's drop point coming down before it lands.
 const PASS_AFTER: Duration = Duration::from_millis(1500);
 
 /// The pit field: 1600 by 600, ground from y = 400, and a shaft beside each spawn.
@@ -372,38 +372,6 @@ fn hold_arrow_right(tab: &Tab, held: Duration) {
     tab.call_method(event(DispatchKeyEventTypeOption::RawKeyDown)).unwrap();
     std::thread::sleep(held);
     tab.call_method(event(DispatchKeyEventTypeOption::KeyUp)).unwrap();
-}
-
-/// A protocol client that passes every one of its turns a beat after it comes up, as a player
-/// would, following the game on `maps` (the drawn maps the server serves). Runs until the socket
-/// closes or goes quiet.
-async fn pass_out(mut client: support::Client, me: MemberId, maps: Maps) {
-    let (mut game, mut seat, mut passed): (Option<Game>, Option<u8>, Option<i64>) = (None, None, None);
-    loop {
-        match client.recv().await {
-            ServerMsg::Room(view) => {
-                if let Stage::Playing { seats } = view.stage {
-                    seat = seats.iter().position(|&id| id == me).and_then(|seat| u8::try_from(seat).ok());
-                }
-            }
-            ServerMsg::Game { log } => game = Some(log.replay(&maps).unwrap()),
-            ServerMsg::Event { event, .. } => {
-                if let Some(game) = game.as_mut() {
-                    game.apply(event).unwrap();
-                }
-            }
-            _ => {}
-        }
-        if let (Some(game), Some(seat)) = (&game, seat)
-            && game.phase() == (Phase::Turn { seat })
-            && game.pending_roll().is_none()
-            && passed != Some(game.turns())
-        {
-            passed = Some(game.turns());
-            tokio::time::sleep(PASS_AFTER).await;
-            client.send(&ClientMsg::Act(Action::Pass)).await;
-        }
-    }
 }
 
 /// The map column under a point on the page, once the page reports one.
@@ -495,7 +463,7 @@ async fn e2e_browser_score_a_dead_player_clicks_the_map_to_drop_back_in() {
     .await;
     host.send(&ClientMsg::Start).await;
     let maps = || Maps::new(&dist.path().join("assets"));
-    let passing = [tokio::spawn(pass_out(host, host_id, maps())), tokio::spawn(pass_out(rival, rival_id, maps()))];
+    let passing = [tokio::spawn(pass_out(host, host_id, maps(), PASS_AFTER)), tokio::spawn(pass_out(rival, rival_id, maps(), PASS_AFTER))];
 
     let state = tokio::task::spawn_blocking(move || -> (i64, Value) {
         // On its turn, into the pit; again on its next, should a walk go unseen.

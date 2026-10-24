@@ -16,6 +16,7 @@ use crate::{
     base::Void,
     game::{Death, Effect, Game, Leg, Phase, Seat, Team},
     items::percent_of,
+    mines,
     movement::{self, Footing, Landing},
     referee,
     tuning::{
@@ -243,7 +244,8 @@ pub(crate) fn pick(game: &mut Game, seat: u8, x: i32, effects: &mut Vec<Effect>)
 
 /// Drops in every dead seat whose turn has come, in the order they died, at the end of a turn
 /// before the next starts. Once a team is out, the rest are moot. A drop that misses the ground
-/// costs nothing, but its player picks again and waits again (GF-vgg).
+/// costs nothing, but its player picks again and waits again (GF-vgg). One that lands on a mine
+/// sets it off, as walking onto one does (`mines::trip`).
 pub(crate) fn land_due(game: &mut Game, effects: &mut Vec<Effect>) {
     let turns = game.turns();
     let due: Vec<(u8, i32)> = game
@@ -262,6 +264,9 @@ pub(crate) fn land_due(game: &mut Game, effects: &mut Vec<Effect>) {
             Some(footing) => {
                 forget(game, seat);
                 stand(game, seat, footing);
+                if mines::trip(game, leg.to, effects) {
+                    game.settle_all(effects);
+                }
             }
             None => {
                 if let Some(respawn) = game.mode_state.respawn_mut(seat) {
@@ -308,7 +313,8 @@ pub fn fall(game: &Game, x: i32) -> (Leg, Option<Footing>) {
 /// Brings `seat` back at `footing`: alive with its HP and shield refilled (`RESPAWN_HP_PERCENT`),
 /// facing the middle as a spawn does, and its turn the one after the next mover's
 /// (`RESPAWN_TURNS_BEFORE`). Everything else stands as it was: items used stay used, an SS lock
-/// holds, and so does brittleness (GF-lee).
+/// holds, and so does brittleness (GF-lee). Its mines don't come back: they went with its death
+/// (`mines::orphan`).
 pub(crate) fn stand(game: &mut Game, seat: u8, footing: Footing) {
     let clock = comeback_clock(game, seat);
     let width = game.terrain().width();
@@ -599,6 +605,42 @@ mod unit {
         assert_eq!(back.items[0], None, "used stays used");
         assert_eq!(back.ss_lock, 2, "the lock stands");
         assert_eq!(back.brittle, frostfin::BRITTLE_PER_HIT.value, "brittleness carries between lives (GF-lee)");
+    }
+
+    #[test]
+    fn a_drop_onto_a_mine_sets_it_off() {
+        let mut game = score_2v2();
+        // Seat 3's mine, out of every mobile's sense, where seat 0 will drop.
+        let mut laid = Vec::new();
+        mines::lay(&mut game, 3, Vec2::new(1200.5, 499.5), Facing::Left, 0, &mut laid);
+        let mine = game.mines()[0];
+        bunge_seat_0(&mut game);
+        respawn(&mut game, 0, mine.at.x).unwrap();
+        let effects = pass_turns(&mut game, 5);
+        let landed = effects.iter().position(|e| matches!(e, Effect::Respawned { seat: 0, to: Some(_), .. })).unwrap();
+        let after = &effects[landed..];
+        let Effect::Respawned { legs, .. } = &after[0] else { unreachable!() };
+        assert!(
+            after.contains(&Effect::MineGone { mine: mine.id, tick: Some(legs[0].to) }),
+            "it goes off as the mobile lands: {after:?}"
+        );
+        assert!(after.iter().any(|e| matches!(e, Effect::Damaged { seat: 0, .. })), "{after:?}");
+        assert_eq!(game.mines(), [], "{after:?}");
+        assert!(game.players()[0].alive, "one mine's blast doesn't kill a whole mobile");
+    }
+
+    #[test]
+    fn a_layers_mines_go_with_its_death_and_dont_come_back_with_it() {
+        let mut game = score_2v2();
+        let mut laid = Vec::new();
+        mines::lay(&mut game, 0, Vec2::new(1200.5, 499.5), Facing::Right, 0, &mut laid);
+        let mine = game.mines()[0];
+        let effects = bunge_seat_0(&mut game);
+        assert!(effects.contains(&Effect::MineGone { mine: mine.id, tick: None }), "{effects:?}");
+        respawn(&mut game, 0, 600).unwrap();
+        pass_turns(&mut game, 5);
+        assert!(game.players()[0].alive);
+        assert_eq!(game.mines(), [], "a new life lays its own");
     }
 
     #[test]

@@ -57,6 +57,8 @@ holds: GunBound Classic first, DragonBound where it is silent, a recorded pick w
 | Brittleness (Frostfin) | carries over | cited `[GF-lee]` |
 | A player who never picks | stays out; the game neither waits for them nor picks for them, and the turn clock never runs for the dead | cited `[SW-modes]` ("at any time", and waiting may pay) |
 | The slot machine | off: the dead pick a drop point instead | cited `[GF-kurai]`, `[GF-vgg]`, `[WP06]` |
+| Dropping in onto a mine | sets it off, as running over one does | pick, after `[GF-lee]` ("running over a Raon explodes them immediately"): a mobile landing on one meets it as one walking onto it does |
+| A dead layer's mines | go with its death, as in every mode, and don't come back when it drops back in | pick: Tinbadger's rule (`tinbadger.md`) holds; a mine moves on its layer's turns, and a new life lays its own |
 
 ## Contradictions resolved
 
