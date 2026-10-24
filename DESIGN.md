@@ -240,7 +240,10 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   leave from its tusk, a second barrel, and leave their target brittle to Physical damage) and
   Herdhound (a sheepdog mech, Kalsiddon's: its missiles loop, then home on its whistle) and
   Thistleback (a hedgehog gardener with a wheelbarrow catapult, Trico's: S2 sprouts orbit a
-  cabbage, SS a pumpkin bursts nine times and hurts most at a target's feet).
+  cabbage, SS a pumpkin bursts nine times and hurts most at a target's feet) and Kitewyrm (a gecko
+  flying a paper festival-dragon kite over a cart, Dragon's: it floats, its body hovering 16 px
+  over the ground so rolling shots pass under it; its SS loosens five mini paper dragons that
+  converge on the landing).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:
