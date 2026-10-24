@@ -23,7 +23,7 @@ use super::{
     Focus, GameRoot,
     fx::{Bolts, Dot, pop, puff, rising},
     world,
-    world::{MapArt, MobileView, Shown, depth},
+    world::{Glide, MapArt, MobileView, Shown, depth},
 };
 use crate::{
     model::{ApplyEvents, Match, Played, Screen, Session},
@@ -140,6 +140,17 @@ enum Cue {
         from: SimVec2,
         to: SimVec2,
         level: u8,
+    },
+    /// A mobile's own satellite firing a laser (Lensowl's).
+    Laser {
+        from: SimVec2,
+        to: SimVec2,
+    },
+    /// A mobile's own satellite setting off to `at`, getting there in `seconds`.
+    Satellite {
+        seat: u8,
+        at: SimVec2,
+        seconds: f32,
     },
     Bounce {
         at: SimVec2,
@@ -297,23 +308,31 @@ struct Shooter {
 const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
 const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
 const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+/// Lensowl's tracers: a star for S1 and S2, the SS's big green guide (SW-mob).
+const STAR: Color = Color::srgb_u8(0xff, 0xf2, 0xa8);
+const GUIDE: Color = Color::srgb_u8(0x7c, 0xf2, 0x9a);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, Lensowl's tracers
+    /// shine, the rest are dark.
     fn color(self, strand: bool) -> Color {
-        match self.mobile {
-            Some(MobileKind::Spoutpot) => WATER,
+        match (self.mobile, self.shot) {
+            (Some(MobileKind::Spoutpot), _) => WATER,
+            (Some(MobileKind::Lensowl), Some(Shot::Ss)) => GUIDE,
+            (Some(MobileKind::Lensowl), _) => STAR,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
-    /// in flight small.
+    /// in flight small; Lensowl's tracers are small, its SS guide large.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            (Some(MobileKind::Lensowl), Some(Shot::Ss)) => 14.0,
+            (Some(MobileKind::Lensowl), _) => 8.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -406,6 +425,16 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         }
         Effect::Bolt { from, to, .. } => cues.push((at, Cue::Bolt { from, to })),
         Effect::Beam { from, to, level, .. } => cues.push((at, Cue::Beam { from, to, level })),
+        Effect::Laser { from, to, .. } => cues.push((at, Cue::Laser { from, to })),
+        // Scheduled as it sets off.
+        Effect::Satellite { seat, at: to, from, to: arrives } => cues.push((
+            at,
+            Cue::Satellite {
+                seat,
+                at: to,
+                seconds: ticks(arrives.saturating_sub(from)),
+            },
+        )),
         Effect::Bounced { at: point, .. } => cues.push((at, Cue::Bounce { at: point })),
         // Scheduled at its end; it sparks from its start.
         Effect::Pierced { seat, from, to } => {
@@ -662,6 +691,8 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         }
         Cue::Bolt { from, to } => hands.bolts.strike(from, to),
         Cue::Beam { from, to, level } => hands.bolts.beam(from, to, level),
+        Cue::Laser { from, to } => hands.bolts.laser(from, to),
+        Cue::Satellite { seat, at, seconds } => glide(views, seat, at, seconds, hands.time.elapsed_secs_f64()),
         Cue::Bounce { at } => {
             commands.spawn(puff(dot, at, 16.0, Color::srgb_u8(0xc9, 0xa8, 0x7c), 0.35));
         }
@@ -730,6 +761,11 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut Query<(&mut Transform
         }
         true
     });
+}
+
+/// Sends `seat`'s own satellite off to `at` at `start` on the app's clock, to get there in `seconds`.
+fn glide(views: &mut Query<(&MobileView, &mut Shown)>, seat: u8, to: SimVec2, seconds: f32, start: f64) {
+    adjust(views, seat, |shown| shown.glide = Some(Glide { to, start, seconds }));
 }
 
 /// Changes how one seat's mobile is shown.
@@ -862,6 +898,49 @@ mod unit {
         let fired = Effect::Fired { seat: 0, legs: legs.clone() };
         assert_eq!(born_in_flight(&fired), Some((1.0, legs[0].flight.at(0))));
         assert_eq!(born_in_flight(&Effect::Fired { seat: 0, legs: vec![leg(0, 10, 0)] }), None);
+    }
+
+    #[test]
+    fn a_satellite_sets_off_when_scheduled_and_glides_until_it_arrives() {
+        let mut cues = Vec::new();
+        let at = SimVec2::new(10.0, -20.0);
+        cue(
+            Effect::Satellite {
+                seat: 1,
+                at,
+                from: TICKS_PER_SECOND,
+                to: 3 * TICKS_PER_SECOND,
+            },
+            1.5,
+            &mut cues,
+        );
+        assert!(
+            matches!(cues[..], [(1.5, Cue::Satellite { seat: 1, at: to, seconds: 2.0 })] if to == at),
+            "one cue, when the sim scheduled it"
+        );
+        cues.clear();
+        cue(
+            Effect::Laser {
+                seat: 1,
+                from: at,
+                to: SimVec2::ZERO,
+                tick: 0,
+            },
+            2.0,
+            &mut cues,
+        );
+        assert!(matches!(cues[..], [(2.0, Cue::Laser { from, to })] if from == at && to == SimVec2::ZERO));
+    }
+
+    #[test]
+    fn lensowls_tracers_shine_and_its_ss_guide_is_big_and_green() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Lensowl),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S1).color(false), STAR);
+        assert_eq!(shooter(Shot::Ss).color(false), GUIDE);
+        assert!(shooter(Shot::Ss).size(&[leg(0, 10, 0)]) > shooter(Shot::S2).size(&[leg(0, 10, 0)]));
     }
 
     #[test]

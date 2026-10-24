@@ -7,7 +7,7 @@ use anyhow::{Context as _, bail, ensure};
 use lobshot_assets::{MobileRig, mobile_slug, part_path, rider_path, rig_path, to_ron};
 use lobshot_sim::{
     base::{Res, Void},
-    game::MobileKind,
+    game::{MobileKind, Shot},
     tuning::MobileTuning,
 };
 
@@ -23,7 +23,18 @@ pub fn load_rig(sources: &Path, mobile: MobileKind) -> Res<MobileRig> {
     let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let rig = MobileRig::from_ron(&text).with_context(|| format!("reading {}", path.display()))?;
     check_rig(&rig, mobile.tuning()).with_context(|| format!("checking {}", path.display()))?;
+    check_satellite(&rig, mobile).with_context(|| format!("checking {}", path.display()))?;
     Ok(rig)
+}
+
+/// The rig draws a satellite exactly when the sim gives the mobile one (`MobileKind::satellite`).
+pub fn check_satellite(rig: &MobileRig, mobile: MobileKind) -> Void {
+    let flies_one = mobile.satellite(lobshot_sim::units::Vec2::ZERO, Shot::S1).is_some();
+    match (&rig.satellite, flies_one) {
+        (Some(_), true) | (None, false) => Ok(()),
+        (Some(file), false) => bail!("the rig draws a satellite ({file}), but the sim gives {} none", rig.name),
+        (None, true) => bail!("the sim gives {} a satellite, but the rig draws none", rig.name),
+    }
 }
 
 /// The art must agree with the gameplay geometry (`DESIGN.md`, "Art"): each barrel (the cannon,
@@ -75,8 +86,7 @@ pub fn build_mobiles(sources: &Path, out: &Out) -> Res<Vec<(MobileKind, MobileRi
     let mut rigs = Vec::with_capacity(MobileKind::ALL.len());
     for mobile in MobileKind::ALL {
         let rig = load_rig(sources, mobile)?;
-        let files: BTreeSet<&str> = rig.parts.iter().map(|part| part.file.as_str()).collect();
-        for file in files {
+        for file in rig.files() {
             let path = sources.join("mobiles").join(mobile_slug(mobile)).join(file);
             let png = encode_png(&Svg::load(&path)?.render_centered(ART_SCALE)?)?;
             out.write(&part_path(mobile, file), &png)?;
@@ -152,6 +162,17 @@ mod unit {
         let mut coilback = load_rig(&sources(), MobileKind::Coilback).unwrap();
         coilback.second_barrel = Some(second);
         assert!(check_rig(&coilback, MobileKind::Coilback.tuning()).is_err(), "the rig draws one tuning doesn't have");
+    }
+
+    #[test]
+    fn a_rig_draws_a_satellite_exactly_when_the_sim_flies_one() {
+        let mut lensowl = load_rig(&sources(), MobileKind::Lensowl).unwrap();
+        assert!(lensowl.satellite.is_some());
+        let mut coilback = load_rig(&sources(), MobileKind::Coilback).unwrap();
+        coilback.satellite.clone_from(&lensowl.satellite);
+        assert!(check_satellite(&coilback, MobileKind::Coilback).is_err(), "Coilback has none");
+        lensowl.satellite = None;
+        assert!(check_satellite(&lensowl, MobileKind::Lensowl).is_err(), "Lensowl's must be drawn");
     }
 
     #[test]

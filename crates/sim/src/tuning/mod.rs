@@ -11,6 +11,7 @@ pub mod herdhound;
 pub mod hookclaw;
 pub mod items;
 pub mod lanternwing;
+pub mod lensowl;
 pub mod marblemole;
 pub mod score;
 pub mod sparkhorn;

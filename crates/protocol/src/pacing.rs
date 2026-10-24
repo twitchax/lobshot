@@ -104,7 +104,17 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 busy = busy.max(stage.base + ticks_to_seconds(last));
                 stage.base
             }
-            Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::Beam { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
+            // A satellite's glide holds the scene until it arrives.
+            Effect::Satellite { from, to, .. } => {
+                busy = busy.max(stage.base + ticks_to_seconds(*to));
+                stage.base + ticks_to_seconds(*from)
+            }
+            Effect::Exploded { tick, .. }
+            | Effect::Bolt { tick, .. }
+            | Effect::Beam { tick, .. }
+            | Effect::Laser { tick, .. }
+            | Effect::ShieldStripped { tick, .. }
+            | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
             Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
             Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } | Effect::Frosted { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
@@ -454,6 +464,30 @@ mod unit {
         let schedule = schedule(&effects);
         assert_eq!(schedule.at, [0.0, 0.0]);
         assert_eq!(schedule.end, 3.0 + FALL_SECONDS + TAIL_SECONDS);
+    }
+
+    #[test]
+    fn a_satellite_glides_from_its_start_and_its_lasers_strike_on_their_ticks() {
+        let second = TICKS_PER_SECOND;
+        let effects = vec![
+            Effect::Volley { seat: 0, shot: Shot::Ss },
+            Effect::Satellite {
+                seat: 0,
+                at: Vec2::ZERO,
+                from: second,
+                to: 3 * second,
+            },
+            Effect::Laser {
+                seat: 0,
+                from: Vec2::ZERO,
+                to: Vec2::new(0.0, 100.0),
+                tick: second / 2,
+            },
+            Effect::Damaged { seat: 1, amount: 90 },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at, [0.0, 1.0, 0.5, 0.5 + DAMAGE_AFTER_BLAST]);
+        assert_eq!(schedule.end, 3.0 + FALL_SECONDS + TAIL_SECONDS, "the scene waits for the glide");
     }
 
     #[test]

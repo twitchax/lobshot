@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="70" viewBox="-40 -66 76 70">
+  <!-- Lensowl body: an owl astronomer in brass spectacles and a starry scarf, perched at the back of
+       a navy-and-brass telescope rover. The owl (tail, body, wing, talons on the rail, head, ear
+       tufts), the rover (hull, brass rail and rivets, the moon emblem, the team roundel, axle
+       bosses), the telescope's mount post and the rider's stool. The wheels spin; the telescope
+       on the mount is the cannon; the clockwork moon hovering over it is its own part.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="hull" d="M -29,-25.4 H 26 Q 28.6,-25.4 29.4,-23 L 31,-17.6 Q 31.6,-15.4 30,-13.4 L 28.2,-11.6 Q 27,-10.4 25.2,-10.4 H -28.4 Q -31,-10.4 -31.4,-13 L -32,-22.2 Q -32,-25.4 -29,-25.4 Z"/>
+    <clipPath id="hullClip"><use href="#hull"/></clipPath>
+    <ellipse id="belly" cx="-19" cy="-36" rx="13.6" ry="13.6"/>
+    <clipPath id="bellyClip"><use href="#belly"/></clipPath>
+    <circle id="head" cx="-17" cy="-47.6" r="10.4"/>
+    <clipPath id="headClip"><use href="#head"/></clipPath>
+    <radialGradient id="hullLight" cx="-14" cy="-26" r="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a8c4ff" stop-opacity="0.3"/>
+      <stop offset="0.45" stop-color="#a8c4ff" stop-opacity="0"/>
+      <stop offset="0.85" stop-color="#0d1226" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0d1226" stop-opacity="0.3"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the telescope's mount post, behind the hull rail: brass, with a fork cup at the pivot -->
+    <path d="M 15,-26 L 15.4,-33 H 18.6 L 19,-26 Z" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 16,-26.4 L 16.2,-32.6" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
+    <path d="M 12,-33 Q 12,-39.8 17,-40.2 Q 22,-39.8 22,-33 Z" fill="#283563" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 13.4,-34.4 Q 14,-38.4 16.8,-38.8" stroke="#5a6cb0" stroke-width="0.8" fill="none"/>
+
+    <!-- tail feathers, fanned back over the hull's rear -->
+    <path d="M -28,-31 L -38.6,-31.6 Q -39.6,-29 -37,-28 L -27,-27.4 Z" fill="#7a4a30" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -28,-29 L -38.4,-26.8 Q -38.8,-24 -36,-23.8 L -27,-25.4 Z" fill="#a8774a" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -29.4,-30.2 L -37.4,-30.4 M -29.4,-27.6 L -37,-25.8" stroke="#5e3826" stroke-width="0.6" fill="none"/>
+
+    <!-- the hull: navy, a brass rail along its deck, rivets, the moon emblem and the roundel -->
+    <use href="#hull" fill="#283563" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#hullClip)">
+      <path d="M -34,-15.6 C -10,-14 10,-14 34,-16 V 0 H -34 Z" fill="#1b2445"/>
+      <path d="M -34,-23.2 H 34" stroke="#3a4a86" stroke-width="1.6"/>
+      <rect x="-34" y="-30" width="68" height="20" fill="url(#hullLight)"/>
+    </g>
+    <path d="M -30.6,-25.6 H 27.4" stroke="#2a1a2e" stroke-width="2.6"/>
+    <path d="M -30.6,-25.6 H 27.4" stroke="#e9b949" stroke-width="1.4"/>
+    <path d="M -29.6,-26.1 H 18" stroke="#fff1a8" stroke-width="0.5"/>
+    <g fill="#e9b949" stroke="#2a1a2e" stroke-width="0.5">
+      <circle cx="-26" cy="-19.4" r="0.9"/><circle cx="-26" cy="-14.4" r="0.9"/>
+      <circle cx="24" cy="-19.4" r="0.9"/><circle cx="24" cy="-14.4" r="0.9"/>
+    </g>
+    <!-- the moon emblem: a brass crescent with a star -->
+    <path d="M 8.6,-21.6 A 4.6 4.6 0 1 0 8.6,-13.2 A 3.6 3.6 0 1 1 8.6,-21.6 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 12.4,-19.6 L 12.9,-18.3 L 14.2,-18.2 L 13.2,-17.3 L 13.5,-16 L 12.4,-16.7 L 11.3,-16 L 11.6,-17.3 L 10.6,-18.2 L 11.9,-18.3 Z" fill="#fff1a8" stroke="#2a1a2e" stroke-width="0.5"/>
+    <!-- a constellation picked out along the hull -->
+    <path d="M -22,-20.4 L -18,-16.6 L -14.6,-19.6 M 17,-15 L 20.4,-19.6" stroke="#5a6cb0" stroke-width="0.6" fill="none"/>
+    <g fill="#fff1a8"><circle cx="-22" cy="-20.4" r="0.7"/><circle cx="-18" cy="-16.6" r="0.6"/><circle cx="-14.6" cy="-19.6" r="0.7"/><circle cx="17" cy="-15" r="0.6"/><circle cx="20.4" cy="-19.6" r="0.7"/></g>
+    <!-- team roundel -->
+    <circle cx="-10" cy="-17.6" r="3" fill="#f6f0e2" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-10" cy="-17.6" r="2" fill="#e8434f"/>
+    <!-- axle bosses -->
+    <rect x="-24" y="-11.6" width="6" height="3.2" rx="0.8" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.7"/>
+    <rect x="18" y="-11.6" width="6" height="3.2" rx="0.8" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.7"/>
+
+    <!-- the rider's stool, a navy cushion on the deck -->
+    <path d="M -2.4,-25.4 Q -2.4,-27.6 0.8,-27.6 H 5 Q 7.6,-27.6 7.6,-25.4 Z" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -0.8,-26.4 Q 2,-27.1 5.6,-26.8" stroke="#c97a4a" stroke-width="0.8" fill="none"/>
+
+    <!-- the owl: body, then belly, then the wing over it -->
+    <use href="#belly" fill="#a8774a" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#bellyClip)">
+      <ellipse cx="-12.6" cy="-32.6" rx="9.2" ry="11.6" fill="#f6e2bc"/>
+      <g stroke="#b8865a" stroke-width="0.9" fill="none">
+        <path d="M -15.4,-38 l 1.5,1.5 l 1.5,-1.5 M -11,-38 l 1.5,1.5 l 1.5,-1.5"/>
+        <path d="M -17.6,-33.2 l 1.5,1.5 l 1.5,-1.5 M -13.2,-33.2 l 1.5,1.5 l 1.5,-1.5 M -8.8,-33.2 l 1.5,1.5 l 1.5,-1.5"/>
+        <path d="M -15.4,-28.4 l 1.5,1.5 l 1.5,-1.5 M -11,-28.4 l 1.5,1.5 l 1.5,-1.5"/>
+      </g>
+      <path d="M -34,-27 C -24,-23.4 -14,-23.4 -4,-27 V -20 H -34 Z" fill="#7a4a30" opacity="0.45"/>
+    </g>
+    <!-- the near wing, folded, its feathers scalloped -->
+    <path d="M -23.6,-46 Q -32.8,-42 -32,-30.6 Q -31.6,-26 -27.6,-25.6 Q -25,-28.8 -21.8,-27 Q -18.8,-30.6 -17.4,-34.6 Q -17,-42.6 -23.6,-46 Z" fill="#7a4a30" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -29.6,-32 Q -27,-30 -24.6,-32 Q -22.2,-30 -19.8,-32.6 M -29.8,-37.2 Q -27.2,-35.2 -24.8,-37.2 Q -22.4,-35.2 -19.8,-37.6" stroke="#5e3826" stroke-width="0.8" fill="none"/>
+    <path d="M -26.6,-43.4 Q -30,-40 -30,-35" stroke="#d4a86a" stroke-width="1" fill="none"/>
+    <!-- talons on the rail -->
+    <g fill="#f2c23c" stroke="#2a1a2e" stroke-width="0.6">
+      <path d="M -16.6,-25.2 l -1.1,2.8 h 1.5 l 0.6,-1.7 l 0.6,1.7 h 1.5 l -1.1,-2.8 Z"/>
+      <path d="M -10.2,-25.2 l -1.1,2.8 h 1.5 l 0.6,-1.7 l 0.6,1.7 h 1.5 l -1.1,-2.8 Z"/>
+    </g>
+
+    <!-- ear tufts, then the head -->
+    <path d="M -22.8,-54.4 L -27.4,-63.4 L -17.4,-56.8 Z" fill="#7a4a30" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -13,-56.4 L -8.4,-64.4 L -7.6,-54.2 Z" fill="#7a4a30" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -23.4,-56.4 L -26,-61.4 M -11.8,-57.4 L -9.2,-61.8" stroke="#a8774a" stroke-width="0.8" fill="none"/>
+    <use href="#head" fill="#a8774a" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#headClip)">
+      <!-- the facial disc, turned toward the front -->
+      <path d="M -21.8,-53.4 Q -15,-57 -7.6,-52.8 Q -5.8,-46.8 -8.2,-41.2 Q -14.4,-37 -21,-41.6 Q -23.8,-47.4 -21.8,-53.4 Z" fill="#f6e8cc" stroke="#c48a5c" stroke-width="0.9"/>
+      <path d="M -26,-54.8 Q -24.4,-58 -19.4,-58.4" stroke="#d4a86a" stroke-width="1.3" fill="none"/>
+    </g>
+    <!-- the starry scarf at its neck, one end trailing back -->
+    <path d="M -28.4,-39.4 Q -17.6,-35 -7,-40.4 L -6.8,-36.6 Q -17.6,-31.4 -28.6,-35.8 Z" fill="#283563" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -26.6,-35.8 L -31,-28.4 L -27.6,-27.6 L -24.6,-35 Z" fill="#283563" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -27.4,-38.4 Q -17.6,-34.6 -8,-39.2" stroke="#3a4a86" stroke-width="0.8" fill="none"/>
+    <g fill="#fff1a8">
+      <circle cx="-22.4" cy="-36.8" r="0.75"/><circle cx="-16" cy="-35.6" r="0.75"/><circle cx="-10.6" cy="-37.4" r="0.75"/><circle cx="-28.2" cy="-31" r="0.65"/>
+    </g>
+    <!-- big amber eyes in brass spectacles, and the beak -->
+    <circle cx="-18.2" cy="-48.2" r="3.9" fill="#ffb340" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="-11" cy="-48.2" r="4.1" fill="#ffb340" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="-17.5" cy="-48" r="2.1" fill="#2a1a2e"/>
+    <circle cx="-10.2" cy="-48" r="2.2" fill="#2a1a2e"/>
+    <circle cx="-16.9" cy="-48.9" r="0.8" fill="#ffffff"/>
+    <circle cx="-9.5" cy="-49" r="0.85" fill="#ffffff"/>
+    <g fill="none" stroke="#2a1a2e" stroke-width="1.9">
+      <circle cx="-18.2" cy="-48.2" r="4.6"/><circle cx="-11" cy="-48.2" r="4.8"/><path d="M -14.2,-49.2 Q -14.6,-50 -15.2,-49.2"/>
+    </g>
+    <g fill="none" stroke="#e9b949" stroke-width="0.85">
+      <circle cx="-18.2" cy="-48.2" r="4.6"/><circle cx="-11" cy="-48.2" r="4.8"/><path d="M -14.2,-49.2 Q -14.6,-50 -15.2,-49.2"/>
+    </g>
+    <path d="M -14.6,-44 Q -12.4,-44.6 -12,-42.2 Q -12.4,-40.2 -13.9,-39.6 Q -15.4,-41.6 -14.6,-44 Z" fill="#f2c23c" stroke="#2a1a2e" stroke-width="0.7"/>
+  </g>
+</svg>

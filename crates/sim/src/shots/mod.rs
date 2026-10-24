@@ -2,8 +2,10 @@
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
 //! helix strands (`helix`), orbiters (`orbit`), bouncing balls (`bounce`), blobs that walk the
-//! ground (`crawl`) and homing missiles (`homing`).
+//! ground (`crawl`), homing missiles (`homing`), beams (`beam`) and a mobile's own satellite
+//! (`satellite`).
 
+mod beam;
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
@@ -14,8 +16,10 @@ mod herdhound;
 mod homing;
 mod hookclaw;
 mod lanternwing;
+mod lensowl;
 mod marblemole;
 mod orbit;
+mod satellite;
 pub(crate) mod skyeye;
 mod sparkhorn;
 mod spoutpot;
@@ -193,6 +197,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Lensowl => lensowl::fire(game, &gun, shot, effects),
     }
 }
 
@@ -220,6 +225,7 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Herdhound
         | MobileKind::Thistleback => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
+        MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
     }
 }
 

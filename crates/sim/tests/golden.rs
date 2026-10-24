@@ -88,6 +88,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         63,
         0xc8a1_51a2_4657_e6be,
     ),
+    (
+        "roster_lensowl",
+        include_str!("golden/roster_lensowl.json"),
+        include_bytes!("golden/roster_lensowl.bin"),
+        65,
+        0xf43b_b11a_2db7_190e,
+    ),
 ];
 
 #[test]
@@ -225,6 +232,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_lensowl", play(roster_lensowl(), &winds)),
     ]
 }
 
@@ -445,6 +453,23 @@ fn roster_thistleback() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Lensowl (A.Sate's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_lensowl() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Lensowl, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

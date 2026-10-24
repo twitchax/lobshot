@@ -847,6 +847,8 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         #[allow(clippy::cast_possible_truncation)]
         Effect::Beam { to, .. } => format!(" Skyeye's beam struck at x={}, y={}.", to.x.round() as i32, to.y.round() as i32),
         Effect::SkyeyeLevel { level } => format!(" Skyeye reached level {level}."),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::Laser { seat, to, .. } => format!(" {} satellite's laser struck at x={}, y={}.", names.whose(*seat), to.x.round() as i32, to.y.round() as i32),
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
@@ -1002,6 +1004,10 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Lensowl => format!(
+            "Every shot is a tracer that hurts nothing; once it lands, the satellite hovering over you fires lasers at it from where it hovers, and the first mobile or ground in a laser's way takes it, you included. S1 is one laser from {} px over your feet, aimed a little high when it fires leftward on screen, so it can sail over a target's head; S2 three from three times as high, which clears ground in the way, raining down left to right onto the tracer and spreading wider the farther off; SS sends the satellite over the landing to sweep five lasers straight down, left to right. Has a shield.",
+            tuning::lensowl::SATELLITE_HEIGHT.value
+        ),
     }
 }
 
@@ -1394,6 +1400,19 @@ mod unit {
         };
         assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
         assert!(rules().contains("While Skyeye is up"));
+    }
+
+    #[test]
+    fn the_log_says_where_a_satellites_laser_struck() {
+        let session = Session::new(&flat(1), &maps()).unwrap();
+        let names = Names { game: session.game(), you: 0 };
+        let laser = Effect::Laser {
+            seat: 0,
+            from: lobshot_sim::units::Vec2::new(300.0, 370.0),
+            to: lobshot_sim::units::Vec2::new(700.2, 480.6),
+            tick: 0,
+        };
+        assert_eq!(effect_line(&names, &laser), " Your satellite's laser struck at x=700, y=481.");
     }
 
     #[test]
