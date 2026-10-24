@@ -245,7 +245,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   over the ground so rolling shots pass under it; its SS loosens five mini paper dragons that
   converge on the landing) and Flarecrow (a crow signalman with a flare mortar over its back,
   Aduka's: it fires from the rear, its S2 flares call Skyeye's beam wherever they land, and its SS
-  flies through everything, beaming down on each enemy it passes).
+  flies through everything, beaming down on each enemy it passes) and Augerdillo (an armadillo on a tracked drill rig, Nak's:
+  it fires from the rear; its S2 drill flies through mobiles, bores into the ground on a mirror of
+  its arc and goes off where it comes up; its SS rolls through land and stops only in a mobile).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:
