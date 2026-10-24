@@ -8,6 +8,7 @@ pub(crate) mod bolt;
 mod bounce;
 mod coilback;
 mod crawl;
+mod flarecrow;
 mod frostfin;
 mod helix;
 mod herdhound;
@@ -130,6 +131,16 @@ impl Gun<'_> {
     /// armed or it passed through Electricity (one bolt either way: the item is the weather,
     /// GF-tiro), and Skyeye's beam toward it if Skyeye is up (GF-tiro).
     pub fn follow_up(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
+        self.thunder(game, at, tick, marks, effects);
+        if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
+            skyeye::beam(game, at, tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
+        }
+    }
+
+    /// `follow_up`'s bolt alone: down the column of a projectile that landed at `at` at `tick`, a
+    /// beat later, if Thunder is armed or it passed through Electricity (Flarecrow's flares call
+    /// Skyeye themselves).
+    pub fn thunder(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
         if self.salvo.thunder || marks.charged {
             let strike = bolt::from_sky(game, at.x);
             bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick + ticks(BOLT_DELAY_SECONDS.value), effects);
@@ -142,9 +153,6 @@ impl Gun<'_> {
                 boost: 1.0,
             };
             bolt::zap(game, &strike, &thunder, effects);
-        }
-        if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
-            skyeye::beam(game, at, tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
         }
     }
 
@@ -193,6 +201,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Flarecrow => flarecrow::fire(game, &mut gun, shot, effects),
     }
 }
 
@@ -218,7 +227,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
         | MobileKind::Herdhound
-        | MobileKind::Thistleback => None,
+        | MobileKind::Thistleback
+        | MobileKind::Flarecrow => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }

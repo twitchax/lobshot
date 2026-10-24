@@ -297,23 +297,28 @@ struct Shooter {
 const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
 const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
 const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+const FLARE: Color = Color::srgb_u8(0xff, 0x6a, 0x2b);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Flarecrow's flares burn, Lanternwing's
+    /// strands glow, the rest are dark.
     fn color(self, strand: bool) -> Color {
         match self.mobile {
             Some(MobileKind::Spoutpot) => WATER,
+            Some(MobileKind::Flarecrow) => FLARE,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
-    /// in flight small.
+    /// in flight small; Flarecrow's flares are small, and its SS cart bigger.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            (Some(MobileKind::Flarecrow), Some(Shot::S2)) => 7.0,
+            (Some(MobileKind::Flarecrow), Some(Shot::Ss)) => 14.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -878,6 +883,18 @@ mod unit {
             shot: Some(Shot::S2),
         };
         assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
+    }
+
+    #[test]
+    fn flarecrows_flares_burn_small_and_its_ss_cart_is_bigger() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Flarecrow),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S2).color(false), FLARE);
+        let path = [leg(0, 10, 0)];
+        assert!(shooter(Shot::S2).size(&path) < shooter(Shot::S1).size(&path));
+        assert!(shooter(Shot::Ss).size(&path) > shooter(Shot::S1).size(&path));
     }
 
     #[test]

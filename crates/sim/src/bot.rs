@@ -171,8 +171,8 @@ impl Spot {
     }
 }
 
-/// `game` after `walk`, if any, and turning toward the target, with the moves that did it. `None`
-/// when the walk ends the turn (off the map).
+/// `game` after `walk`, if any, and turning to shoot at the target, with the moves that did it.
+/// `None` when the walk ends the turn (off the map).
 fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -> Option<(Game, Vec<Event>)> {
     let mut scratch = game.clone();
     let mut moves = Vec::new();
@@ -185,7 +185,7 @@ fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -
         }
     }
     let me = *scratch.players().get(usize::from(seat))?;
-    let facing = facing_toward(&me, target);
+    let facing = facing_to_shoot(&me, target);
     if me.facing != facing {
         let turn = Event::Walk { seat, facing, steps: 0 };
         scratch.apply(turn).ok()?;
@@ -196,6 +196,13 @@ fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -
 
 fn facing_toward(me: &Player, target: &Player) -> Facing {
     if target.footing.x >= me.footing.x { Facing::Right } else { Facing::Left }
+}
+
+/// The way to face to shoot at the target: toward it, or away for a mobile that fires over its
+/// back.
+fn facing_to_shoot(me: &Player, target: &Player) -> Facing {
+    let toward = facing_toward(me, target);
+    if me.tuning().s1.aim.value.backward() { toward.flip() } else { toward }
 }
 
 /// The best shot `seat` can take from where it stands, as it faces.

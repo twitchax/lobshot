@@ -1002,6 +1002,12 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Flarecrow => format!(
+            "Fires over its back: its aims run past 90 (170 is 10 degrees above level behind it), so turn your back to the target. S1 is an electric ball with a small blast and a flat {} aftershock on every mobile near where it lands, which runs on ({} each) to any mobile beside one it hit, and on down the line, once a turn. S2 fires three flares down one path, one after another: Skyeye's beam strikes wherever each lands, its weather up or not, so a short shot digs its way on toward the target; all its damage is the beams', which grow as Skyeye levels up. SS flies through land and mobiles alike and never goes off: each enemy it passes into takes a beam {}x as strong.",
+            tuning::flarecrow::S1_AFTERSHOCK.value,
+            tuning::flarecrow::S1_CHAIN.value,
+            tuning::flarecrow::SS_BEAM_BOOST.value
+        ),
     }
 }
 
@@ -1394,6 +1400,14 @@ mod unit {
         };
         assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
         assert!(rules().contains("While Skyeye is up"));
+    }
+
+    #[test]
+    fn the_rules_say_flarecrow_fires_over_its_back() {
+        let rules = rules();
+        assert!(rules.contains("### Flarecrow (`flarecrow`)"), "{rules}");
+        assert!(rules.contains("Fires over its back"), "{rules}");
+        assert!(rules.contains("- S1: delay 250, aim 130 to 170"), "{rules}");
     }
 
     #[test]

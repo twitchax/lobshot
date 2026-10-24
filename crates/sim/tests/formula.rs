@@ -4,9 +4,11 @@
 //! `tool_fit` below).
 //!
 //! The setup is a duel on flat ground: the shooter (Coilback, Armor's behavior and GunBound's
-//! reference shot, unless a test says otherwise) at x = 300 facing right, and a Coilback target
-//! `distance` px away. "Ideal power" is the continuous power whose flight passes through the
-//! target's hitbox center. Aim limits don't apply here: the formulas are about the ballistics.
+//! reference shot, unless a test says otherwise) at x = 300 shooting right, and a Coilback target
+//! `distance` px away. A mobile that fires over its back faces away, and every angle here is above
+//! level toward the target, as players read it (`AimRange::elevation`). "Ideal power" is the
+//! continuous power whose flight passes through the target's hitbox center. Aim limits don't apply
+//! here: the formulas are about the ballistics.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -77,6 +79,56 @@ fn inferred_cbchui(ax: f64) -> f64 {
     products / squares * ax.sqrt()
 }
 
+/// Aduka's power for 60 degrees one screen away in zero wind: 2.35 on cbchui's chart (CR-fixed) and
+/// by CR-aduka's own rule, 2.40 in GN-aduka's table ("like 2.4", CR-aduka adds). Flarecrow is
+/// fitted midway, so both hold.
+const ADUKA_ONE_SCREEN: [f64; 2] = [2.35, 2.40];
+
+/// Aduka's power tables, in zero wind, as (source, aim, quarter screens, bars): the entries in the
+/// acceptance set. GN-aduka's and CR-aduka's fixed-angle tables (CR-aduka credits its table to the
+/// KNAT guild), and CR-aduka's "3 bar formula", whose 1-screen landmark is 70 degrees at 2.75.
+/// docs/research/flarecrow.md says which entries are out, and why.
+const ADUKA_POWERS: [(&str, i16, i32, f64); 6] = [
+    ("GN-aduka", 60, 2, 1.60),
+    ("GN-aduka", 80, 3, 3.30),
+    ("GN-aduka", 80, 4, 3.80),
+    ("CR-aduka", 60, 2, 1.6),
+    ("CR-aduka", 80, 3, 3.3),
+    ("CR-aduka 3 bar", 70, 4, 2.75),
+];
+
+/// The entries left out of the acceptance set, for `tool_fit`'s report.
+const ADUKA_POWERS_OUT: [(&str, i16, i32, f64); 25] = [
+    ("GN-aduka", 60, 1, 1.10),
+    ("GN-aduka", 60, 3, 2.10),
+    ("GN-aduka", 60, 5, 3.10),
+    ("GN-aduka", 60, 6, 3.60),
+    ("GN-aduka", 70, 1, 1.35),
+    ("GN-aduka", 70, 2, 2.00),
+    ("GN-aduka", 70, 3, 2.45),
+    ("GN-aduka", 70, 4, 2.85),
+    ("GN-aduka", 70, 5, 3.25),
+    ("GN-aduka", 70, 6, 3.65),
+    ("GN-aduka", 80, 1, 1.70),
+    ("GN-aduka", 80, 2, 2.40),
+    ("GN-aduka", 85, 2, 3.80),
+    ("CR-aduka", 60, 1, 1.1),
+    ("CR-aduka", 60, 3, 2.1),
+    ("CR-aduka", 70, 1, 1.35),
+    ("CR-aduka", 70, 2, 2.0),
+    ("CR-aduka", 70, 3, 2.45),
+    ("CR-aduka", 70, 4, 2.85),
+    ("CR-aduka", 80, 1, 1.95),
+    ("CR-aduka", 80, 2, 2.7),
+    ("CR-aduka", 80, 4, 3.9),
+    ("CR-aduka 3 bar", 80, 2, 2.55),
+    ("CR-aduka 3 bar", 60, 6, 2.85),
+    ("CR-aduka high angle", 81, 4, 3.8),
+];
+
+/// CR-aduka's full-power high angles: (px to the target, the angle that lands there).
+const ADUKA_FULL_POWER: [(i32, i16); 3] = [(267, 87), (533, 84), (800, 81)];
+
 /// UC-boomer: 10 wind toward the target saves Boomer about 0.45 bars on a 70-degree, one-screen
 /// shot.
 const BOOMER_HOOK: (i16, u8, f64) = (70, 10, 0.45);
@@ -94,7 +146,8 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
                     team: Team::A,
                     mobile: shooter,
                     spawn_x: 300,
-                    facing: Facing::Right,
+                    // A mobile that fires over its back turns it to the target.
+                    facing: if shooter.tuning().s1.aim.value.backward() { Facing::Left } else { Facing::Right },
                     items: Loadout::default(),
                 },
                 Seat {
@@ -144,9 +197,11 @@ fn flight(game: &Game, aim: i16, bars: f64, accel: Vec2) -> Flight {
     flight_of(game, Shot::S1, aim, bars, accel)
 }
 
-/// `flight`, leaving `shot`'s barrel.
+/// `flight`, leaving `shot`'s barrel, `aim` degrees above level toward the target: over the back
+/// for a mobile that fires that way.
 fn flight_of(game: &Game, shot: Shot, aim: i16, bars: f64, accel: Vec2) -> Flight {
-    let mut flight = game.launch(0, shot, aim, bars).unwrap();
+    let backward = shot.tuning(game.players()[0].tuning()).aim.value.backward();
+    let mut flight = game.launch(0, shot, if backward { 180 - aim } else { aim }, bars).unwrap();
     flight.accel = accel;
     flight
 }
@@ -194,6 +249,18 @@ fn wind_saving(mobile: MobileKind, aim: i16, wind: Wind, gravity: f64, sensitivi
 fn best_aim(game: &Game, bars: f64, accel: Vec2) -> i16 {
     let target = target_center(game);
     (46..=89)
+        .min_by(|&a, &b| {
+            let miss = |aim| miss_below(&flight(game, aim, bars, accel), target).map_or(f64::MAX, f64::abs);
+            miss(a).total_cmp(&miss(b))
+        })
+        .unwrap()
+}
+
+/// `best_aim` among high lobs only (80 to 89 degrees): at full power the low solution crosses a
+/// near target's center on the way up.
+fn lob_aim(game: &Game, bars: f64, accel: Vec2) -> i16 {
+    let target = target_center(game);
+    (80..=89)
         .min_by(|&a, &b| {
             let miss = |aim| miss_below(&flight(game, aim, bars, accel), target).map_or(f64::MAX, f64::abs);
             miss(a).total_cmp(&miss(b))
@@ -279,6 +346,37 @@ fn formula_kalsiddon_60_degrees_lands_one_screen() {
     let power = ideal_power(&duel_of(MobileKind::Herdhound, 800), 60, tuned_for(MobileKind::Herdhound, Wind::default()));
     for bars in KAL_ONE_SCREEN {
         assert_bars("Kalsiddon one screen", power, bars);
+    }
+}
+
+#[test]
+fn formula_aduka_60_degrees_lands_one_screen() {
+    // CR-fixed, GN-aduka: Flarecrow's gravity puts 60 degrees one screen away, over its back, at
+    // both sources' power.
+    let power = ideal_power(&duel_of(MobileKind::Flarecrow, 800), 60, tuned_for(MobileKind::Flarecrow, Wind::default()));
+    for bars in ADUKA_ONE_SCREEN {
+        assert_bars("Aduka one screen", power, bars);
+    }
+}
+
+#[test]
+fn formula_flarecrow_holds_adukas_power_tables() {
+    // GN-aduka's and CR-aduka's tables, unfitted, at the entries docs/research/flarecrow.md keeps.
+    let calm = tuned_for(MobileKind::Flarecrow, Wind::default());
+    for (source, aim, quarters, bars) in ADUKA_POWERS {
+        let power = ideal_power(&duel_of(MobileKind::Flarecrow, 200 * quarters), aim, calm);
+        assert_bars(&format!("{source}: {aim} degrees, {quarters}/4 screen"), power, bars);
+    }
+}
+
+#[test]
+fn formula_flarecrow_full_power_lobs_land_where_creedo_says() {
+    // CR-aduka, unfitted: at full power, 87 degrees lands a third of a screen away, 84 two thirds
+    // and 81 one screen.
+    let calm = tuned_for(MobileKind::Flarecrow, Wind::default());
+    for (distance, aim) in ADUKA_FULL_POWER {
+        let landed = lob_aim(&duel_of(MobileKind::Flarecrow, distance), 4.0, calm);
+        assert!((landed - aim).abs() <= 1, "{distance} px at full power: {landed} degrees, CR-aduka says {aim}");
     }
 }
 
@@ -556,7 +654,8 @@ fn spoutpot_report(gravity: f64, hertz: f64, kept: f64) {
 }
 
 /// Derives the fitted constants. The M3 mobiles' and Spoutpot's gravities (cbchui), the inferred
-/// mobiles' (`INFERRED`), Herdhound's (CR-kal), Hookclaw's wind sensitivity on top of its gravity (UC-boomer), and
+/// mobiles' (`INFERRED`), Herdhound's (CR-kal), Flarecrow's (CR-fixed and GN-aduka), Hookclaw's
+/// wind sensitivity on top of its gravity (UC-boomer), and
 /// Spoutpot's spiral and SS balls (CR-turtle) are written straight into their tuning files;
 /// Coilback's gravity and the vertical and horizontal wind factors are printed, to copy by hand.
 /// Run with `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, then the
@@ -592,6 +691,11 @@ fn tool_fit() {
     let gravity = fit_gravity(MobileKind::Herdhound, kal);
     rewrite("herdhound.rs", "GRAVITY", &format!("{gravity:.1}"));
     println!("Herdhound gravity: {gravity:.1}");
+
+    let aduka = f64::midpoint(ADUKA_ONE_SCREEN[0], ADUKA_ONE_SCREEN[1]);
+    let gravity = fit_gravity(MobileKind::Flarecrow, aduka);
+    rewrite("flarecrow.rs", "GRAVITY", &format!("{gravity:.1}"));
+    println!("Flarecrow gravity: {gravity:.1}");
 
     let game = duel(800);
     let gravity = fit_gravity(MobileKind::Coilback, 2.45);
@@ -649,6 +753,18 @@ fn tool_fit() {
         ("Kal cbchui 75 deg, 1/2 screen", 75, 400, 2.55),
     ] {
         println!("{name}: model {:.2}, CR-kal {says}", ideal_power(&kal_duel(distance), aim, kal_calm));
+    }
+
+    // Aduka's tables, in and out of the acceptance set, against Flarecrow's fit
+    // (docs/research/flarecrow.md).
+    let crow = tuned_for(MobileKind::Flarecrow, Wind::default());
+    for (source, aim, quarters, says) in ADUKA_POWERS.into_iter().chain(ADUKA_POWERS_OUT) {
+        let model = ideal_power(&duel_of(MobileKind::Flarecrow, 200 * quarters), aim, crow);
+        println!("{source} {aim} deg, {quarters}/4 screen: Flarecrow {model:.3}, table {says}");
+    }
+    for (distance, says) in ADUKA_FULL_POWER {
+        let game = duel_of(MobileKind::Flarecrow, distance);
+        println!("CR-aduka full power, {distance} px: Flarecrow {} deg, guide {says}", lob_aim(&game, 4.0, crow));
     }
 
     let lob = flight(&duel(800), 80, ideal_power(&duel(800), 80, calm), calm);
