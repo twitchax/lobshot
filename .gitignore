@@ -5,3 +5,6 @@
 /assets/gen
 # Coverage output from `cargo make codecov`.
 coverage.lcov
+
+# Playwright MCP session logs and snapshots, written to the working directory.
+/.playwright-mcp

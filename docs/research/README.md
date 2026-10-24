@@ -19,6 +19,7 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`augerdillo.md`](augerdillo.md) | Nak (Augerdillo): the S2's mirrored bore, the SS that only stops in a mobile, its weak spot, and the community Nak formula fit. |
 | [`lensowl.md`](lensowl.md) | A.Sate (Lensowl): the tracer, its satellite's heights and lasers, the S1's side bias and the SS sweep. |
 | [`needlemouse.md`](needlemouse.md) | Knight (Needlemouse): its sword counts, where the swords come from, and its GunBound and DragonBound stats. |
+| [`tinbadger.md`](tinbadger.md) | Raon (Tinbadger): when its mines crawl, whom they hunt, what sets them off, the walking SS, and every contradiction between the guides. |
 | [`modes-score.md`](modes-score.md) | Score mode: team lives, what a death costs, and how the dead drop back in, with every pick. Gathered on 2026-10-24. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |

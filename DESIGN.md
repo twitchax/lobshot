@@ -250,7 +250,10 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   its arc and goes off where it comes up; its SS rolls through land and stops only in a mobile) and
   Lensowl (an owl astronomer on a telescope rover, A.Sate's: every shot is a tracer, and a
   clockwork moon over it fires lasers at where the tracer lands) and Needlemouse (a mouse knight on
-  a wind-up toy horse, Knight's: the same tracer, with a pincushion raining pins on it).
+  a wind-up toy horse, Knight's: the same tracer, with a pincushion raining pins on it) and Tinbadger
+  (a badger tinker pushing a crate-cart of wind-up tin beetles, Raon's: its S2 lays mines, the
+  first state that outlives a turn, which crawl at the nearest mobile on its turn and go off under a
+  mobile's middle or in any blast; its SS winds up a big beetle that walks until it meets something).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:
