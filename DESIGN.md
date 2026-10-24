@@ -244,7 +244,9 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:
-  a giant tree's roots over a dusk marsh, A low arches, B a higher lattice).
+  a giant tree's roots over a dusk marsh, A low arches, B a higher lattice) and Starmote (sparse
+  starfield: motes of moon-rock and crystal in a violet void, A a loose ring of motes, B larger
+  motes beside a crystal spire).
 
 ## Testing
 

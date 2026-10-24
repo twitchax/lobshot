@@ -63,6 +63,9 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Starmote (M5), motes of moon-rock and crystal in a violet starfield on the sparse-starfield
+  archetype: A a loose ring of small motes around a crystal cluster, B larger motes beside a
+  crystal spire, with stepping stones that catch a fall off the high shoals.
 - Thistleback (M5), a hedgehog gardener with a wheelbarrow catapult: S1 a heavy cabbage, S2 a
   cabbage with two sprouts circling it, SS a pumpkin that bursts nine times in a ring and hurts
   most when it lands at a target's feet.
