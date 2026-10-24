@@ -25,12 +25,12 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice, Trico). J.Frog
-/// came after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog). Dragon
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice, Trico, Raon).
+/// J.Frog came after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog). Dragon
 /// isn't on it: Kitewyrm's is the chart's power for JD and Lightning, the shots GF-lee weighs Light,
 /// as it weighs Dragon's. A.Sate's (Lensowl's) is on the chart, and CR-sate's fixed-power method
 /// agrees.
-const CBCHUI: [(MobileKind, f64); 11] = [
+const CBCHUI: [(MobileKind, f64); 12] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
@@ -42,6 +42,7 @@ const CBCHUI: [(MobileKind, f64); 11] = [
     (MobileKind::Thistleback, 2.65),
     (MobileKind::Kitewyrm, 2.30),
     (MobileKind::Lensowl, 2.50),
+    (MobileKind::Tinbadger, 2.50),
 ];
 
 /// Mobiles the chart leaves out whose shot weight the sources tie to a charted one's, with that

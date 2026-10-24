@@ -23,113 +23,120 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x8d48_2b7c_0a4c_a292),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6692_3498_df91_7f62),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0x631d_6850_ae14_cc26,
+        0x719f_bf71_eaa6_6416,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x108a_3366_ee2b_90dc),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x4294_3d82_2c03_c33d),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xa6d0_0503_e825_473c),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x60cd_ece7_e933_5bc5),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0xbf78_a853_47dc_883d,
+        0x6f3a_abc8_1f99_e8c5,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0xbe25_d8d9_c0ea_169d,
+        0x3de5_e0c3_a4c4_d625,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0x8ba8_07c2_fb1e_7b64,
+        0x03a6_f123_3613_6f04,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0xe088_e1e3_b6c2_2fa5,
+        0x07eb_440a_d4a2_f06d,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0x3c69_3f88_6961_e900,
+        0x3d17_f50e_8449_5100,
     ),
     (
         "roster_frostfin",
         include_str!("golden/roster_frostfin.json"),
         include_bytes!("golden/roster_frostfin.bin"),
         54,
-        0x01a1_373c_f1d5_87a2,
+        0x5037_52de_21bb_5ef2,
     ),
     (
         "roster_herdhound",
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         54,
-        0x4aac_f207_d8bf_5766,
+        0x7764_0df2_0ff0_7156,
     ),
     (
         "roster_thistleback",
         include_str!("golden/roster_thistleback.json"),
         include_bytes!("golden/roster_thistleback.bin"),
         63,
-        0x1edf_5e38_fe93_399e,
-    ),
-    (
-        "mode_score",
-        include_str!("golden/mode_score.json"),
-        include_bytes!("golden/mode_score.bin"),
-        153,
-        0x01e7_911d_bc0c_d827,
+        0x1493_9203_c4e7_544e,
     ),
     (
         "roster_kitewyrm",
         include_str!("golden/roster_kitewyrm.json"),
         include_bytes!("golden/roster_kitewyrm.bin"),
         32,
-        0x0e01_66a4_6496_13e9,
+        0x512f_d4b1_5782_cb51,
     ),
     (
         "roster_flarecrow",
         include_str!("golden/roster_flarecrow.json"),
         include_bytes!("golden/roster_flarecrow.bin"),
         74,
-        0x9161_52a1_3b55_8a57,
+        0xee41_541a_6f0c_4cef,
     ),
     (
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
         99,
-        0x8f5c_e9dc_3d31_79d2,
+        0x50f7_e4eb_9f95_b8a2,
     ),
     (
         "roster_lensowl",
         include_str!("golden/roster_lensowl.json"),
         include_bytes!("golden/roster_lensowl.bin"),
         65,
-        0x46ad_4500_ac8d_e8db,
+        0xc549_4139_49ea_7c13,
     ),
     (
         "roster_needlemouse",
         include_str!("golden/roster_needlemouse.json"),
         include_bytes!("golden/roster_needlemouse.bin"),
         32,
-        0x6bc8_1e00_27a0_196b,
+        0x0808_e269_8203_f323,
+    ),
+    (
+        "roster_tinbadger",
+        include_str!("golden/roster_tinbadger.json"),
+        include_bytes!("golden/roster_tinbadger.bin"),
+        52,
+        0xc20e_4b28_4594_ef5c,
+    ),
+    (
+        "mode_score",
+        include_str!("golden/mode_score.json"),
+        include_bytes!("golden/mode_score.bin"),
+        153,
+        0xf1cc_9be1_fabf_854f,
     ),
 ];
 
@@ -248,6 +255,30 @@ fn roster_augerdillo_bores_and_rolls_through_the_hills() {
     assert!(bored && rolled, "bored: {bored}; rolled into the target: {rolled}");
 }
 
+#[test]
+fn roster_tinbadger_lays_mines_that_outlive_their_turn() {
+    // Tinbadger fires all three shots; its S2's mines stay on the map past the turn that laid
+    // them, and crawl as its turn comes up.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_tinbadger").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut laid, mut crawled, mut outlived) = (Vec::new(), 0, 0, false);
+    for event in &log.events {
+        let before = game.mines().to_vec();
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::MineLaid { .. } => laid += 1,
+                Effect::MineCrawled { .. } => crawled += 1,
+                _ => {}
+            }
+        }
+        outlived |= matches!(event, Event::Pass { .. } | Event::Shoot { seat: 1, .. }) && !before.is_empty();
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(laid >= 2 && crawled >= 1 && outlived, "laid {laid}, crawled {crawled}, outlived a turn: {outlived}");
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 
 /// Re-records every golden game and prints the `GOLDEN` table. Native only (it writes files).
@@ -314,6 +345,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_augerdillo", play(roster_augerdillo(), &winds)),
         ("roster_lensowl", play(roster_lensowl(), &winds)),
         ("roster_needlemouse", play(roster_needlemouse(), &winds)),
+        ("roster_tinbadger", play(roster_tinbadger(), &winds)),
         ("mode_score", play(mode_score(), &winds)),
     ]
 }
@@ -661,6 +693,25 @@ fn roster_needlemouse() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Needlemouse, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Tinbadger against Coilback on hills in wind: its S1, S2 and SS each fire, and its mines stay on
+/// the map from turn to turn.
+fn roster_tinbadger() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 80,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Tinbadger, 420, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="-8 -10 40 20">
+  <!-- Tinbadger's launcher: a riveted tin tube on a spring hinge, flaring to a bell at the mouth,
+       with a brass wind-up key on top and a beetle peeking out. Origin = pivot (the hinge bolt);
+       drawn at aim 0 (pointing +x). Muzzle = (24, 0), the beetle in the bell. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the wind-up key on top of the tube, its bow edge-on -->
+    <path d="M 9.6,-3.2 V -6" stroke="#2a1a2e" stroke-width="1.8"/>
+    <path d="M 9.6,-3.2 V -6" stroke="#e9b949" stroke-width="0.8"/>
+    <ellipse cx="7.6" cy="-7.4" rx="2.2" ry="1.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <ellipse cx="11.6" cy="-7.4" rx="2.2" ry="1.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="7.6" cy="-7.4" r="0.6" fill="#2a1a2e"/>
+    <circle cx="11.6" cy="-7.4" r="0.6" fill="#2a1a2e"/>
+    <!-- the tube: tin, a light band along its top, rivets along a seam -->
+    <path d="M 0,-3.4 L 17.6,-3.4 C 19.6,-3.6 21.6,-5.2 23.2,-6.4 L 25,-6.4 L 25,6.4 L 23.2,6.4 C 21.6,5.2 19.6,3.6 17.6,3.4 L 0,3.4 Z" fill="#a9b6c4" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 0,1 L 17.6,1 C 19.8,1.2 21.8,2.8 23.6,4.4 L 25,4.4 L 25,6.4 L 23.2,6.4 C 21.6,5.2 19.6,3.6 17.6,3.4 L 0,3.4 Z" fill="#7d8a9a"/>
+    <path d="M 1.6,-2.2 H 17.4 C 19.2,-2.4 21,-3.8 22.6,-5" stroke="#eef3f8" stroke-width="0.8" fill="none"/>
+    <path d="M 6,-3.4 V 3.4 M 15,-3.4 V 3.4" stroke="#5a6676" stroke-width="0.7"/>
+    <g fill="#5a6676"><circle cx="3.6" cy="-0.4" r="0.5"/><circle cx="8.6" cy="-0.4" r="0.5"/><circle cx="12.6" cy="-0.4" r="0.5"/></g>
+    <!-- the beetle peeking out of the bell: its tin dome and a bead eye -->
+    <path d="M 23.4,3.6 C 23.4,-1.4 25.6,-3.6 27.6,-3.6 C 29.8,-3.6 31.6,-1 31.2,2.4 Z" fill="#7ccad8" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 25.2,-0.6 C 25.6,-2 26.6,-2.8 27.6,-2.8" stroke="#ffffff" stroke-width="0.8" fill="none"/>
+    <circle cx="29.4" cy="0.4" r="0.9" fill="#2a1a2e"/>
+    <path d="M 27.6,-3.4 L 28.8,-6.8" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle cx="29" cy="-7.2" r="1" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.5"/>
+    <!-- the bell's rolled rim, over the beetle -->
+    <path d="M 25,-6.6 V 6.6" stroke="#2a1a2e" stroke-width="2.6"/>
+    <path d="M 25,-6.6 V 6.6" stroke="#d6dee8" stroke-width="1.2"/>
+    <!-- the spring hinge -->
+    <circle r="4.6" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 3.2,0 A 3.2 3.2 0 1 1 0,-3.2 M 2,0 A 2 2 0 1 0 0,2" stroke="#b4b2cc" stroke-width="0.8" fill="none"/>
+    <circle r="1.5" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+  </g>
+</svg>

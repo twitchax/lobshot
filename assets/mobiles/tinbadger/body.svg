@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="84" height="66" viewBox="-44 -60 84 66">
+  <!-- Tinbadger body: a badger tinker in brass goggles and a leather apron, pushing a wooden crate
+       cart heaped with wind-up tin beetles. The badger (striped face, grey coat, black legs, the
+       apron's pocket of tools, paws on the push bar), the crate (planks, iron straps, its beetles
+       and their keys) and its undercarriage. The two cart wheels spin; the tin launcher on the
+       crate's front corner is the cannon. The rider sits in the crate among the beetles.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <ellipse id="coat" cx="-21" cy="-24" rx="12.6" ry="15.4"/>
+    <clipPath id="coatClip"><use href="#coat"/></clipPath>
+    <path id="head" d="M -21.4,-45.6 C -21.6,-51.6 -15.4,-54.2 -10.6,-52.6 C -6.4,-51.2 -3.6,-47.6 -0.6,-43.6 C 0.6,-42 0.2,-40 -1.6,-39.4 C -5.6,-38 -10.6,-36.8 -15,-37.4 C -19,-38 -21.2,-41.4 -21.4,-45.6 Z"/>
+    <clipPath id="headClip"><use href="#head"/></clipPath>
+    <rect id="crate" x="0" y="-36" width="34" height="23" rx="1.2"/>
+    <clipPath id="crateClip"><use href="#crate"/></clipPath>
+    <radialGradient id="crateLight" cx="6" cy="-34" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff1d0" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#fff1d0" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#3a2030" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3a2030" stop-opacity="0.3"/>
+    </radialGradient>
+    <radialGradient id="coatLight" cx="-26" cy="-36" r="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.85" stop-color="#2a1a2e" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2a1a2e" stop-opacity="0.25"/>
+    </radialGradient>
+    <!-- a tin beetle in the heap: a domed shell with a seam, a little head, a brass key -->
+    <g id="beetle">
+      <path d="M -5.4,0 C -5.4,-4.4 -2.6,-6.4 0,-6.4 C 2.6,-6.4 5.4,-4.4 5.4,0 Z" fill="#63b7c7" stroke="#2a1a2e" stroke-width="0.8"/>
+      <path d="M 0,-6.2 V 0" stroke="#2f6f82" stroke-width="0.7"/>
+      <path d="M -3.6,-3.4 C -3.2,-4.8 -2,-5.6 -0.8,-5.6" stroke="#d4f4f8" stroke-width="0.9" fill="none"/>
+      <circle cx="5.6" cy="-1.4" r="2" fill="#3f8ea2" stroke="#2a1a2e" stroke-width="0.7"/>
+      <circle cx="6.1" cy="-1.8" r="0.6" fill="#2a1a2e"/>
+    </g>
+    <g id="key">
+      <path d="M -0.5,0 V -2.4" stroke="#2a1a2e" stroke-width="1.6"/>
+      <path d="M -0.5,0 V -2.4" stroke="#e9b949" stroke-width="0.7"/>
+      <ellipse cx="-2" cy="-3.6" rx="1.7" ry="1.3" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+      <ellipse cx="1" cy="-3.6" rx="1.7" ry="1.3" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+    </g>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the tail, a grey tuft behind -->
+    <path d="M -32.4,-22 C -37.6,-22.4 -40,-19.4 -39.6,-16 C -36.6,-17.6 -34.6,-17.4 -32.6,-18.4 Z" fill="#8f8e9e" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -37.6,-19.6 C -36.6,-20.8 -35,-21.2 -33.6,-21" stroke="#c9c8d6" stroke-width="0.7" fill="none"/>
+
+    <!-- the far hind leg, in the shade -->
+    <path d="M -15.6,-14 L -14.6,-3.2" stroke="#2a1a2e" stroke-width="6" fill="none"/>
+    <path d="M -15.6,-14 L -14.6,-3.2" stroke="#3a3442" stroke-width="4.4" fill="none"/>
+    <ellipse cx="-13.2" cy="-1.8" rx="4.2" ry="2.2" fill="#2e2a36" stroke="#2a1a2e" stroke-width="0.8"/>
+
+    <!-- the far end of the push bar, behind the badger -->
+    <path d="M 0.6,-30.6 L -5.4,-31.6" stroke="#2a1a2e" stroke-width="3.8" fill="none"/>
+    <path d="M 0.6,-30.6 L -5.4,-31.6" stroke="#8a5a30" stroke-width="2.2" fill="none"/>
+
+    <!-- the coat: grey, darker over the back, pale at the belly -->
+    <use href="#coat" fill="#a7a6b4" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#coatClip)">
+      <path d="M -36,-40 C -30,-36 -28,-26 -30,-6 H -36 Z" fill="#7c7a8c"/>
+      <path d="M -26,-38 C -25,-30 -26,-20 -29,-8" stroke="#8f8e9e" stroke-width="1.2" fill="none"/>
+      <path d="M -12,-34 C -9,-26 -9,-16 -12,-8 H -6 V -34 Z" fill="#d8d4dc"/>
+      <rect x="-36" y="-42" width="32" height="36" fill="url(#coatLight)"/>
+    </g>
+    <!-- the near hind leg, stepping into the push -->
+    <path d="M -25.6,-13.6 L -28.4,-3.2" stroke="#2a1a2e" stroke-width="6.4" fill="none"/>
+    <path d="M -25.6,-13.6 L -28.4,-3.2" stroke="#4a4458" stroke-width="4.8" fill="none"/>
+    <ellipse cx="-27.4" cy="-1.8" rx="4.6" ry="2.3" fill="#3a3442" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -24.4,-0.8 V -0.1 M -22.8,-1 V -0.2" stroke="#8f8e9e" stroke-width="0.6"/>
+
+    <!-- the leather tinker's apron, its strap round the neck -->
+    <path d="M -17.6,-34 C -13.6,-36.2 -10.4,-35.8 -8.4,-33.8 L -8.6,-12.6 C -11.4,-10.6 -15.8,-10.8 -18.4,-12.4 Z" fill="#a8613a" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -16.4,-31.6 C -14,-33.2 -11.6,-33 -10,-31.8" stroke="#d48a58" stroke-width="0.9" fill="none"/>
+    <path d="M -9.2,-31 L -9.4,-14" stroke="#7a3f22" stroke-width="1.2" fill="none"/>
+    <!-- its pocket: a spanner and a screwdriver poking out -->
+    <path d="M -15.6,-22.4 H -10 V -16.4 Q -12.8,-15.2 -15.6,-16.4 Z" fill="#8a4b2e" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -14.4,-22.6 L -15.2,-27.4" stroke="#2a1a2e" stroke-width="1.8"/>
+    <path d="M -14.4,-22.6 L -15.2,-27.4" stroke="#b4b2cc" stroke-width="0.8"/>
+    <path d="M -16.4,-27.8 A 1.3 1.3 0 0 1 -14,-28.2" stroke="#2a1a2e" stroke-width="1.6" fill="none"/>
+    <path d="M -16.4,-27.8 A 1.3 1.3 0 0 1 -14,-28.2" stroke="#b4b2cc" stroke-width="0.7" fill="none"/>
+    <path d="M -11.4,-22.6 L -10.8,-26.6" stroke="#2a1a2e" stroke-width="2"/>
+    <path d="M -11.4,-22.6 L -10.8,-26.6" stroke="#e8434f" stroke-width="1"/>
+
+    <!-- a beetle riding on the badger's shoulders, key up -->
+    <use href="#key" transform="translate(-27,-39.6) rotate(-10)"/>
+    <use href="#beetle" transform="translate(-26.6,-34.6) rotate(-14) scale(0.95)"/>
+
+    <!-- the head: grey crown and nape, the black mask stripe through the eye, the white blaze -->
+    <use href="#head" fill="#f4f1ea" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#headClip)">
+      <path d="M -24,-50 C -18,-49 -12,-47 -4,-43.2 C -2,-42.4 0,-42.4 1,-43 V -36 H -24 Z" fill="#2e2a36"/>
+      <path d="M -24,-44.2 C -20,-43.6 -15,-41.6 -10,-39.6 C -7,-38.6 -4,-38.4 -1,-38.8 V -36 H -24 Z" fill="#f4f1ea"/>
+      <path d="M -24,-56 C -20,-53.6 -18,-50 -18.6,-44 L -24,-44 Z" fill="#8f8e9e"/>
+      <path d="M -14,-53 C -10,-52 -6,-49.4 -2.6,-46" stroke="#ffffff" stroke-width="1.1" fill="none"/>
+    </g>
+    <!-- a round ear, white-rimmed -->
+    <ellipse cx="-18.6" cy="-50.4" rx="2.8" ry="2.4" fill="#2e2a36" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -21,-51.4 A 2.6 2.4 0 0 1 -16.4,-52.2" stroke="#f4f1ea" stroke-width="0.9" fill="none"/>
+    <!-- the nose and a bead eye in the mask -->
+    <ellipse cx="0" cy="-41.6" rx="1.9" ry="1.5" fill="#2e2030" stroke="#2a1a2e" stroke-width="0.5"/>
+    <circle cx="-0.6" cy="-42.2" r="0.5" fill="#9a8aa8"/>
+    <circle cx="-8.2" cy="-44.6" r="1.6" fill="#120c16"/>
+    <circle cx="-8.7" cy="-45.2" r="0.6" fill="#ffffff"/>
+    <path d="M -5.2,-39.6 Q -3.6,-38.6 -2,-39.2" stroke="#2a1a2e" stroke-width="0.6" fill="none"/>
+    <!-- brass tinker's goggles pushed up on the brow -->
+    <path d="M -21.4,-48.4 C -17,-51.4 -11.6,-52.6 -7.2,-51.6" stroke="#2a1a2e" stroke-width="2.4" fill="none"/>
+    <path d="M -21.4,-48.4 C -17,-51.4 -11.6,-52.6 -7.2,-51.6" stroke="#6e4224" stroke-width="1.2" fill="none"/>
+    <circle cx="-12.4" cy="-52.4" r="2.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-12.4" cy="-52.4" r="1.5" fill="#7fd3e0"/>
+    <circle cx="-7.8" cy="-51.8" r="2.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-7.8" cy="-51.8" r="1.4" fill="#7fd3e0"/>
+    <circle cx="-8.3" cy="-52.4" r="0.5" fill="#ffffff"/>
+    <circle cx="-12.9" cy="-53" r="0.5" fill="#ffffff"/>
+
+    <!-- the undercarriage: an iron axle beam and its bosses -->
+    <path d="M -1.4,-12.6 H 35.4 V -9.6 H -1.4 Z" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -0.4,-11.8 H 34.4" stroke="#8a88a6" stroke-width="0.7"/>
+
+    <!-- the heap of tin beetles over the crate's rim, keys up -->
+    <use href="#beetle" transform="translate(14,-36.4)"/>
+    <use href="#beetle" transform="translate(4.6,-35.6) scale(-1.05,1.05)"/>
+    <use href="#key" transform="translate(4.4,-42.2) rotate(-12)"/>
+    <use href="#beetle" transform="translate(22.4,-35.8) scale(1.05)"/>
+    <use href="#key" transform="translate(21.4,-42) rotate(4)"/>
+
+    <!-- the crate: planks, a darker back post, iron straps and corner brackets -->
+    <use href="#crate" fill="#d49a5e" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#crateClip)">
+      <path d="M -1,-28.6 H 35 M -1,-21 H 35" stroke="#9a6235" stroke-width="0.9"/>
+      <path d="M -1,-27.6 H 35 M -1,-20 H 35" stroke="#f0c48e" stroke-width="0.6"/>
+      <path d="M 3,-34 Q 5,-33.4 7,-34 M 22,-25.6 Q 24.6,-25 27,-25.8 M 9,-17.4 Q 11,-16.8 13,-17.4" stroke="#9a6235" stroke-width="0.6" fill="none"/>
+      <rect x="-1" y="-37" width="4" height="25" fill="#b9783e"/>
+      <rect x="31" y="-37" width="4" height="25" fill="#b9783e"/>
+      <path d="M -1,-16 C 10,-14.6 24,-14.6 36,-16.4 V -12 H -1 Z" fill="#a8693a"/>
+      <rect x="-2" y="-38" width="38" height="28" fill="url(#crateLight)"/>
+    </g>
+    <path d="M 8.6,-36 V -13 M 25.4,-36 V -13" stroke="#5a5870" stroke-width="1.6"/>
+    <path d="M 8.2,-35 V -14 M 25,-35 V -14" stroke="#8a88a6" stroke-width="0.5"/>
+    <g fill="#3e3c52"><circle cx="8.6" cy="-33.2" r="0.6"/><circle cx="8.6" cy="-15.6" r="0.6"/><circle cx="25.4" cy="-33.2" r="0.6"/><circle cx="25.4" cy="-15.6" r="0.6"/></g>
+    <path d="M -0.6,-36.4 H 34.6" stroke="#2a1a2e" stroke-width="2.6"/>
+    <path d="M -0.6,-36.4 H 34.6" stroke="#e8b07a" stroke-width="1.2"/>
+    <!-- team roundel, stencilled on the crate's side -->
+    <circle cx="17" cy="-24.4" r="3" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="17" cy="-24.4" r="2" fill="#e8434f"/>
+    <path transform="translate(17,-24.4) scale(0.42)" d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#fff1d0" stroke-width="1.6" fill="none"/>
+
+    <!-- a beetle loose from the heap, climbing the crate's front, and its key -->
+    <use href="#key" transform="translate(32.2,-22.4) rotate(-90)"/>
+    <use href="#beetle" transform="translate(34.4,-22.6) rotate(-90)"/>
+
+    <!-- the near end of the push bar, gripped in the badger's paws -->
+    <path d="M 0.6,-28.4 L -6,-29.6" stroke="#2a1a2e" stroke-width="4.2" fill="none"/>
+    <path d="M 0.6,-28.4 L -6,-29.6" stroke="#c98a4f" stroke-width="2.6" fill="none"/>
+    <path d="M -0.6,-29.4 L -5,-30.2" stroke="#e8b07a" stroke-width="0.7" fill="none"/>
+    <path d="M -12.6,-31 C -10.4,-30.2 -8.6,-29.8 -6.8,-29.8" stroke="#2a1a2e" stroke-width="4" fill="none"/>
+    <path d="M -12.6,-31 C -10.4,-30.2 -8.6,-29.8 -6.8,-29.8" stroke="#4a4458" stroke-width="2.6" fill="none"/>
+    <ellipse cx="-5.4" cy="-29.6" rx="2.4" ry="2.2" fill="#3a3442" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M -6.4,-31 A 1.6 1.6 0 0 1 -4.4,-31.2" stroke="#8f8e9e" stroke-width="0.6" fill="none"/>
+  </g>
+</svg>

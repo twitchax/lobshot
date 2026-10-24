@@ -9,6 +9,7 @@ use super::{Gun, land_in_order, skyeye};
 use crate::{
     ballistics::Flight,
     game::{Contact, Effect, Game, Senses, Shot, Track},
+    mines,
     tuning::{
         flarecrow::{S1_AFTERSHOCK, S1_AFTERSHOCK_REACH, S1_BLAST, S1_CHAIN, S1_CHAIN_REACH, S1_DAMAGE, S2_FLARE_SECONDS, S2_FLARES, SS_BEAM_BOOST},
         weather::SKYEYE_DELAY_SECONDS,
@@ -113,12 +114,31 @@ fn pass_through(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Ef
     let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: false });
     effects.push(Effect::Fired { seat: gun.seat, legs: track.legs.clone() });
     let delay = ticks(SKYEYE_DELAY_SECONDS.value);
-    for (seat, tick) in entries(game, gun.seat, &track) {
-        let enemy = game.players()[usize::from(seat)];
-        if enemy.alive {
-            skyeye::beam_by(game, enemy.center(), tick + delay, SS_BEAM_BOOST.value, effects);
-        }
+    // It calls a beam onto each enemy it passes into, and each mine it meets (WP06: a mini-Raon
+    // triggers it as an enemy does), in the order it meets them.
+    let mut calls: Vec<(u32, Call)> = entries(game, gun.seat, &track).into_iter().map(|(seat, tick)| (tick, Call::Enemy(seat))).collect();
+    calls.extend(mines::crossed(game, &track.legs).into_iter().map(|(mine, tick)| (tick, Call::Mine(mine.middle()))));
+    calls.sort_by_key(|&(tick, _)| tick);
+    for (tick, call) in calls {
+        let target = match call {
+            Call::Enemy(seat) => {
+                let enemy = game.players()[usize::from(seat)];
+                if !enemy.alive {
+                    continue;
+                }
+                enemy.center()
+            }
+            Call::Mine(at) => at,
+        };
+        skyeye::beam_by(game, target, tick + delay, SS_BEAM_BOOST.value, effects);
     }
+}
+
+/// What the SS calls a beam onto as it passes.
+#[derive(Debug, Clone, Copy)]
+enum Call {
+    Enemy(u8),
+    Mine(Vec2),
 }
 
 /// Each time `track` passes into an enemy of `shooter`'s, in order: the enemy, and the stage tick.
@@ -338,6 +358,25 @@ mod unit {
             !effects.iter().any(|e| matches!(e, Effect::Exploded { at, .. } if at.y > 500.0)),
             "it carved nothing under the ground: {effects:?}"
         );
+    }
+
+    #[test]
+    fn ss_beams_a_mine_it_passes_over_and_sets_it_off() {
+        // WP06: Aduka's SS "triggers Thor's Hammer when it hits an enemy mobile ..., a jewel, or a
+        // mini-Raon". A mine on the ground where its path goes into it.
+        let (mut game, power) = line_up();
+        let flight = game.launch(0, Shot::Ss, 170, power.bars()).unwrap();
+        let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: false });
+        let leg = track.legs[0];
+        let into = (leg.from..=leg.to).map(|tick| leg.flight.at(tick)).find(|at| at.y >= 496.0).unwrap();
+        let mut laid = Vec::new();
+        mines::lay(&mut game, 1, Vec2::new(into.x, 499.5), Facing::Left, 0, &mut laid);
+        let mine = game.mines()[0];
+        assert!(mine.middle().distance(into) <= crate::tuning::tinbadger::MINE_RADIUS.value, "{into:?} {mine:?}");
+        let effects = shoot(&mut game, 0, Shot::Ss, 170, power);
+        assert_eq!(beams(&effects).len(), 3, "two enemies and the mine: {effects:?}");
+        assert!(effects.iter().any(|e| matches!(e, Effect::MineGone { mine: id, tick: Some(_) } if *id == mine.id)), "{effects:?}");
+        assert_eq!(game.mines(), []);
     }
 
     #[test]
