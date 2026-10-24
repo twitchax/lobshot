@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="-9 -9 18 18">
+  <!-- Needlemouse's wheel: a painted toy wheel, a cotton reel's end, with a red rim and thread
+       wound round its hub. Origin = axle; spins (the reel's spokes make rotation readable). -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.49" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linecap="round">
+    <!-- Ring shading only: it spins, and a baked light would spin with it. -->
+    <circle r="7.6" fill="#8a4b2e"/>
+    <circle r="6.6" fill="#c97a4a"/>
+    <circle r="5.2" fill="#f2d7a8" stroke="#2a1a2e" stroke-width="0.7"/>
+    <g stroke="#2a1a2e" stroke-width="1.1"><path d="M 0,-5 V 5 M -4.3,-2.5 L 4.3,2.5 M -4.3,2.5 L 4.3,-2.5"/></g>
+    <circle r="2.2" fill="#6b4a9a" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle r="0.9" fill="#f2d7a8"/>
+  </g>
+</svg>

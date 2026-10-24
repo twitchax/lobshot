@@ -18,6 +18,7 @@ mod hookclaw;
 mod lanternwing;
 mod lensowl;
 mod marblemole;
+mod needlemouse;
 mod orbit;
 mod satellite;
 pub(crate) mod skyeye;
@@ -198,6 +199,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
         MobileKind::Lensowl => lensowl::fire(game, &gun, shot, effects),
+        MobileKind::Needlemouse => needlemouse::fire(game, &gun, shot, effects),
     }
 }
 
@@ -226,6 +228,7 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Thistleback => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
         MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
+        MobileKind::Needlemouse => Some(needlemouse::aim_point(game, seat, shot, flight)),
     }
 }
 

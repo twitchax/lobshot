@@ -76,8 +76,8 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
 /// S2's last, straight at the tracer; the SS's middle one, straight down over it.
 fn lead(home: Vec2, shot: Shot, guide: Vec2) -> (Vec2, Vec2) {
     match shot {
-        Shot::S1 if home.x > guide.x => (home, guide - Vec2::new(0.0, S1_HIGH.value)),
-        Shot::S1 | Shot::S2 => (home, guide),
+        Shot::S1 => (home, satellite::sighted(home, guide, S1_HIGH.value)),
+        Shot::S2 => (home, guide),
         Shot::Ss => {
             let over = Vec2::new(guide.x, home.y);
             (over, over + DOWN)

@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, lensowl, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, lensowl, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -62,11 +62,12 @@ pub enum MobileKind {
     Herdhound,
     Thistleback,
     Lensowl,
+    Needlemouse,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -79,6 +80,7 @@ impl MobileKind {
         Self::Herdhound,
         Self::Thistleback,
         Self::Lensowl,
+        Self::Needlemouse,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -102,6 +104,7 @@ impl MobileKind {
     pub fn satellite(self, foot: Vec2, shot: Shot) -> Option<Vec2> {
         let height = match self {
             Self::Lensowl => lensowl::satellite(shot),
+            Self::Needlemouse => needlemouse::satellite(shot),
             Self::Coilback
             | Self::Lanternwing
             | Self::Hookclaw
@@ -132,6 +135,7 @@ impl MobileKind {
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
             Self::Lensowl => &lensowl::MOBILE,
+            Self::Needlemouse => &needlemouse::MOBILE,
         }
     }
 }
@@ -561,9 +565,9 @@ pub enum Effect {
         seat: u8,
         legs: Vec<Leg>,
     },
-    /// `seat`'s own satellite (Lensowl's) glides to `at`, leaving where it was at stage tick `from`
-    /// and arriving at `to`: where it fires from next. It goes back over its mobile, at the height
-    /// of the shot picked (`MobileKind::satellite`), once the scene is over.
+    /// `seat`'s own satellite (Lensowl's, Needlemouse's) glides to `at`, leaving where it was at
+    /// stage tick `from` and arriving at `to`: where it fires from next. It goes back over its
+    /// mobile, at the height of the shot picked (`MobileKind::satellite`), once the scene is over.
     Satellite {
         seat: u8,
         at: Vec2,

@@ -1008,6 +1008,10 @@ fn about(mobile: MobileKind) -> String {
             "Every shot is a tracer that hurts nothing; once it lands, the satellite hovering over you fires lasers at it from where it hovers, and the first mobile or ground in a laser's way takes it, you included. S1 is one laser from {} px over your feet, aimed a little high when it fires leftward on screen, so it can sail over a target's head; S2 three from three times as high, which clears ground in the way, raining down left to right onto the tracer and spreading wider the farther off; SS sends the satellite over the landing to sweep five lasers straight down, left to right. Has a shield.",
             tuning::lensowl::SATELLITE_HEIGHT.value
         ),
+        MobileKind::Needlemouse => format!(
+            "A mouse knight on a wind-up toy horse, with the widest true angle range: every angle it can aim is true. Every shot is a tracer that hurts nothing; once it lands, the pincushion hovering over you fires pins at it, each flying straight at the tracer from where it leaves the cushion and striking the first mobile or ground in its way, you included. S1 is three pins from {} px over your feet, aimed a little high when they fly leftward on screen; S2 five from twice as high, which clears ground in the way; SS sends the cushion over the landing, where it sweeps back and forth as seven pins rain down onto the tracer. Its pins dig little.",
+            tuning::needlemouse::SATELLITE_HEIGHT.value
+        ),
     }
 }
 

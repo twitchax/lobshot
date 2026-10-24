@@ -138,8 +138,8 @@ pub struct Glide {
     pub seconds: f32,
 }
 
-/// A mobile's own satellite on screen (Lensowl's), apart from its body: it neither leans nor
-/// mirrors with it.
+/// A mobile's own satellite on screen (Lensowl's, Needlemouse's), apart from its body: it neither
+/// leans nor mirrors with it.
 #[derive(Component)]
 pub struct SatelliteView {
     pub seat: u8,

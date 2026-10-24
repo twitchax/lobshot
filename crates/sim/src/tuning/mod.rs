@@ -13,6 +13,7 @@ pub mod items;
 pub mod lanternwing;
 pub mod lensowl;
 pub mod marblemole;
+pub mod needlemouse;
 pub mod score;
 pub mod sparkhorn;
 pub mod spoutpot;

@@ -95,6 +95,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         65,
         0xf43b_b11a_2db7_190e,
     ),
+    (
+        "roster_needlemouse",
+        include_str!("golden/roster_needlemouse.json"),
+        include_bytes!("golden/roster_needlemouse.bin"),
+        32,
+        0x975a_bc37_c189_141a,
+    ),
 ];
 
 #[test]
@@ -233,6 +240,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
         ("roster_lensowl", play(roster_lensowl(), &winds)),
+        ("roster_needlemouse", play(roster_needlemouse(), &winds)),
     ]
 }
 
@@ -470,6 +478,23 @@ fn roster_lensowl() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Lensowl, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Needlemouse (Knight's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_needlemouse() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Needlemouse, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

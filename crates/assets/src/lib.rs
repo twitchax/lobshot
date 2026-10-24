@@ -184,9 +184,9 @@ pub struct MobileRig {
     pub second_barrel: Option<Cannon>,
     /// Where the rider sits.
     pub rider_socket: Socket,
-    /// The source SVG of the mobile's own satellite (Lensowl's), next to the rig: drawn hovering
-    /// over it, apart from the body, where `MobileKind::satellite` puts it, its pivot at the point
-    /// it fires from. Most rigs have none.
+    /// The source SVG of the mobile's own satellite (Lensowl's, Needlemouse's), next to the rig:
+    /// drawn hovering over it, apart from the body, where `MobileKind::satellite` puts it, its
+    /// pivot at the point it fires from. Most rigs have none.
     #[serde(default)]
     pub satellite: Option<String>,
 }
