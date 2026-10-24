@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, lodestoad, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -61,11 +61,12 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Lodestoad,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -77,6 +78,7 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Lodestoad,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -107,6 +109,7 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Lodestoad => &lodestoad::MOBILE,
         }
     }
 }
@@ -535,6 +538,16 @@ pub enum Effect {
     Guide {
         seat: u8,
         legs: Vec<Leg>,
+    },
+    /// Lodestoad's magnet pulled `seat` toward where it struck, or its pyramid pushed it away:
+    /// it slid along the ground from stage tick `from` to `to`, through `path` (a footing a step,
+    /// at an even pace), and stands at its last. One dragged over an edge ends in the air just
+    /// past it, and its `Fell` (or a bunge) follows with the others'.
+    Slid {
+        seat: u8,
+        path: Vec<Footing>,
+        from: u32,
+        to: u32,
     },
 }
 

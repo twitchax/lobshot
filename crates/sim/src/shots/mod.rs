@@ -14,6 +14,7 @@ mod herdhound;
 mod homing;
 mod hookclaw;
 mod lanternwing;
+mod lodestoad;
 mod marblemole;
 mod orbit;
 pub(crate) mod skyeye;
@@ -193,6 +194,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Lodestoad => lodestoad::fire(game, &mut gun, shot, effects),
     }
 }
 
@@ -218,7 +220,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
         | MobileKind::Herdhound
-        | MobileKind::Thistleback => None,
+        | MobileKind::Thistleback
+        | MobileKind::Lodestoad => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }

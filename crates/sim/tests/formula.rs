@@ -22,9 +22,9 @@ use lobshot_sim::{
 const TOLERANCE_BARS: f64 = 0.05;
 
 /// CR-fixed's cbchui chart: the power that lands 60 degrees one screen away in zero wind, for each
-/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice, Trico). J.Frog
-/// came after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
-const CBCHUI: [(MobileKind, f64); 9] = [
+/// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice, Trico, JD).
+/// J.Frog came after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog).
+const CBCHUI: [(MobileKind, f64); 10] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
@@ -34,6 +34,7 @@ const CBCHUI: [(MobileKind, f64); 9] = [
     (MobileKind::Sudsotter, 2.10),
     (MobileKind::Frostfin, 2.33),
     (MobileKind::Thistleback, 2.65),
+    (MobileKind::Lodestoad, 2.30),
 ];
 
 /// GF-ice's 70-degree table for Ice, in eighths of a screen and bars: the entries in the acceptance

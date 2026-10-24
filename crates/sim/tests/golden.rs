@@ -88,6 +88,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         63,
         0xc8a1_51a2_4657_e6be,
     ),
+    (
+        "roster_lodestoad",
+        include_str!("golden/roster_lodestoad.json"),
+        include_bytes!("golden/roster_lodestoad.bin"),
+        80,
+        0x2089_8a0c_7a0c_23a5,
+    ),
 ];
 
 #[test]
@@ -164,6 +171,32 @@ fn roster_frostfin_frosts_its_target() {
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
 }
 
+#[test]
+fn roster_lodestoad_pulls_and_pushes_its_target() {
+    // Lodestoad fires all three shots: its S2's magnet slides the Coilback toward where it struck,
+    // and its SS's pyramid away.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_lodestoad").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut slides) = (Vec::new(), Vec::new());
+    let mut shot = None;
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot: fired } => {
+                    shots.push(fired);
+                    shot = Some(fired);
+                }
+                Effect::Volley { .. } => shot = None,
+                Effect::Slid { seat: 1, .. } => slides.extend(shot),
+                _ => {}
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(slides.contains(&Shot::S2) && slides.contains(&Shot::Ss), "the shots that slid the Coilback: {slides:?}");
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 
 /// Re-records every golden game and prints the `GOLDEN` table. Native only (it writes files).
@@ -225,6 +258,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_lodestoad", play(roster_lodestoad(), &winds)),
     ]
 }
 
@@ -445,6 +479,25 @@ fn roster_thistleback() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Lodestoad against Coilback on hills in wind, from a crest (from a slope, its low aims hit the
+/// next hill) at a Coilback on the far slope: its S1, S2 and SS each fire, and the magnet and the
+/// pyramid slide the Coilback along the ground.
+fn roster_lodestoad() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Lodestoad, 280, Facing::Right, &[]), seat(Team::B, 1300, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

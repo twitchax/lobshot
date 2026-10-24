@@ -66,6 +66,14 @@ impl Stage {
         self.last_blast = self.last_blast.max(self.blast);
         self.blast
     }
+
+    /// A mobile sliding from the stage's tick `from` to `to` (Lodestoad's pull and push): it
+    /// starts then, and what falls, falls once it has stopped. Returns when it starts and stops.
+    fn slide(&mut self, from: u32, to: u32) -> (f32, f32) {
+        let stopped = self.base + ticks_to_seconds(to);
+        self.last_blast = self.last_blast.max(stopped);
+        (self.base + ticks_to_seconds(from), stopped)
+    }
 }
 
 /// The schedule for one event's effects.
@@ -106,6 +114,11 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             }
             Effect::Exploded { tick, .. } | Effect::Bolt { tick, .. } | Effect::Beam { tick, .. } | Effect::ShieldStripped { tick, .. } | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
             Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
+            Effect::Slid { from, to, .. } => {
+                let (starts, stops) = stage.slide(*from, *to);
+                busy = busy.max(stops);
+                starts
+            }
             Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } | Effect::Frosted { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
                 Death::Blasted => stage.blast + DEATH_AFTER_BLAST,
@@ -436,6 +449,32 @@ mod unit {
         ];
         let schedule = schedule(&effects);
         assert_eq!(schedule.at, [0.0, 0.0, 0.0, 0.0, 2.0]);
+    }
+
+    #[test]
+    fn what_falls_after_a_slide_waits_for_it_to_stop() {
+        // Lodestoad's magnet drags a mobile half a second along the ground and over an edge.
+        let second = TICKS_PER_SECOND;
+        let effects = vec![
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 25.0,
+                tick: second,
+                dirty: None,
+            },
+            Effect::Slid {
+                seat: 1,
+                path: vec![Footing { x: 10, y: 20 }, Footing { x: 11, y: 20 }],
+                from: second,
+                to: second + second / 2,
+            },
+            Effect::Fell { seat: 1, to: Footing { x: 11, y: 90 } },
+            Effect::Died { seat: 1, death: Death::Bunged },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at[..3], [1.0, 1.0, 1.5 + SETTLE_SECONDS], "it slides from the blast, and falls once stopped");
+        assert_eq!(schedule.at[3], 1.5 + SETTLE_SECONDS + FALL_SECONDS);
+        assert_eq!(schedule.end, 1.5 + SETTLE_SECONDS + FALL_SECONDS + FALL_SECONDS + TAIL_SECONDS);
     }
 
     #[test]
