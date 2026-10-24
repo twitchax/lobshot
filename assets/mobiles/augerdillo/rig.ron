@@ -1,0 +1,36 @@
+// Augerdillo: an armadillo in a miner's headlamp, curled up on a tracked drill rig, firing drill
+// shells from the mortar on the back of its shell. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the ground contact under the track, +x =
+// facing, +y = down; facing left mirrors x. Every part SVG puts its pivot at its own origin, so
+// `at` is where that pivot lands in the body frame, and `cargo xtask art` renders each part with
+// its pivot at the image's center (lobshot_assets::ART_SCALE pixels per world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, cannon pivot and barrel length) lives in
+// sim::tuning::augerdillo; `cargo xtask art` refuses a rig whose cannon disagrees with it. It fires
+// over its back: its aims run 130 to 170, so the mortar points up and behind.
+MobileRig(
+    name: "Augerdillo",
+    parts: [
+        // Drawn in z order, lowest first. spin: rolls as it moves; aim: turns with the cannon.
+        // The track's road wheels ride on the belt, under the rig's hull.
+        (id: "tread",       file: "tread.svg",  at: (0.0, 0.0),    z: 0),
+        (id: "wheel_rear",  file: "wheel.svg",  at: (-20.0, -7.4), z: 1, spin: true),
+        (id: "wheel_back",  file: "wheel.svg",  at: (-8.0, -7.4),  z: 1, spin: true),
+        (id: "wheel_mid",   file: "wheel.svg",  at: (4.0, -7.4),   z: 1, spin: true),
+        (id: "wheel_front", file: "wheel.svg",  at: (16.0, -7.4),  z: 1, spin: true),
+        (id: "body",        file: "body.svg",   at: (0.0, 0.0),    z: 2),
+        // The mortar swivels in a yoke raised on the back of the shell, behind the rider, high
+        // enough to clear the shell aimed level behind it.
+        (id: "cannon",      file: "cannon.svg", at: (-15.0, -48.0), z: 3, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where shots leave, in the cannon's frame at aim 0 (pointing +x): the mortar's mouth,
+        // one barrel length (sim::tuning) from the pivot. The drill shell's tip pokes out past it.
+        muzzle: (26.0, 0.0),
+    ),
+    // Riders are cosmetic and swappable; a rider's origin is its seat. The rider sits on a pad on
+    // the front of the shell, hands on the drill lever.
+    rider_socket: (at: (7.0, -44.0), z: 4),
+)

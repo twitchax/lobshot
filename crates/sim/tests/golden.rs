@@ -102,6 +102,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         74,
         0x7a11_9392_d851_ec67,
     ),
+    (
+        "roster_augerdillo",
+        include_str!("golden/roster_augerdillo.json"),
+        include_bytes!("golden/roster_augerdillo.bin"),
+        99,
+        0xc1c7_a661_a1b1_0db2,
+    ),
 ];
 
 #[test]
@@ -198,6 +205,27 @@ fn roster_flarecrow_calls_skyeye_down() {
     assert!(beams >= 3, "{beams} beams");
 }
 
+#[test]
+fn roster_augerdillo_bores_and_rolls_through_the_hills() {
+    // Augerdillo fires all three shots over its back: an S2 bores through the ground and comes up
+    // to blow, and its SS rolls through the hills into the Coilback.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_augerdillo").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut bored, mut rolled) = (Vec::new(), false, false);
+    for event in &log.events {
+        let effects = game.apply(*event).unwrap();
+        let Event::Shoot { seat: 0, shot, .. } = *event else { continue };
+        shots.push(shot);
+        let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
+        let legs = effects.iter().find_map(|e| if let Effect::Fired { legs, .. } = e { Some(legs.len()) } else { None }).unwrap_or(0);
+        bored |= shot == Shot::S2 && legs >= 2 && blasts > 0;
+        rolled |= shot == Shot::Ss && effects.iter().any(|e| matches!(e, Effect::Damaged { seat: 1, .. }));
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(bored && rolled, "bored: {bored}; rolled into the target: {rolled}");
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 
 /// Re-records every golden game and prints the `GOLDEN` table. Native only (it writes files).
@@ -261,6 +289,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_thistleback", play(roster_thistleback(), &winds)),
         ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
         ("roster_flarecrow", play(roster_flarecrow(), &winds)),
+        ("roster_augerdillo", play(roster_augerdillo(), &winds)),
     ]
 }
 
@@ -516,6 +545,24 @@ fn roster_flarecrow() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Flarecrow, 400, Facing::Left, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Augerdillo (Nak's behavior) against Coilback on hills in wind: its S1, its burrowing S2 and its
+/// SS through the hills. The ground runs deep, so a bore can come up.
+fn roster_augerdillo() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 1100,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Augerdillo, 650, Facing::Left, &[]), seat(Team::B, 1350, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

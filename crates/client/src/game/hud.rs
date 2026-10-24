@@ -980,6 +980,8 @@ mod unit {
         let behind = MobileKind::Flarecrow.tuning().s1.aim.value;
         assert_eq!(angle_label(150, Some(140), Some(behind)), "Angle 30 (last 40)");
         assert_eq!(angle_label(30, None, Some(MobileKind::Coilback.tuning().s1.aim.value)), "Angle 30");
+        let rear = MobileKind::Augerdillo.tuning().s1.aim.value;
+        assert_eq!(angle_label(150, Some(165), Some(rear)), "Angle 30 (last 15)");
         assert_eq!(angle_label(30, None, None), "Angle 30");
     }
 

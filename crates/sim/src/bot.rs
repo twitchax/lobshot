@@ -518,6 +518,17 @@ mod unit {
     }
 
     #[test]
+    fn it_turns_its_back_on_its_target_to_fire_over_it() {
+        // Augerdillo fires over its back: facing its target, it turns away first.
+        let mut game = duel_of(MobileKind::Augerdillo, MobileKind::Coilback, 700);
+        assert_eq!(game.players()[0].facing, Facing::Right);
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert_eq!(events[0], Event::Walk { seat: 0, facing: Facing::Left, steps: 0 });
+        let effects = play(&mut game, events);
+        assert!(damage_to(&effects, 1) > 0, "{effects:?}");
+    }
+
+    #[test]
     fn it_only_plans_its_own_turn_and_is_a_pure_function_of_its_seed() {
         let game = duel(700);
         assert_eq!(plan(&game, 1, Level::Hard, 7), None);

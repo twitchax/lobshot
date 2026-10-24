@@ -424,6 +424,21 @@ mod unit {
     }
 
     #[test]
+    fn a_shot_over_the_back_is_as_high_as_its_elevation() {
+        // Augerdillo's 150 is 30 degrees above the horizon behind it: never a high lob, however long
+        // it flies. Off a tall pillar over a deep pit, it falls for seconds.
+        let terrain = crate::terrain::Terrain::from_fn(2400, 3000, |x, y| y >= 2900 || ((280..320).contains(&x) && y >= 200)).unwrap();
+        let game = crate::game::testing::game_on(
+            terrain,
+            vec![seat(Team::A, MobileKind::Augerdillo, 300, Facing::Left), seat(Team::B, MobileKind::Coilback, 2000, Facing::Left)],
+        );
+        let power = Power::nearest(2.0);
+        let flown = seconds(game.track(game.launch(0, Shot::S1, 150, power.bars()).unwrap(), 0, 0).impact.tick);
+        assert!(flown >= 2.5, "{flown:.2} s");
+        assert_eq!(tricks_of(&game, 150, power), [], "30 degrees, not 150");
+    }
+
+    #[test]
     fn a_hook_is_a_boomerang_out_front_and_behind_the_back_behind() {
         // Facing the target into a gale, high: it sails out, turns, and comes down in front.
         let mut game = duel_of(MobileKind::Hookclaw, MobileKind::Coilback, 300);

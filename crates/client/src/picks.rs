@@ -120,6 +120,7 @@ pub fn role(mobile: Option<MobileKind>) -> &'static str {
         Some(MobileKind::Thistleback) => "A hedgehog gardener. Lobs heavy cabbages; its SS digs deep.",
         Some(MobileKind::Kitewyrm) => "A kite dragon that floats. Breathes fireballs; its SS calls dragons.",
         Some(MobileKind::Flarecrow) => "A crow signalman. Its flares call the satellite's beam down.",
+        Some(MobileKind::Augerdillo) => "A drilling armadillo. Fires over its back; its drills burrow.",
         None => "Any of them: the room picks when the game starts.",
     }
 }
@@ -169,8 +170,14 @@ const PORTRAIT: Vec2 = Vec2::new(66.0, 54.0);
 const PORTRAIT_SCALE: f32 = 0.5;
 /// The picker and editor's width: six mobile cards, or four item cards, side by side.
 pub const PICKS_WIDTH: f32 = 442.0;
-/// The cannon's aim in a portrait, in degrees.
+/// The cannon's aim in a portrait, in degrees above level.
 const PORTRAIT_AIM: f32 = 35.0;
+
+/// A portrait's cannon aim for `mobile`: `PORTRAIT_AIM` above level ahead, or over the back for a
+/// mobile that fires that way (Augerdillo).
+fn portrait_aim(mobile: MobileKind) -> f32 {
+    if mobile.tuning().s1.aim.value.backward() { 180.0 - PORTRAIT_AIM } else { PORTRAIT_AIM }
+}
 
 fn portrait_frame() -> impl Bundle {
     (
@@ -366,7 +373,7 @@ fn draw_portraits(
                 ));
                 if aim {
                     // UI rotation turns clockwise on screen; aim counts counterclockwise.
-                    layer.insert(UiTransform::from_rotation(Rot2::degrees(-PORTRAIT_AIM)));
+                    layer.insert(UiTransform::from_rotation(Rot2::degrees(-portrait_aim(mobile))));
                 }
             }
         });
@@ -419,6 +426,14 @@ mod unit {
     fn the_starter_loadout_is_full_and_legal() {
         assert_eq!(starter().slots(), LOADOUT_SLOTS.value);
         assert_eq!(starter().items().count(), 5);
+    }
+
+    #[test]
+    // Exact: the aims are a constant and 180 minus it.
+    #[allow(clippy::float_cmp)]
+    fn a_portrait_aims_over_the_back_of_a_mobile_that_fires_that_way() {
+        assert_eq!(portrait_aim(MobileKind::Coilback), PORTRAIT_AIM);
+        assert_eq!(portrait_aim(MobileKind::Augerdillo), 180.0 - PORTRAIT_AIM);
     }
 
     #[test]

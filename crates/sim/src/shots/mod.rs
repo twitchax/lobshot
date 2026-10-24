@@ -4,6 +4,7 @@
 //! after another (`ripple`), bolts (`bolt`), helix strands (`helix`), orbiters (`orbit`), bouncing
 //! balls (`bounce`), blobs that walk the ground (`crawl`) and homing missiles (`homing`).
 
+mod augerdillo;
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
@@ -204,6 +205,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
         MobileKind::Kitewyrm => kitewyrm::fire(game, &gun, shot, effects),
         MobileKind::Flarecrow => flarecrow::fire(game, &mut gun, shot, effects),
+        MobileKind::Augerdillo => augerdillo::fire(game, &gun, shot, effects),
     }
 }
 
@@ -216,8 +218,8 @@ fn weatherproof(game: &Game, seat: u8) -> bool {
 }
 
 /// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
-/// for SearchBot's aim pass (Sudsotter's shots walk on from there). `target` is where the bot wants
-/// it.
+/// for SearchBot's aim pass (Sudsotter's shots walk on from there, Augerdillo's bore on or pass
+/// through the ground). `target` is where the bot wants it.
 pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
     match game.players().get(usize::from(seat))?.mobile {
         MobileKind::Coilback
@@ -233,6 +235,7 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Kitewyrm
         | MobileKind::Flarecrow => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
+        MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
     }
 }
 

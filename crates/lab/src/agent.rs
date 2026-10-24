@@ -1012,6 +1012,9 @@ fn about(mobile: MobileKind) -> String {
             tuning::flarecrow::S1_CHAIN.value,
             tuning::flarecrow::SS_BEAM_BOOST.value
         ),
+        MobileKind::Augerdillo => {
+            "Fires over its back: its aims run past 90, so 150 is 30 degrees above level on the side it faces away from; turn your back to the target. Heavy shots that the wind moves less. S1 is one round; S2 a drill that flies through mobiles, digs into the first ground it strikes, bores a mirror of its arc through it (the faster it struck, the deeper and farther) and goes off where it comes up, or is lost out of the map's bottom: drop it at a target's feet close by; SS an armadillo that rolls through the ground and goes off only in a mobile, any mobile, as a direct hit, worth most near its center. It walks little but climbs well.".to_owned()
+        }
     }
 }
 

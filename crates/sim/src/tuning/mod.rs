@@ -3,6 +3,7 @@
 //! every source is silent. Source keys (`SW-mds`, `CR-mob`, ...) are defined in `docs/research/`;
 //! a test checks every key cited here exists there. Balance work edits this module and nothing else.
 
+pub mod augerdillo;
 pub mod bot;
 pub mod coilback;
 pub mod drops;
