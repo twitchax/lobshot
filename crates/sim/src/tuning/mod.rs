@@ -3,6 +3,7 @@
 //! every source is silent. Source keys (`SW-mds`, `CR-mob`, ...) are defined in `docs/research/`;
 //! a test checks every key cited here exists there. Balance work edits this module and nothing else.
 
+pub mod augerdillo;
 pub mod bot;
 pub mod coilback;
 pub mod drops;
@@ -262,7 +263,8 @@ pub struct Rect {
     pub h: f64,
 }
 
-/// An aim range in whole degrees above the body's forward direction.
+/// An aim range in whole degrees above the body's forward direction. A range past 90 aims over the
+/// body's back (`rear`): 150 is 30 degrees above the way it faces away from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AimRange {
     pub min: i16,
@@ -281,6 +283,13 @@ impl AimRange {
     #[must_use]
     pub fn is_true(self, aim: i16) -> bool {
         (self.true_min..=self.true_max).contains(&aim)
+    }
+
+    /// Whether the range aims over the body's back, past straight up (Augerdillo's): its shots
+    /// leave the other way from the one it faces.
+    #[must_use]
+    pub fn rear(self) -> bool {
+        self.min > 90
     }
 }
 
@@ -359,6 +368,13 @@ pub struct Barrel {
 }
 
 impl MobileTuning {
+    /// Whether every shot leaves over the back (`AimRange::rear`): it turns its back on a target to
+    /// fire at it.
+    #[must_use]
+    pub fn fires_rear(&self) -> bool {
+        [self.s1, self.s2, self.ss].iter().all(|shot| shot.aim.value.rear())
+    }
+
     /// The barrel `shot` leaves: the second barrel if it names the shot, else the cannon.
     #[must_use]
     pub fn barrel(&self, shot: Shot) -> Barrel {

@@ -297,23 +297,28 @@ struct Shooter {
 const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
 const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
 const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+/// Augerdillo's SS: a little armadillo curled into a ball, its shell's sandy tan.
+const CURLED: Color = Color::srgb_u8(0xe8, 0xb0, 0x7a);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, Augerdillo's SS is a
+    /// curled armadillo, the rest are dark.
     fn color(self, strand: bool) -> Color {
-        match self.mobile {
-            Some(MobileKind::Spoutpot) => WATER,
+        match (self.mobile, self.shot) {
+            (Some(MobileKind::Spoutpot), _) => WATER,
+            (Some(MobileKind::Augerdillo), Some(Shot::Ss)) => CURLED,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
-    /// in flight small.
+    /// in flight small; Augerdillo's curled armadillo is a size up.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            (Some(MobileKind::Augerdillo), Some(Shot::Ss)) => 14.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -878,6 +883,17 @@ mod unit {
             shot: Some(Shot::S2),
         };
         assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
+    }
+
+    #[test]
+    fn augerdillos_ss_is_a_curled_armadillo_and_its_drill_a_shell() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Augerdillo),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::Ss).color(false), CURLED);
+        assert!(shooter(Shot::Ss).size(&[leg(0, 10, 0)]) > shooter(Shot::S2).size(&[leg(0, 10, 0)]));
+        assert_eq!(shooter(Shot::S2).color(false), SHELL);
     }
 
     #[test]

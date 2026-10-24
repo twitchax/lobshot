@@ -1002,6 +1002,9 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Augerdillo => {
+            "Fires over its back: its aims run past straight up, so 150 is 30 degrees above level on the side it faces away from, and it turns its back on a target to fire at it. Heavy shots that the wind moves less. S1 is one round; S2 a drill that strikes a mobile it meets in flight, but digging into the ground bores a mirror of its arc through it (the faster it struck, the deeper and farther) and goes off where it comes up, or is lost out of the map's bottom; SS an armadillo that rolls through the ground and goes off only in a mobile, any mobile, worth most low on its body, least on top. It walks little but climbs well.".to_owned()
+        }
     }
 }
 

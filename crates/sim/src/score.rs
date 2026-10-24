@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base::Res,
+    body::elevation,
     game::{Death, Effect, Event, Game, Leg},
     log::Log,
     map::MapAssets,
@@ -228,9 +229,11 @@ fn tricks(before: &Game, event: &Event) -> Vec<Bonus> {
         bonuses.push(Bonus::BankShot);
     }
     let flown = seconds(track.impact.tick);
-    if aim >= HIGH_ANGLE_AIM.value && flown >= ULTRA_HIGH_ANGLE_SECONDS.value {
+    // How high it was aimed above the horizon it left by: over the back, too (Augerdillo's).
+    let high = elevation(aim) >= HIGH_ANGLE_AIM.value;
+    if high && flown >= ULTRA_HIGH_ANGLE_SECONDS.value {
         bonuses.push(Bonus::Moonshot);
-    } else if aim >= HIGH_ANGLE_AIM.value && flown >= HIGH_ANGLE_SECONDS.value {
+    } else if high && flown >= HIGH_ANGLE_SECONDS.value {
         bonuses.push(Bonus::SkyLob);
     }
     if track.legs.iter().any(Leg::hooked) {
@@ -405,6 +408,22 @@ mod unit {
         assert!(found.contains(&Bonus::SkyLob) && found.contains(&Bonus::Moonshot), "{found:?}");
         let low = direct_hit_power(&game, 60);
         assert_eq!(tricks_of(&game, 60, low), [], "below 70 degrees");
+    }
+
+    #[test]
+    fn a_shot_over_the_back_is_as_high_as_its_elevation() {
+        // Augerdillo's 150 is 30 degrees above the horizon behind it: never a high lob, however long
+        // it flies. Off a tall pillar over a deep pit, it falls for seconds.
+        let terrain = crate::terrain::Terrain::from_fn(2400, 3000, |x, y| y >= 2900 || ((280..320).contains(&x) && y >= 200)).unwrap();
+        let game = crate::game::testing::game_on(
+            terrain,
+            vec![seat(Team::A, MobileKind::Augerdillo, 300, Facing::Left), seat(Team::B, MobileKind::Coilback, 2000, Facing::Left)],
+        );
+        let power = Power::nearest(2.0);
+        let flown = seconds(game.track(game.launch(0, Shot::S1, 150, power.bars()).unwrap(), 0, 0).impact.tick);
+        assert!(flown >= 2.5, "{flown:.2} s");
+        assert_eq!(tricks_of(&game, 150, power), [], "30 degrees, not 150");
+        assert_eq!(elevation(110), 70, "70 degrees over the back would be high");
     }
 
     #[test]

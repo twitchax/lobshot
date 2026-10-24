@@ -25,7 +25,7 @@ use crate::{
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
     tuning::{
-        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
+        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
         drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
@@ -61,11 +61,12 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Augerdillo,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -77,6 +78,7 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Augerdillo,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -107,6 +109,7 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Augerdillo => &augerdillo::MOBILE,
         }
     }
 }

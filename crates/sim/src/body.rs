@@ -9,6 +9,14 @@ use crate::{
     units::{Facing, Vec2, to_radians},
 };
 
+/// How far `aim` points above the body's horizon on the side its shot leaves: the aim itself, or for
+/// one over the back (past straight up, `AimRange::rear`), its angle above the way the body faces
+/// away from. What a player reads and GunBound's angle rules (High Angle) mean.
+#[must_use]
+pub fn elevation(aim: i16) -> i16 {
+    if aim > 90 { 180 - aim } else { aim }
+}
+
 /// Where a mobile stands and which way it leans.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Pose {
@@ -158,6 +166,19 @@ mod unit {
         // Facing left on the same slope, the mobile leans back: 30 degrees is 20 in the world.
         let direction = pose(Facing::Left, 10.0).aim_direction(30);
         assert!(close(direction, Vec2::new(-libm::cos(to_radians(20.0)), -libm::sin(to_radians(20.0)))));
+    }
+
+    #[test]
+    fn an_aim_over_the_back_leaves_behind_at_its_elevation() {
+        // 150 degrees is 30 above the way a right-facing mobile faces away from: up and to the left.
+        let direction = pose(Facing::Right, 0.0).aim_direction(150);
+        assert!(close(direction, Vec2::new(-libm::cos(to_radians(30.0)), -libm::sin(to_radians(30.0)))));
+        assert_eq!(elevation(150), 30);
+        assert_eq!((elevation(30), elevation(90)), (30, 90), "a forward aim is its own elevation");
+        // On a slope rising to the right, a left-facing mobile's back points up the slope: 150 is 40
+        // above the world's horizon, to the right.
+        let direction = pose(Facing::Left, 10.0).aim_direction(150);
+        assert!(close(direction, Vec2::new(libm::cos(to_radians(40.0)), -libm::sin(to_radians(40.0)))));
     }
 
     #[test]

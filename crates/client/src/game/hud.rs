@@ -5,6 +5,7 @@
 
 use bevy::{ecs::system::SystemParam, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
+    body::elevation,
     drops::DropKind,
     game::{Effect, Game, Shot, SsState},
     items::Item,
@@ -370,6 +371,17 @@ fn delay_label(delay: i64, base: Option<i64>, yours: bool) -> String {
     }
 }
 
+/// The angle readout: how high the aim is above the horizon it fires toward (`body::elevation`),
+/// so a shot over the back (Augerdillo's) reads as GunBound showed it, and last turn's.
+fn angle_label(aim: i16, last: Option<i16>) -> String {
+    let aim = elevation(aim);
+    // The default font is ASCII only, so no degree sign until lobshot ships a font.
+    match last.map(elevation) {
+        Some(last) => format!("Angle {aim} (last {last})"),
+        None => format!("Angle {aim}"),
+    }
+}
+
 /// The SS button's label: its lock in own turns left, or that sudden death took it.
 fn ss_label(ss: SsState) -> String {
     match ss {
@@ -448,11 +460,7 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
                 }
             }
             Readout::Turn => whose.clone(),
-            Readout::Angle => match controls.last_aim {
-                // The default font is ASCII only, so no degree sign until lobshot ships a font.
-                Some(last) => format!("Angle {} (last {last})", controls.aim),
-                None => format!("Angle {}", controls.aim),
-            },
+            Readout::Angle => angle_label(controls.aim, controls.last_aim),
             Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
             Readout::Sudden => String::new(),
             Readout::Weather => weather_label(game.predicted.weather()),
@@ -959,6 +967,14 @@ mod unit {
         assert_eq!(delay_label(760, Some(760), true), "760", "your own stands as it is");
         assert_eq!(delay_label(700, Some(760), false), "-60");
         assert_eq!(delay_label(700, None, false), "700");
+    }
+
+    #[test]
+    fn the_angle_reads_above_the_horizon_it_fires_toward() {
+        assert_eq!(angle_label(35, None), "Angle 35");
+        assert_eq!(angle_label(35, Some(40)), "Angle 35 (last 40)");
+        // Over the back: 150 is 30 above the horizon behind.
+        assert_eq!(angle_label(150, Some(165)), "Angle 30 (last 15)");
     }
 
     #[test]

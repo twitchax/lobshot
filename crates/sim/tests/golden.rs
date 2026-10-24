@@ -88,6 +88,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         63,
         0xc8a1_51a2_4657_e6be,
     ),
+    (
+        "roster_augerdillo",
+        include_str!("golden/roster_augerdillo.json"),
+        include_bytes!("golden/roster_augerdillo.bin"),
+        62,
+        0xb726_9b7d_8902_5848,
+    ),
 ];
 
 #[test]
@@ -164,6 +171,27 @@ fn roster_frostfin_frosts_its_target() {
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
 }
 
+#[test]
+fn roster_augerdillo_bores_and_rolls_through_the_hills() {
+    // Augerdillo fires all three shots over its back: an S2 bores through the ground and comes up
+    // to blow, and its SS rolls through the hills into the Coilback.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_augerdillo").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut bored, mut rolled) = (Vec::new(), false, false);
+    for event in &log.events {
+        let effects = game.apply(*event).unwrap();
+        let Event::Shoot { seat: 0, shot, .. } = *event else { continue };
+        shots.push(shot);
+        let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
+        let legs = effects.iter().find_map(|e| if let Effect::Fired { legs, .. } = e { Some(legs.len()) } else { None }).unwrap_or(0);
+        bored |= shot == Shot::S2 && legs >= 2 && blasts > 0;
+        rolled |= shot == Shot::Ss && effects.iter().any(|e| matches!(e, Effect::Damaged { seat: 1, .. }));
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(bored && rolled, "bored: {bored}; rolled into the target: {rolled}");
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 
 /// Re-records every golden game and prints the `GOLDEN` table. Native only (it writes files).
@@ -225,6 +253,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_augerdillo", play(roster_augerdillo(), &winds)),
     ]
 }
 
@@ -451,9 +480,28 @@ fn roster_thistleback() -> Setup {
     }
 }
 
+/// Augerdillo (Nak's behavior) against Coilback on hills in wind: its S1, its burrowing S2 and its
+/// SS through the hills. The ground runs deep, so a bore can come up.
+fn roster_augerdillo() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 1100,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Augerdillo, 650, Facing::Left, &[]), seat(Team::B, 1350, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
 /// Plays a game with a simple scripted player and returns its log. The dead spin their slot
 /// machines whenever they may. Every third turn the wind changes (if `winds` has any); every
-/// fourth, the player walks toward the nearest enemy; every seventh, it times out. Every turn it
+/// fourth, the player walks toward the nearest enemy (then turns its back on it if it fires over
+/// its back); every seventh, it times out. Every turn it
 /// first uses the first item it can. Otherwise it cycles S1, S2, SS (S1 when SS is locked or off) at the
 /// middle of the shot's true range, with the power step that lands closest to the enemy.
 fn play(setup: Setup, winds: &[Wind]) -> Log {
@@ -506,6 +554,9 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         apply(&mut game, Event::Walk { seat, facing: toward, steps });
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
             continue;
+        }
+        if me.tuning().fires_rear() {
+            apply(&mut game, Event::Walk { seat, facing: toward.flip(), steps: 0 });
         }
         if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {
             apply(&mut game, Event::UseItem { seat, slot, time: Centis(0) });

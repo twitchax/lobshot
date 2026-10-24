@@ -16,7 +16,7 @@ use lobshot_sim::{
     items::Loadout,
     map::{MapRef, NoAssets},
     tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, spoutpot},
-    units::{Facing, SCREEN, TICK, Vec2, Wind, ticks},
+    units::{Facing, SCREEN, TICK, Vec2, Wind, ticks, to_radians},
 };
 
 const TOLERANCE_BARS: f64 = 0.05;
@@ -43,6 +43,41 @@ const FROSTFIN_SEVENTY: [(i32, f64); 3] = [(6, 2.30), (8, 2.70), (16, 3.90)];
 /// Kalsiddon's power for 60 degrees one screen away in zero wind, in cbchui-style shooting: 2.65
 /// (CR-kal) and 2.7 (CR-kal30). Herdhound is fitted midway, so both hold.
 const KAL_ONE_SCREEN: [f64; 2] = [2.65, 2.7];
+
+/// CR-nak, the community's Nak formula, in zero wind: the bars that land `screens` away at `aim`.
+fn cr_nak(screens: f64, aim: i16) -> f64 {
+    cr_nak_in(screens, aim, 0.0)
+}
+
+/// CR-nak with `down` units of wind pushing down (negative: up), which adds to its gravity:
+/// `Power = Sqrt(Distance / ((47.87^2) * SIN(2*A) * ((1 / (111.615 + W*SINX)) + (1/610)))) * 4`,
+/// with distance in its UHA parts, nine to a screen. It leaves side wind out.
+fn cr_nak_in(screens: f64, aim: i16, down: f64) -> f64 {
+    let parts = 9.0 * screens;
+    let sin = libm::sin(2.0 * to_radians(f64::from(aim)));
+    libm::sqrt(parts / (47.87 * 47.87 * sin * (1.0 / (111.615 + down) + 1.0 / 610.0))) * 4.0
+}
+
+/// How many bars `up` units of up-wind (negative: down) save at 60 degrees over one screen, by
+/// CR-nak.
+fn nak_saving(up: f64) -> f64 {
+    cr_nak(1.0, 60) - cr_nak_in(1.0, 60, -up)
+}
+
+/// The vertical winds CR-nak's wind term is checked at, up (positive) and down, to the room's
+/// highest; 14 up is the one Augerdillo's wind sensitivity is fitted to.
+const NAK_WINDS: [i8; 6] = [7, 14, 26, -7, -14, -26];
+
+/// Nak's power for 60 degrees one screen away in zero wind: cbchui's chart (CR-fixed, 2.70) and
+/// the Nak formula (CR-nak, about 2.62). Augerdillo is fitted midway, so both hold.
+fn nak_one_screen() -> [f64; 2] {
+    [2.70, cr_nak(1.0, 60)]
+}
+
+/// The Nak formula's entries in the acceptance set: the angles Augerdillo fires at from three
+/// quarters of a screen to one and a quarter (docs/research/augerdillo.md says what is out, and
+/// why).
+const NAK_FORMULA: [(i16, f64); 6] = [(45, 0.75), (45, 1.0), (45, 1.25), (50, 0.75), (50, 1.0), (50, 1.25)];
 
 /// CR-fixed gives Bigfoot's power as "??". DBR's per-mobile shot weights (`ax`, clone, unverified)
 /// track the chart's powers as their square roots (docs/research/mechanics.md, 2.3): every mobile
@@ -85,6 +120,8 @@ fn duel(distance: i32) -> Game {
     duel_of(MobileKind::Coilback, distance)
 }
 
+/// A duel with `shooter` at x = 300 and the target `distance` px to its right. The shooter faces
+/// the target, or turns its back on it if it fires over its back (Augerdillo).
 fn duel_of(shooter: MobileKind, distance: i32) -> Game {
     Game::new(
         &Setup {
@@ -94,7 +131,7 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
                     team: Team::A,
                     mobile: shooter,
                     spawn_x: 300,
-                    facing: Facing::Right,
+                    facing: if shooter.tuning().fires_rear() { Facing::Left } else { Facing::Right },
                     items: Loadout::default(),
                 },
                 Seat {
@@ -144,8 +181,10 @@ fn flight(game: &Game, aim: i16, bars: f64, accel: Vec2) -> Flight {
     flight_of(game, Shot::S1, aim, bars, accel)
 }
 
-/// `flight`, leaving `shot`'s barrel.
+/// `flight`, leaving `shot`'s barrel. `aim` is the formulas' angle, above level toward the target:
+/// over the back for a mobile that fires that way.
 fn flight_of(game: &Game, shot: Shot, aim: i16, bars: f64, accel: Vec2) -> Flight {
+    let aim = if game.players()[0].tuning().fires_rear() { 180 - aim } else { aim };
     let mut flight = game.launch(0, shot, aim, bars).unwrap();
     flight.accel = accel;
     flight
@@ -279,6 +318,40 @@ fn formula_kalsiddon_60_degrees_lands_one_screen() {
     let power = ideal_power(&duel_of(MobileKind::Herdhound, 800), 60, tuned_for(MobileKind::Herdhound, Wind::default()));
     for bars in KAL_ONE_SCREEN {
         assert_bars("Kalsiddon one screen", power, bars);
+    }
+}
+
+#[test]
+fn formula_nak_60_degrees_lands_one_screen() {
+    // CR-fixed, CR-nak: Augerdillo's gravity puts 60 degrees, fired over its back, one screen away
+    // at both sources' power.
+    let power = ideal_power(&duel_of(MobileKind::Augerdillo, 800), 60, tuned_for(MobileKind::Augerdillo, Wind::default()));
+    for bars in nak_one_screen() {
+        assert_bars("Nak one screen", power, bars);
+    }
+}
+
+#[test]
+fn formula_nak_shot_formula_at_its_own_angles() {
+    // CR-nak, unfitted: the formula's powers at the angles Augerdillo fires at.
+    let calm = tuned_for(MobileKind::Augerdillo, Wind::default());
+    for (aim, screens) in NAK_FORMULA {
+        // A quarter screen is a whole number of pixels.
+        #[allow(clippy::cast_possible_truncation)]
+        let game = duel_of(MobileKind::Augerdillo, (screens * SCREEN) as i32);
+        assert_bars(&format!("Nak formula, {aim} degrees, {screens} screens"), ideal_power(&game, aim, calm), cr_nak(screens, aim));
+    }
+}
+
+#[test]
+fn formula_nak_vertical_wind_acts_as_its_gravity() {
+    // CR-nak: vertical wind adds to the formula's gravity. Augerdillo's wind sensitivity (fitted at 14
+    // up) saves what the formula does at every vertical wind, up or down.
+    let tuning = MobileKind::Augerdillo.tuning();
+    for up in NAK_WINDS {
+        let wind = Wind::new(up.unsigned_abs(), if up > 0 { 90 } else { 270 }).unwrap();
+        let saved = wind_saving(MobileKind::Augerdillo, 60, wind, tuning.gravity.value, tuning.wind_sensitivity.value);
+        assert_bars(&format!("Nak formula, {up} up-wind"), saved, nak_saving(f64::from(up)));
     }
 }
 
@@ -585,6 +658,25 @@ fn tool_fit() {
             let sensitivity = bisect(0.0, 10.0, &|s| wind_saving(mobile, aim, tail, gravity, s) < saving);
             rewrite(&file, "WIND_SENSITIVITY", &format!("{sensitivity:.2}"));
             println!("{mobile:?} wind sensitivity: {sensitivity:.2}");
+        }
+    }
+
+    let [chart, formula] = nak_one_screen();
+    let gravity = fit_gravity(MobileKind::Augerdillo, f64::midpoint(chart, formula));
+    rewrite("augerdillo.rs", "GRAVITY", &format!("{gravity:.1}"));
+    println!("Augerdillo gravity: {gravity:.1}");
+    // More sensitivity saves more power: find the one that saves what CR-nak does at 14 up-wind.
+    let up = Wind::new(14, 90).unwrap();
+    let sensitivity = bisect(0.0, 2.0, &|s| wind_saving(MobileKind::Augerdillo, 60, up, gravity, s) < nak_saving(14.0));
+    rewrite("augerdillo.rs", "WIND_SENSITIVITY", &format!("{sensitivity:.2}"));
+    println!("Augerdillo wind sensitivity: {sensitivity:.2}");
+    // The Nak formula's other entries, against Augerdillo's fit (docs/research/augerdillo.md).
+    let nak_calm = Vec2::new(0.0, gravity);
+    for aim in [15, 30, 45, 50, 60] {
+        for eighths in [2, 4, 6, 8, 10, 12] {
+            let screens = f64::from(eighths) / 8.0;
+            let model = ideal_power(&duel_of(MobileKind::Augerdillo, 100 * eighths), aim, nak_calm);
+            println!("Nak formula {aim} deg, {eighths}/8 screen: model {model:.2}, CR-nak {:.2}", cr_nak(screens, aim));
         }
     }
 
