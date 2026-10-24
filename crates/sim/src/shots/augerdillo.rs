@@ -2,10 +2,11 @@
 //! bores a mirror of its arc through it and goes off where it comes up; and an SS armadillo that
 //! rolls through rock and goes off only in a mobile.
 
-use super::Gun;
+use super::{Gun, helix::cut};
 use crate::{
     ballistics::Flight,
     game::{Contact, Effect, Game, Impact, Leg, Senses, Shot, Track},
+    mines,
     tuning::{
         MAX_FLIGHT_SECONDS,
         augerdillo::{S1_BLAST, S1_DAMAGE, S2_BLAST, S2_BURROW_LIFT, S2_BURROW_SPEED, S2_DAMAGE, SS_BLAST, SS_DAMAGE},
@@ -37,6 +38,32 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             // It goes off where it first touches a mobile, a direct hit worth most at the hitbox's
             // center: its weak spot, which only a shot from overlapping the target reaches.
             let track = game.track_sensing(flight, 0, 0, THROUGH_GROUND);
+            // Or on a mine it meets first: Nak's SS "explodes upon impact with a mobile, a jewel,
+            // or a mini-Raon" (WP06). Its blast sets the mine off.
+            let mine = mines::crossed(game, &track.legs)
+                .first()
+                .copied()
+                .filter(|&(_, tick)| tick < track.impact.tick || track.impact.contact == Contact::Gone);
+            if let Some((mine, tick)) = mine {
+                effects.push(Effect::Fired {
+                    seat: gun.seat,
+                    legs: cut(track.legs, &[tick]),
+                });
+                let impact = Impact {
+                    tick,
+                    at: mine.middle(),
+                    contact: Contact::Terrain,
+                };
+                gun.land(
+                    game,
+                    &gun.blast(impact.at, SS_BLAST.value, SS_DAMAGE.value, track.marks.boost()),
+                    SS_BLAST.value,
+                    &impact,
+                    track.marks,
+                    effects,
+                );
+                return;
+            }
             effects.push(Effect::Fired { seat: gun.seat, legs: track.legs.clone() });
             gun.land(game, &gun.blast_on(&track, SS_BLAST.value, SS_DAMAGE.value), SS_BLAST.value, &track.impact, track.marks, effects);
         }
@@ -388,6 +415,28 @@ mod unit {
         assert_eq!(explosions(&effects), 1, "{effects:?}");
         // 350-500 x 0.96 (Physical against Mechanical).
         assert!((336..=480).contains(&damage_to(&effects, 1)), "{effects:?}");
+    }
+
+    #[test]
+    fn ss_goes_off_on_a_mine_it_meets_and_sets_it_off() {
+        // WP06: Nak's SS "explodes upon impact with a mobile, a jewel, or a mini-Raon". A mine on the
+        // ground where the SS goes into it, short of any mobile.
+        let mut game = duel(800);
+        let power = Power::nearest(0.8);
+        let flight = game.launch(0, Shot::Ss, 150, power.bars()).unwrap();
+        let track = game.track_sensing(flight, 0, 0, THROUGH_GROUND);
+        let leg = track.legs[0];
+        let into = (leg.from..=leg.to).map(|tick| leg.flight.at(tick)).find(|at| at.y >= 496.0).unwrap();
+        let mut laid = Vec::new();
+        mines::lay(&mut game, 1, Vec2::new(into.x, 499.5), Facing::Left, 0, &mut laid);
+        let mine = game.mines()[0];
+        let effects = shoot(&mut game, 0, Shot::Ss, 150, power);
+        let Some(&Effect::Exploded { at, .. }) = effects.iter().find(|e| matches!(e, Effect::Exploded { .. })) else {
+            panic!("{effects:?}")
+        };
+        assert_eq!(at, mine.middle(), "it went off on the mine");
+        assert!(effects.iter().any(|e| matches!(e, Effect::MineGone { mine: id, tick: Some(_) } if *id == mine.id)), "{effects:?}");
+        assert_eq!(game.mines(), []);
     }
 
     #[test]

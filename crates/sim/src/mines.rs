@@ -213,12 +213,43 @@ pub(crate) fn trip(game: &mut Game, tick: u32, effects: &mut Vec<Effect>) -> boo
 /// its own blast may set off the next. Shots set them off, the beetles' own and anyone's, beams and
 /// bolts too (GF-tiro, CR-icy, CR-tooya, GF-vgg, OB); GF-lee has them only "eliminate[d]". Every
 /// blast calls it (`Game::explode_by`, so Skyeye's beams and the satellites' lasers too), and every
-/// bolt (`shots::bolt::flash`). A shot that runs into a mine (Aduka's SS and Nak's SS, WP06) or
-/// drags one in (J.D.'s S2) calls it where it meets the mine, with `MINE_RADIUS` for its reach.
+/// bolt (`shots::bolt::flash`). A shot that runs into a mine calls it where it meets the mine, with
+/// `MINE_RADIUS` for its reach (Aduka's SS and Nak's SS hit them, WP06: Flarecrow's calls a beam
+/// onto each it passes, Augerdillo's goes off on the first, through `crossed`). J.D.'s S2 pulls
+/// them instead (`drag`).
 pub(crate) fn set_off(game: &mut Game, at: Vec2, reach: f64, tick: u32, effects: &mut Vec<Effect>) {
     while let Some(mine) = game.mines.mines.iter().find(|mine| mine.middle().distance(at) <= reach).copied() {
         blow(game, mine, None, tick, effects);
     }
+}
+
+/// Drags every mine within `reach` of `at` to the ground under `at`, at stage tick `tick`: J.D.'s S2
+/// "sucks in surrounding mobiles, jewels and also mini-Raons" (WP06). One dragged under a mobile's
+/// middle goes off there; one with no ground under `at` is gone.
+// Lodestoad's S2 (J.D.'s) calls it once it lands; until then only the tests do.
+#[cfg_attr(not(test), expect(dead_code, reason = "Lodestoad's S2 pull calls it once it merges"))]
+pub(crate) fn drag(game: &mut Game, at: Vec2, reach: f64, tick: u32, effects: &mut Vec<Effect>) {
+    // The pull's center is on the map, in i32 range.
+    #[allow(clippy::cast_possible_truncation)]
+    let under = Footing {
+        x: at.x.floor() as i32,
+        y: at.y.floor() as i32,
+    };
+    let landing = movement::settle(game.terrain(), under);
+    let pulled: Vec<Mine> = game.mines.mines.iter().filter(|mine| mine.middle().distance(at) <= reach).copied().collect();
+    for mine in pulled {
+        match landing {
+            Landing::On(to) => {
+                game.mines.put(Mine { at: to, ..mine });
+                effects.push(Effect::MineFell { mine: mine.id, to });
+            }
+            Landing::OffMap => {
+                game.mines.take(mine.id);
+                effects.push(Effect::MineGone { mine: mine.id, tick: Some(tick) });
+            }
+        }
+    }
+    trip(game, tick, effects);
 }
 
 /// Takes `mine` off the map and blows it up, at its middle, direct on the mobile at whose sweet spot
@@ -349,7 +380,7 @@ mod unit {
     use super::*;
     use crate::{
         game::{
-            Event, Phase, Team,
+            Event, Phase, Shot, Team,
             testing::{damage_to, duel_of, game_of, pass, seat, shoot},
         },
         log::Log,
@@ -548,6 +579,60 @@ mod unit {
         let strike = bolt::from_sky(&game, 900.5);
         bolt::flash(&mut game, &strike, 12.0, 70, &mut effects);
         assert_eq!(game.mines(), [], "the bolt set off the third");
+    }
+
+    #[test]
+    fn skyeyes_beam_and_a_satellites_lasers_and_pins_set_off_a_mine_they_strike_by() {
+        let mut game = duel(MobileKind::Coilback);
+        lay_at(&mut game, 1, 650);
+        let mine = game.mines()[0];
+        let mut effects = Vec::new();
+        crate::shots::skyeye::beam(&mut game, mine.middle(), 10, &mut effects);
+        assert!(gone(&effects).contains(&mine.id), "Skyeye: {effects:?}");
+        for mobile in [MobileKind::Lensowl, MobileKind::Needlemouse] {
+            let mut game = duel_of(mobile, MobileKind::Coilback, 800);
+            lay_at(&mut game, 1, 650);
+            let mine = game.mines()[0];
+            let range = Shot::S1.tuning(mobile.tuning()).aim.value;
+            let miss = |aim: i16, power: Power| game.track(game.launch(0, Shot::S1, aim, power.bars()).unwrap(), 0, 0).impact.at.distance(mine.middle());
+            let (aim, power) = (range.min..=range.max)
+                .flat_map(|aim| (0..=Power::MAX.twentieths()).map(move |t| (aim, Power::from_twentieths(t).unwrap())))
+                .min_by(|a, b| miss(a.0, a.1).total_cmp(&miss(b.0, b.1)))
+                .unwrap();
+            assert!(miss(aim, power) < 6.0, "{mobile:?}'s tracer comes down by the mine");
+            let effects = shoot(&mut game, 0, Shot::S1, aim, power);
+            assert!(gone(&effects).contains(&mine.id), "{mobile:?}: {effects:?}");
+            assert_eq!(game.mines(), [], "{mobile:?}");
+        }
+    }
+
+    #[test]
+    fn a_pull_drags_mines_in_reach_to_its_center_and_one_under_a_mobiles_middle_goes_off() {
+        let mut game = duel(MobileKind::Coilback);
+        lay_at(&mut game, 1, 600);
+        lay_at(&mut game, 1, 640);
+        lay_at(&mut game, 1, 900);
+        let mut effects = Vec::new();
+        drag(&mut game, Vec2::new(620.5, 480.0), 40.0, 30, &mut effects);
+        assert_eq!(
+            effects,
+            [
+                Effect::MineFell {
+                    mine: MineId(0),
+                    to: Footing { x: 620, y: 500 }
+                },
+                Effect::MineFell {
+                    mine: MineId(1),
+                    to: Footing { x: 620, y: 500 }
+                }
+            ]
+        );
+        assert_eq!(game.mines()[2].at.x, 900, "out of reach");
+        let middle = game.players()[1].center();
+        let mut effects = Vec::new();
+        drag(&mut game, Vec2::new(middle.x, 480.0), 600.0, 30, &mut effects);
+        assert_eq!(game.mines(), [], "dragged under the Coilback's middle, they all went off");
+        assert!(damage_to(&effects, 1) > 0, "{effects:?}");
     }
 
     #[test]
