@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="20" viewBox="-32 -18 60 20">
+  <!-- Augerdillo's track: a tread belt under the whole rig. Origin = ground contact center (=
+       rig.ron body frame). Static; the road wheels spin on top. Lugs are a dashed stroke on the
+       belt outline, so they wrap the ends. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)">
+    <rect x="-28.6" y="-14.8" width="52.2" height="14.4" rx="7.2" fill="none" stroke="#3d3450" stroke-width="3" stroke-dasharray="2.2 2"/>
+    <rect x="-28.6" y="-14.8" width="52.2" height="14.4" rx="7.2" fill="#4a4060"/>
+    <rect x="-26.2" y="-12.4" width="47.4" height="9.6" rx="4.8" fill="#2e2540"/>
+    <path d="M -22,-13.7 H 17" stroke="#8a7ca6" stroke-width="1" stroke-linecap="round"/>
+  </g>
+</svg>

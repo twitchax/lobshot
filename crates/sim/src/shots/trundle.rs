@@ -45,8 +45,8 @@ pub(crate) enum Heading {
 pub(crate) struct Walked {
     /// Its path from where it started, as legs; a walker that never moved has one resting leg.
     pub legs: Vec<Leg>,
-    /// Where it stopped, and why: in a mobile it touched (`Mobile`), out of steps or stopped
-    /// (`Terrain`), or off the map's bottom (`Gone`). `at` is its middle.
+    /// Where it stopped, and why: at what `touch` said it met, out of steps or stopped (`Terrain`),
+    /// or off the map's bottom (`Gone`). `at` is its middle.
     pub end: Impact,
     /// The ground it stands on at the end (where it was when it left the map, if it did).
     pub footing: Footing,
@@ -66,9 +66,10 @@ impl Gait {
 }
 
 /// Walks from `start` for at most `steps` steps (a turn round at a wall counts as one), the way
-/// `heading` says. `touch` names the mobile a walker's middle is inside, if any it may touch: it
-/// stops there. It falls off edges as a mobile does, straight down (`fall_ticks`).
-pub(crate) fn walk(terrain: &Terrain, start: Start, gait: &Gait, heading: Heading, steps: u32, touch: impl Fn(Vec2) -> Option<u8>) -> Walked {
+/// `heading` says. `touch` says what the walker's middle has met at each step, if anything that
+/// stops it: a mobile, or anything else, which becomes the walk's `end.contact`. It falls off edges
+/// as a mobile does, straight down (`fall_ticks`).
+pub(crate) fn walk(terrain: &Terrain, start: Start, gait: &Gait, heading: Heading, steps: u32, touch: impl Fn(Vec2) -> Option<Contact>) -> Walked {
     let step_ticks = gait.step_ticks();
     let mut runs = Runs::default();
     let Start { mut at, mut facing, tick: mut now } = start;
@@ -81,8 +82,8 @@ pub(crate) fn walk(terrain: &Terrain, start: Start, gait: &Gait, heading: Headin
             facing,
         }
     };
-    if let Some(seat) = touch(gait.middle(at)) {
-        return ended(at, facing, now, Contact::Mobile(seat), runs);
+    if let Some(contact) = touch(gait.middle(at)) {
+        return ended(at, facing, now, contact, runs);
     }
     for _ in 0..steps {
         let way = match heading {
@@ -137,8 +138,8 @@ pub(crate) fn walk(terrain: &Terrain, start: Start, gait: &Gait, heading: Headin
             }
         };
         at = next;
-        if let Some(seat) = touch(gait.middle(at)) {
-            return ended(at, facing, now, Contact::Mobile(seat), runs);
+        if let Some(contact) = touch(gait.middle(at)) {
+            return ended(at, facing, now, contact, runs);
         }
     }
     ended(at, facing, now, Contact::Terrain, runs)
@@ -322,7 +323,7 @@ mod unit {
             &GAIT,
             Heading::Ahead,
             90,
-            |middle| (middle.x > 140.0).then_some(3),
+            |middle| (middle.x > 140.0).then_some(Contact::Mobile(3)),
         );
         assert_eq!(walked.end.contact, Contact::Mobile(3));
         assert_eq!(walked.footing, at(140));

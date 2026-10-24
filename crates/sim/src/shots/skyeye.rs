@@ -1,11 +1,11 @@
 //! Skyeye's beam (GunBound's Thor): from the satellite toward a point, striking the first mobile or
 //! ground in its way, whoever that is (GF-vgg: dual under it and the beams may hit you). It digs and
-//! hurts where it strikes, and the damage it deals levels the satellite up.
+//! hurts where it strikes (`beam`), and the damage it deals levels the satellite up.
 
-use super::bolt;
+use super::beam;
 use crate::{
     damage::Blast,
-    game::{Contact, Effect, Game},
+    game::{Effect, Game},
     tuning::weather::{SKYEYE_BLAST, SKYEYE_DAMAGE, SKYEYE_WEAPON},
     units::Vec2,
     weather::Skyeye,
@@ -13,30 +13,29 @@ use crate::{
 
 /// Fires a beam at `target` at `tick`.
 pub(crate) fn beam(game: &mut Game, target: Vec2, tick: u32, effects: &mut Vec<Effect>) {
-    let from = Skyeye::at(game.terrain().width());
-    let path = target - from;
-    let length = libm::sqrt(path.x * path.x + path.y * path.y);
-    if length <= 0.0 {
-        return;
-    }
-    let strike = bolt::strike(game, from, path * (1.0 / length));
+    beam_by(game, target, tick, 1.0, effects);
+}
+
+/// `beam`, its damage at its level times `boost` (Flarecrow's SS calls a heavier one).
+pub(crate) fn beam_by(game: &mut Game, target: Vec2, tick: u32, boost: f64, effects: &mut Vec<Effect>) {
+    let Some(strike) = beam::strike(game, Skyeye::at(game.terrain().width()), target) else { return };
     let level = game.weather().skyeye.level();
-    effects.push(Effect::Beam { from, to: strike.at, tick, level });
-    let direct = match strike.contact {
-        Contact::Gone | Contact::Column(_) => return,
-        Contact::Terrain => None,
-        Contact::Mobile(seat) => Some(seat),
-    };
+    effects.push(Effect::Beam {
+        from: strike.from,
+        to: strike.at,
+        tick,
+        level,
+    });
     let blast = Blast {
         center: strike.at,
         radius: SKYEYE_BLAST.value,
         damage: SKYEYE_DAMAGE.value[usize::from(level - 1).min(SKYEYE_DAMAGE.value.len() - 1)],
         weapon: SKYEYE_WEAPON.value,
         false_angle: false,
-        boost: 1.0,
+        boost,
     };
     let before = effects.len();
-    game.explode(&blast, SKYEYE_BLAST.value, direct, tick, effects);
+    beam::burn(game, &strike, &blast, SKYEYE_BLAST.value, tick, effects);
     let dealt: u32 = effects[before..]
         .iter()
         .map(|effect| match *effect {

@@ -89,11 +89,46 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         0x8aa7_380d_032a_6e6e,
     ),
     (
+        "roster_kitewyrm",
+        include_str!("golden/roster_kitewyrm.json"),
+        include_bytes!("golden/roster_kitewyrm.bin"),
+        32,
+        0x84aa_4db9_b25e_82c1,
+    ),
+    (
+        "roster_flarecrow",
+        include_str!("golden/roster_flarecrow.json"),
+        include_bytes!("golden/roster_flarecrow.bin"),
+        74,
+        0xb337_92f9_228c_317f,
+    ),
+    (
+        "roster_augerdillo",
+        include_str!("golden/roster_augerdillo.json"),
+        include_bytes!("golden/roster_augerdillo.bin"),
+        99,
+        0x12d0_6764_ffe4_0782,
+    ),
+    (
+        "roster_lensowl",
+        include_str!("golden/roster_lensowl.json"),
+        include_bytes!("golden/roster_lensowl.bin"),
+        65,
+        0x6af1_bd3c_7481_9063,
+    ),
+    (
+        "roster_needlemouse",
+        include_str!("golden/roster_needlemouse.json"),
+        include_bytes!("golden/roster_needlemouse.bin"),
+        32,
+        0xaa82_f533_9ff3_5e73,
+    ),
+    (
         "roster_tinbadger",
         include_str!("golden/roster_tinbadger.json"),
         include_bytes!("golden/roster_tinbadger.bin"),
         52,
-        0x9cff_78a0_e716_2ebb,
+        0x40bc_b2a1_e115_179c,
     ),
 ];
 
@@ -169,6 +204,47 @@ fn roster_frostfin_frosts_its_target() {
     assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
     assert!(frosts.len() >= 2 && frosts.iter().all(|&(seat, _)| seat == 1), "{frosts:?}");
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
+}
+
+#[test]
+fn roster_flarecrow_calls_skyeye_down() {
+    // Flarecrow fires all three shots, and its flares or its SS call Skyeye's beam.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_flarecrow").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut beams) = (Vec::new(), 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::Beam { .. } => beams += 1,
+                _ => {}
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(beams >= 3, "{beams} beams");
+}
+
+#[test]
+fn roster_augerdillo_bores_and_rolls_through_the_hills() {
+    // Augerdillo fires all three shots over its back: an S2 bores through the ground and comes up
+    // to blow, and its SS rolls through the hills into the Coilback.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_augerdillo").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut bored, mut rolled) = (Vec::new(), false, false);
+    for event in &log.events {
+        let effects = game.apply(*event).unwrap();
+        let Event::Shoot { seat: 0, shot, .. } = *event else { continue };
+        shots.push(shot);
+        let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
+        let legs = effects.iter().find_map(|e| if let Effect::Fired { legs, .. } = e { Some(legs.len()) } else { None }).unwrap_or(0);
+        bored |= shot == Shot::S2 && legs >= 2 && blasts > 0;
+        rolled |= shot == Shot::Ss && effects.iter().any(|e| matches!(e, Effect::Damaged { seat: 1, .. }));
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(bored && rolled, "bored: {bored}; rolled into the target: {rolled}");
 }
 
 #[test]
@@ -256,6 +332,11 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
+        ("roster_flarecrow", play(roster_flarecrow(), &winds)),
+        ("roster_augerdillo", play(roster_augerdillo(), &winds)),
+        ("roster_lensowl", play(roster_lensowl(), &winds)),
+        ("roster_needlemouse", play(roster_needlemouse(), &winds)),
         ("roster_tinbadger", play(roster_tinbadger(), &winds)),
     ]
 }
@@ -483,6 +564,93 @@ fn roster_thistleback() -> Setup {
     }
 }
 
+/// Kitewyrm against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_kitewyrm() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Kitewyrm, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(9, 150).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Flarecrow (Aduka's behavior) against Coilback on hills in wind, its back to the target: its S1,
+/// S2 and SS each fire, and its flares call Skyeye.
+fn roster_flarecrow() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Flarecrow, 400, Facing::Left, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Augerdillo (Nak's behavior) against Coilback on hills in wind: its S1, its burrowing S2 and its
+/// SS through the hills. The ground runs deep, so a bore can come up.
+fn roster_augerdillo() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 1100,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Augerdillo, 650, Facing::Left, &[]), seat(Team::B, 1350, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Lensowl (A.Sate's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_lensowl() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Lensowl, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Needlemouse (Knight's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_needlemouse() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Needlemouse, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
 /// Tinbadger against Coilback on hills in wind: its S1, S2 and SS each fire, and its mines stay on
 /// the map from turn to turn.
 fn roster_tinbadger() -> Setup {
@@ -556,6 +724,10 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         apply(&mut game, Event::Walk { seat, facing: toward, steps });
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
             continue;
+        }
+        // A mobile that fires over its back turns it to the enemy.
+        if me.tuning().s1.aim.value.backward() {
+            apply(&mut game, Event::Walk { seat, facing: toward.flip(), steps: 0 });
         }
         if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {
             apply(&mut game, Event::UseItem { seat, slot, time: Centis(0) });

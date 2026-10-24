@@ -1,11 +1,15 @@
 //! Mines: things a shot leaves on the map that outlive its turn (Tinbadger's tin beetles, GunBound
 //! Raon's S2). A mine sits on the ground where its shell landed, part of the game state like a
-//! mobile (so the state hash covers it, a replayed log rebuilds it, and a client that joins late
-//! sees it). As its layer's turn comes up, each of its mines with an enemy in sense crawls toward
-//! it, a walk at a time (`shots::trundle`), and goes off on touching a mobile, whoever walks onto
-//! it. A blast or a bolt in reach smashes one; a mine whose ground is blown away falls, as a mobile
-//! does, and one that leaves the map, or whose layer dies, is gone. The rules' numbers are in
-//! `tuning::tinbadger`, and their sources in `docs/research/tinbadger.md`.
+//! mobile, so the state hash covers it, a replayed log rebuilds it, and a client that joins late
+//! sees it.
+//!
+//! As its layer's turn comes up, each of its mines with a mobile in sense (whoever's: the layer's
+//! own side too) crawls toward the nearest, a walk at a time (`shots::trundle`), and goes off when
+//! it reaches that mobile's middle. A mobile that walks onto one sets it off; any blast, beam or
+//! bolt in reach sets it off (`set_off`), and its blast may set off the next; a tornado takes it.
+//! A mine whose ground is blown away falls, as a mobile does, and one that leaves the map, or whose
+//! layer dies, is gone. A mobile that floats passes over them all (`senses`). The rules' numbers
+//! are in `tuning::tinbadger`, and their sources in `docs/research/tinbadger.md`.
 //!
 //! Everything a mine does reaches the client as effects naming it by `MineId`: laid, crawled (a
 //! stage of its own, before its layer's turn starts), fallen and gone.
@@ -14,14 +18,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     damage::Blast,
-    game::{Contact, Effect, Game, MobileKind},
+    game::{Contact, Effect, Game, Leg, MobileKind},
     movement::{self, Footing, Landing},
     shots::trundle::{self, Gait, Heading, Start},
     tuning::{
         ArmorClass,
-        tinbadger::{MECHANICAL_PULL, MINE_BLAST, MINE_CRAWL_SPEED, MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_HEIGHT, MINE_SENSE},
+        tinbadger::{BIONIC_PULL, MECHANICAL_PULL, MINE_BLAST, MINE_CAP, MINE_CRAWL_SPEED, MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_HEIGHT, MINE_RADIUS, MINE_SENSE, MOBILE, SWEET_SPOT},
     },
     units::{Facing, Vec2},
+    weather::WeatherKind,
 };
 
 /// A mine's name for the game's whole length: the order it was laid in.
@@ -90,63 +95,72 @@ const GAIT: Gait = Gait {
     height: MINE_HEIGHT.value,
 };
 
-/// Whether a mine senses `mobile` at all: crawls toward it, and goes off touching it. A mobile that
-/// floats would be left out here: Dragon "ignores... Raon mines" (SW-mob).
+/// Whether a mine senses `mobile` at all: crawls toward it, and goes off on it. One that floats
+/// passes over them: Dragon "can fly over raon mines" (SW-mob, WP06, CR-blood).
 #[must_use]
 pub fn senses(mobile: MobileKind) -> bool {
-    match mobile {
-        MobileKind::Coilback
-        | MobileKind::Lanternwing
-        | MobileKind::Hookclaw
-        | MobileKind::Sparkhorn
-        | MobileKind::Marblemole
-        | MobileKind::Spoutpot
-        | MobileKind::Tuskrack
-        | MobileKind::Sudsotter
-        | MobileKind::Frostfin
-        | MobileKind::Herdhound
-        | MobileKind::Thistleback
-        | MobileKind::Tinbadger => true,
-    }
+    !mobile.floats()
 }
 
-/// The living, sensed mobile whose hitbox `at` is inside, if any.
-fn touching(game: &Game, at: Vec2) -> Option<u8> {
+/// How far from its hitbox a mine senses a mobile of `armor`, px: farthest a Mechanical one, least
+/// a Bionic one (SW-mob, GF-lee, GF-max, NAMU).
+fn sense_range(armor: ArmorClass) -> f64 {
+    MINE_SENSE.value
+        * match armor {
+            ArmorClass::Mechanical => MECHANICAL_PULL.value,
+            ArmorClass::Shield => 1.0,
+            ArmorClass::Bionic => BIONIC_PULL.value,
+        }
+}
+
+/// The living, sensed mobile whose sweet spot `at` is at: inside its hitbox, within `SWEET_SPOT` of
+/// its middle column, where a mine goes off on it (CR-blood, GF-vgg, GF-max).
+pub(crate) fn sweet_spot(game: &Game, at: Vec2) -> Option<u8> {
     (0_u8..)
         .zip(game.players())
         .filter(|(_, player)| player.alive && senses(player.mobile))
-        .find(|(_, player)| player.pose().hit(player.tuning().hitbox.value, at))
+        .find(|(_, player)| {
+            let hitbox = player.tuning().hitbox.value;
+            let body = player.pose().to_body(at);
+            player.pose().hit(hitbox, at) && (body.x - (hitbox.x + hitbox.w / 2.0)).abs() <= SWEET_SPOT.value
+        })
         .map(|(seat, _)| seat)
 }
 
-/// The enemy of `mine`'s layer it crawls toward: the nearest within `MINE_SENSE` of it, a
-/// Mechanical one counting `MECHANICAL_PULL` times nearer.
-fn quarry(game: &Game, mine: &Mine) -> Option<u8> {
-    let team = game.players().get(usize::from(mine.seat))?.team;
+/// The mobile `mine` crawls toward: the nearest one in sense, measured from its hitbox and scaled by
+/// its armor's pull (`sense_range`). Any mobile, the layer's own side and the layer itself too: the
+/// beetles can't tell friend from foe (SNX-raon, WP06, NAMU, GF-vgg; SW-mob says enemy,
+/// CONTRADICTION).
+#[must_use]
+pub fn quarry(game: &Game, mine: &Mine) -> Option<u8> {
     let at = mine.middle();
     (0_u8..)
         .zip(game.players())
-        .filter(|(_, player)| player.alive && player.team != team && senses(player.mobile))
-        .map(|(seat, player)| {
-            let gap = player.pose().gap(player.tuning().hitbox.value, at);
-            let pull = if player.tuning().armor.value == ArmorClass::Mechanical { MECHANICAL_PULL.value } else { 1.0 };
-            (gap / pull, seat)
-        })
-        .filter(|&(gap, _)| gap <= MINE_SENSE.value)
+        .filter(|(_, player)| player.alive && senses(player.mobile))
+        .map(|(seat, player)| (player.pose().gap(player.tuning().hitbox.value, at) / sense_range(player.tuning().armor.value), seat))
+        .filter(|&(near, _)| near <= 1.0)
         .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
         .map(|(_, seat)| seat)
 }
 
-/// Whether `mine` has an enemy of its layer's in sense: it would crawl as its layer's turn comes
-/// up.
+/// Whether `mine` has a mobile in sense: it would crawl as its layer's turn comes up ("its antenna
+/// will turn red", SW-mob).
 #[must_use]
 pub fn armed(game: &Game, mine: &Mine) -> bool {
     quarry(game, mine).is_some()
 }
 
+/// The tornado column `at` stands in, by index, if any: a tornado takes a mine in it, "whether they
+/// crawl into it or not" (CR-blood, WP-early, NAMU).
+fn tornado(game: &Game, at: Vec2) -> Option<u8> {
+    let index = game.weather().columns.iter().position(|column| column.acts_as() == WeatherKind::Tornado && column.contains(at.x))?;
+    u8::try_from(index).ok()
+}
+
 /// `seat` lays a mine where its shell came down at `at` (a point just above the ground it struck),
 /// at stage tick `tick`, facing `facing`. It settles onto the ground below; with none, it is lost
-/// off the map. One that lands touching a mobile goes off at once.
+/// off the map. A layer keeps at most `MINE_CAP` on the map: its oldest goes to make room. One that
+/// lands at a mobile's sweet spot goes off at once, and one in a tornado is taken.
 pub(crate) fn lay(game: &mut Game, seat: u8, at: Vec2, facing: Facing, tick: u32, effects: &mut Vec<Effect>) {
     // A landing is a pixel or so from the ground, inside the map: in i32 range.
     #[allow(clippy::cast_possible_truncation)]
@@ -156,6 +170,12 @@ pub(crate) fn lay(game: &mut Game, seat: u8, at: Vec2, facing: Facing, tick: u32
     };
     let Landing::On(footing) = movement::settle(game.terrain(), open) else { return };
     let field = &mut game.mines;
+    if field.mines.iter().filter(|mine| mine.seat == seat).count() >= MINE_CAP.value
+        && let Some(oldest) = field.mines.iter().find(|mine| mine.seat == seat).map(|mine| mine.id)
+    {
+        field.take(oldest);
+        effects.push(Effect::MineGone { mine: oldest, tick: Some(tick) });
+    }
     let mine = Mine {
         id: MineId(field.laid),
         seat,
@@ -165,34 +185,44 @@ pub(crate) fn lay(game: &mut Game, seat: u8, at: Vec2, facing: Facing, tick: u32
     field.laid += 1;
     field.mines.push(mine);
     effects.push(Effect::MineLaid { mine, tick });
+    if tornado(game, mine.middle()).is_some() {
+        game.mines.take(mine.id);
+        effects.push(Effect::MineGone { mine: mine.id, tick: Some(tick) });
+        return;
+    }
     trip(game, tick, effects);
 }
 
-/// Whether `seat`'s mobile stands on a mine that senses it.
+/// Whether `seat`'s mobile stands with its sweet spot on a mine.
 pub(crate) fn under(game: &Game, seat: u8) -> bool {
-    game.mines.mines.iter().any(|mine| touching(game, mine.middle()) == Some(seat))
+    game.mines.mines.iter().any(|mine| sweet_spot(game, mine.middle()) == Some(seat))
 }
 
-/// Sets off every mine touching a mobile it senses, at stage tick `tick`. Returns whether any went.
+/// Sets off every mine at a mobile's sweet spot, at stage tick `tick`: "Running over a Raon explodes
+/// them immediately" (GF-lee). Returns whether any went.
 pub(crate) fn trip(game: &mut Game, tick: u32, effects: &mut Vec<Effect>) -> bool {
     let mut tripped = false;
-    while let Some((mine, seat)) = game.mines.mines.iter().find_map(|mine| touching(game, mine.middle()).map(|seat| (*mine, seat))) {
+    while let Some((mine, seat)) = game.mines.mines.iter().find_map(|mine| sweet_spot(game, mine.middle()).map(|seat| (*mine, seat))) {
         blow(game, mine, Some(seat), tick, effects);
         tripped = true;
     }
     tripped
 }
 
-/// Smashes every mine within `reach` of a blast or bolt at `center`, at stage tick `tick`: it is
-/// gone, without going off. "Shooting them will eliminate the threat. Electrical splash damage will
-/// also eliminate them" (GF-lee); OB sets them off instead (CONTRADICTION).
-pub(crate) fn smash(game: &mut Game, center: Vec2, reach: f64, tick: u32, effects: &mut Vec<Effect>) {
-    let (gone, kept): (Vec<Mine>, Vec<Mine>) = game.mines.mines.iter().partition(|mine| mine.middle().distance(center) <= reach);
-    game.mines.mines = kept;
-    effects.extend(gone.into_iter().map(|mine| Effect::MineGone { mine: mine.id, tick: Some(tick) }));
+/// Sets off every mine within `reach` of `at`, at stage tick `tick`: each goes off where it is, and
+/// its own blast may set off the next. Shots set them off, the beetles' own and anyone's, beams and
+/// bolts too (GF-tiro, CR-icy, CR-tooya, GF-vgg, OB); GF-lee has them only "eliminate[d]". Every
+/// blast calls it (`Game::explode_by`, so Skyeye's beams and the satellites' lasers too), and every
+/// bolt (`shots::bolt::flash`). A shot that runs into a mine (Aduka's SS and Nak's SS, WP06) or
+/// drags one in (J.D.'s S2) calls it where it meets the mine, with `MINE_RADIUS` for its reach.
+pub(crate) fn set_off(game: &mut Game, at: Vec2, reach: f64, tick: u32, effects: &mut Vec<Effect>) {
+    while let Some(mine) = game.mines.mines.iter().find(|mine| mine.middle().distance(at) <= reach).copied() {
+        blow(game, mine, None, tick, effects);
+    }
 }
 
-/// Takes `mine` off the map and blows it up, at its middle, direct on the mobile it touched.
+/// Takes `mine` off the map and blows it up, at its middle, direct on the mobile at whose sweet spot
+/// it went off.
 fn blow(game: &mut Game, mine: Mine, direct: Option<u8>, tick: u32, effects: &mut Vec<Effect>) {
     if game.mines.take(mine.id).is_none() {
         return;
@@ -202,11 +232,37 @@ fn blow(game: &mut Game, mine: Mine, direct: Option<u8>, tick: u32, effects: &mu
         center: mine.middle(),
         radius: MINE_BLAST.value,
         damage: MINE_DAMAGE.value,
-        weapon: crate::tuning::tinbadger::MOBILE.weapon.value,
+        weapon: MOBILE.weapon.value,
         false_angle: false,
         boost: 1.0,
     };
     game.explode(&blast, MINE_BLAST.value, direct, tick, effects);
+}
+
+/// The mines a path passes over, each with the stage tick it first comes within `MINE_RADIUS` of the
+/// mine's middle, in that order: for a shot that meets mines on its way (Aduka's SS).
+pub(crate) fn crossed(game: &Game, legs: &[Leg]) -> Vec<(Mine, u32)> {
+    let mut met: Vec<(Mine, u32)> = Vec::new();
+    for leg in legs {
+        for tick in leg.from..=leg.to {
+            let at = leg.flight.at(tick);
+            for mine in &game.mines.mines {
+                if mine.middle().distance(at) <= MINE_RADIUS.value && !met.iter().any(|(seen, _)| seen.id == mine.id) {
+                    met.push((*mine, leg.offset + tick));
+                }
+            }
+        }
+    }
+    met.sort_by_key(|&(mine, tick)| (tick, mine.id));
+    met
+}
+
+/// Takes every mine standing in a tornado: as the weather changes, the columns that come up take
+/// the mines under them.
+pub(crate) fn sweep(game: &mut Game, effects: &mut Vec<Effect>) {
+    let (gone, kept): (Vec<Mine>, Vec<Mine>) = game.mines.mines.iter().partition(|mine| tornado(game, mine.middle()).is_some());
+    game.mines.mines = kept;
+    effects.extend(gone.into_iter().map(|mine| Effect::MineGone { mine: mine.id, tick: None }));
 }
 
 /// Drops every mine whose ground is gone: onto the ground below, or off the map. Returns whether
@@ -238,9 +294,11 @@ pub(crate) fn orphan(game: &mut Game, seat: u8, effects: &mut Vec<Effect>) {
     effects.extend(gone.into_iter().map(|mine| Effect::MineGone { mine: mine.id, tick: None }));
 }
 
-/// As `seat`'s turn comes up, each of its mines with an enemy in sense crawls toward it, one after
-/// another, each walk a stage of its own (`Effect::MineCrawled`): up to `MINE_CRAWL_STEPS`, stopping
-/// at a wall, under its quarry, or on touching any mobile, where it goes off.
+/// As `seat`'s turn comes up, each of its mines with a mobile in sense crawls toward the middle of
+/// its quarry, one after another, each walk a stage of its own (`Effect::MineCrawled`): up to
+/// `MINE_CRAWL_STEPS`, stopping at a wall or once there. It goes off at the first mobile's sweet
+/// spot it reaches, and a tornado on its way takes it. A mine already at a sweet spot goes off at
+/// once.
 pub(crate) fn crawl(game: &mut Game, seat: u8, effects: &mut Vec<Effect>) {
     let ids: Vec<MineId> = game.mines.mines.iter().filter(|mine| mine.seat == seat).map(|mine| mine.id).collect();
     for id in ids {
@@ -249,33 +307,30 @@ pub(crate) fn crawl(game: &mut Game, seat: u8, effects: &mut Vec<Effect>) {
         }
         // An earlier mine's blast may have set this one off, or dropped it.
         let Some(mine) = game.mines.get(id) else { continue };
-        if let Some(hit) = touching(game, mine.middle()) {
+        if let Some(hit) = sweet_spot(game, mine.middle()) {
             blow(game, mine, Some(hit), 0, effects);
             game.settle_all(effects);
             continue;
         }
         let Some(target) = quarry(game, &mine) else { continue };
-        let to = game.players()[usize::from(target)].footing.x;
-        let walked = trundle::walk(
-            game.terrain(),
-            Start {
-                at: mine.at,
-                facing: mine.facing,
-                tick: 0,
-            },
-            &GAIT,
-            Heading::Toward(to),
-            MINE_CRAWL_STEPS.value,
-            |at| touching(game, at),
-        );
+        // The quarry's middle column: its center, a world point well inside the map.
+        #[allow(clippy::cast_possible_truncation)]
+        let to = game.players()[usize::from(target)].center().x.floor() as i32;
+        let start = Start {
+            at: mine.at,
+            facing: mine.facing,
+            tick: 0,
+        };
+        let stop = |at: Vec2| sweet_spot(game, at).map(Contact::Mobile).or_else(|| tornado(game, at).map(Contact::Column));
+        let walked = trundle::walk(game.terrain(), start, &GAIT, Heading::Toward(to), MINE_CRAWL_STEPS.value, stop);
         effects.push(Effect::MineCrawled { seat, mine: id, legs: walked.legs });
         match walked.end.contact {
-            Contact::Gone => {
+            Contact::Gone | Contact::Column(_) => {
                 game.mines.take(id);
                 effects.push(Effect::MineGone { mine: id, tick: Some(walked.end.tick) });
             }
             Contact::Mobile(hit) => blow(game, Mine { at: walked.footing, ..mine }, Some(hit), walked.end.tick, effects),
-            Contact::Terrain | Contact::Column(_) => game.mines.put(Mine {
+            Contact::Terrain => game.mines.put(Mine {
                 at: walked.footing,
                 facing: walked.facing,
                 ..mine
@@ -299,7 +354,9 @@ mod unit {
         },
         log::Log,
         map::NoAssets,
+        shots::bolt,
         units::{Centis, Power},
+        weather::Column,
     };
 
     /// A Tinbadger at x = 300 facing right, and a `target` 800 px away, on flat ground at 500.
@@ -328,6 +385,27 @@ mod unit {
         effects.iter().filter_map(|e| if let Effect::MineCrawled { mine, .. } = e { Some(*mine) } else { None }).collect()
     }
 
+    fn gone(effects: &[Effect]) -> Vec<MineId> {
+        effects.iter().filter_map(|e| if let Effect::MineGone { mine, .. } = e { Some(*mine) } else { None }).collect()
+    }
+
+    /// The column of `seat`'s middle.
+    fn middle_column(game: &Game, seat: usize) -> i32 {
+        #[allow(clippy::cast_possible_truncation)]
+        let x = game.players()[seat].center().x.floor() as i32;
+        x
+    }
+
+    /// The nearest column whose mine sits more than `gap` px from `seat`'s hitbox, on the side
+    /// toward x = 0.
+    fn column_short_of(game: &Game, seat: usize, gap: f64) -> i32 {
+        let player = game.players()[seat];
+        (0..middle_column(game, seat))
+            .rev()
+            .find(|&x| player.pose().gap(player.tuning().hitbox.value, Mine::middle_at(Footing { x, y: 500 })) > gap)
+            .unwrap()
+    }
+
     #[test]
     fn a_mine_stays_on_the_map_turn_after_turn_in_the_state_and_its_hash() {
         let mut game = duel(MobileKind::Coilback);
@@ -340,109 +418,119 @@ mod unit {
         for _ in 0..3 {
             round(&mut game);
         }
-        assert_eq!(game.mines(), [laid], "far from any enemy, it waits");
+        assert_eq!(game.mines(), [laid], "far from any mobile, it waits");
     }
 
     #[test]
-    fn as_its_layers_turn_comes_up_a_mine_crawls_into_an_enemy_in_sense_and_goes_off() {
+    fn as_its_layers_turn_comes_up_a_mine_crawls_to_the_middle_of_a_mobile_in_sense_and_goes_off() {
         let mut game = duel(MobileKind::Coilback);
-        let target = game.players()[1].footing.x;
-        lay_at(&mut game, 0, target - 80);
+        let start = column_short_of(&game, 1, 60.0);
+        lay_at(&mut game, 0, start);
         let effects = pass(&mut game, 0);
-        assert!(crawls(&effects).is_empty(), "not on the enemy's turn: {effects:?}");
+        assert_eq!(crawls(&effects), [], "not on the other side's turn: {effects:?}");
         assert_eq!(game.mines().len(), 1);
+        let target = game.players()[1];
         let effects = pass(&mut game, 1);
         assert_eq!(crawls(&effects), [MineId(0)], "{effects:?}");
         let gone = effects.iter().position(|e| matches!(e, Effect::MineGone { mine: MineId(0), tick: Some(_) })).unwrap();
         let crawled = effects.iter().position(|e| matches!(e, Effect::MineCrawled { .. })).unwrap();
         let turn = effects.iter().position(|e| matches!(e, Effect::TurnStarted { seat: 0 })).unwrap();
         assert!(crawled < gone && gone < turn, "it crawls, goes off, then the turn starts: {effects:?}");
-        // A direct hit by its own blast: 140-180, Explosion against Mechanical.
-        assert!((140..=180).contains(&damage_to(&effects, 1)), "{effects:?}");
+        // At the sweet spot, near the middle of its body: a direct hit, 140-180, Laser against
+        // Mechanical.
+        let Some(&Effect::Exploded { at, tick, .. }) = effects.iter().find(|e| matches!(e, Effect::Exploded { .. })) else {
+            panic!()
+        };
+        let hitbox = target.tuning().hitbox.value;
+        assert!((target.pose().to_body(at).x - (hitbox.x + hitbox.w / 2.0)).abs() <= SWEET_SPOT.value, "{at:?}");
+        assert!((134..=180).contains(&damage_to(&effects, 1)), "{effects:?}");
+        // At walking pace, a column a step.
+        #[allow(clippy::cast_possible_truncation)]
+        let columns = f64::from(at.x.floor() as i32 - start);
+        let walked = f64::from(tick) * crate::units::TICK * MINE_CRAWL_SPEED.value;
+        assert!((walked - columns).abs() <= 1.0, "{walked} steps for {columns} columns");
         assert_eq!(game.mines(), []);
     }
 
     #[test]
-    fn a_crawl_reaches_its_target_at_walking_pace() {
+    fn a_mine_with_no_one_in_sense_stays_put_and_one_crawls_at_most_its_steps() {
         let mut game = duel(MobileKind::Coilback);
-        let target = game.players()[1];
-        lay_at(&mut game, 0, target.footing.x - 80);
-        pass(&mut game, 0);
-        let effects = pass(&mut game, 1);
-        let Some(Effect::MineCrawled { legs, .. }) = effects.iter().find(|e| matches!(e, Effect::MineCrawled { .. })) else {
-            panic!("{effects:?}")
-        };
-        let end = legs.last().unwrap();
-        let reached = end.flight.at(end.to);
-        assert!(target.pose().hit(target.tuning().hitbox.value, reached), "it stops inside the target: {reached:?}");
-        let Some(&Effect::Exploded { tick, at, .. }) = effects.iter().find(|e| matches!(e, Effect::Exploded { .. })) else {
-            panic!()
-        };
-        assert_eq!(at, reached);
-        // A pixel a step at MINE_CRAWL_SPEED, from 80 px off to the hitbox's edge.
-        let steps = f64::from(tick) * crate::units::TICK * MINE_CRAWL_SPEED.value;
-        let gap = target.pose().gap(
-            target.tuning().hitbox.value,
-            Mine {
-                at: Footing { x: target.footing.x - 80, y: 500 },
-                ..game_mine()
-            }
-            .middle(),
-        );
-        assert!((steps - gap).abs() <= 2.0, "{steps} steps for a {gap} px gap");
-    }
-
-    fn game_mine() -> Mine {
-        Mine {
-            id: MineId(0),
-            seat: 0,
-            at: Footing { x: 0, y: 0 },
-            facing: Facing::Right,
-        }
-    }
-
-    #[test]
-    fn a_mine_with_no_enemy_in_sense_stays_put_and_one_crawls_at_most_its_steps() {
-        let mut game = duel(MobileKind::Coilback);
-        let target = game.players()[1].footing.x;
-        // Out of sense: past MINE_SENSE (and its Mechanical pull) from the hitbox.
-        lay_at(&mut game, 0, target - 200);
-        // In sense, but farther than one crawl reaches.
-        lay_at(&mut game, 0, target - 30 - 120);
+        let reach = MINE_SENSE.value * MECHANICAL_PULL.value;
+        // Out of sense, and in sense but farther than one crawl reaches.
+        let far = column_short_of(&game, 1, reach + 20.0);
+        let near = column_short_of(&game, 1, reach - 10.0);
+        lay_at(&mut game, 0, far);
+        lay_at(&mut game, 0, near);
         let effects = round(&mut game);
         assert_eq!(crawls(&effects), [MineId(1)], "{effects:?}");
-        let moved = game.mines()[1];
-        assert_eq!(moved.at.x, target - 150 + i32::try_from(MINE_CRAWL_STEPS.value).unwrap());
-        assert_eq!(game.mines()[0].at.x, target - 200, "the far one never moved");
+        assert_eq!(game.mines()[1].at.x, near + i32::try_from(MINE_CRAWL_STEPS.value).unwrap());
+        assert_eq!(game.mines()[0].at.x, far, "the far one never moved");
         assert_eq!(damage_to(&effects, 1), 0);
     }
 
     #[test]
-    fn a_mechanical_enemy_pulls_harder_than_a_nearer_bionic_one() {
-        // Tinbadger, then a Bionic Marblemole and a Mechanical Coilback on the other team, the mine
-        // between them, nearer the Marblemole.
-        let seats = vec![
-            seat(Team::A, MobileKind::Tinbadger, 300, Facing::Right),
-            seat(Team::B, MobileKind::Marblemole, 900, Facing::Left),
-            seat(Team::B, MobileKind::Coilback, 1100, Facing::Left),
-        ];
-        let mut game = game_of(seats);
-        let between = 990;
+    fn a_mechanical_mobile_draws_a_mine_from_farther_than_a_bionic_one() {
+        // A Mechanical Coilback, and a mine just within a crawl of its middle; then a Bionic
+        // Marblemole on the mine's other side, nearer it, but not so near as to outweigh its armor.
+        let coilback = |marblemole: i32| {
+            game_of(vec![
+                seat(Team::A, MobileKind::Tinbadger, 300, Facing::Right),
+                seat(Team::B, MobileKind::Marblemole, marblemole, Facing::Right),
+                seat(Team::B, MobileKind::Coilback, 1100, Facing::Left),
+            ])
+        };
+        let probe = coilback(700);
+        let mine = column_short_of(&probe, 2, 45.0);
         let gap = |game: &Game, seat: usize| {
             let player = game.players()[seat];
-            player.pose().gap(player.tuning().hitbox.value, GAIT.middle(Footing { x: between, y: 500 }))
+            player.pose().gap(player.tuning().hitbox.value, Mine::middle_at(Footing { x: mine, y: 500 }))
         };
-        assert!(gap(&game, 1) < gap(&game, 2) && gap(&game, 2) < MECHANICAL_PULL.value * gap(&game, 1), "nearer the Bionic one");
-        lay_at(&mut game, 0, between);
+        let mut game = (600..mine).rev().map(coilback).find(|game| (25.0..35.0).contains(&gap(game, 1))).expect("a spot for the Marblemole");
+        assert!(gap(&game, 1) < gap(&game, 2), "nearer the Bionic one");
+        lay_at(&mut game, 0, mine);
         let effects = round(&mut game);
         assert!(damage_to(&effects, 2) > 0 && damage_to(&effects, 1) == 0, "it went for the Coilback: {effects:?}");
+        // The same gap from a Bionic mobile alone is out of sense.
+        let mut lone = duel(MobileKind::Marblemole);
+        let out = column_short_of(&lone, 1, MINE_SENSE.value * BIONIC_PULL.value + 5.0);
+        lay_at(&mut lone, 0, out);
+        assert_eq!(crawls(&round(&mut lone)), [], "Bionics draw them least");
     }
 
     #[test]
-    fn a_blast_or_bolt_in_reach_smashes_a_mine_without_setting_it_off() {
+    fn a_mine_cant_tell_friend_from_foe_its_own_layer_included() {
+        let mut game = duel(MobileKind::Coilback);
+        // Just ahead of Tinbadger, far from the Coilback.
+        let ahead = middle_column(&game, 0) + 60;
+        lay_at(&mut game, 0, ahead);
+        pass(&mut game, 0);
+        let effects = pass(&mut game, 1);
+        assert_eq!(crawls(&effects), [MineId(0)], "{effects:?}");
+        assert!(damage_to(&effects, 0) > 0, "into its own layer: {effects:?}");
+    }
+
+    #[test]
+    fn a_floating_mobile_passes_over_mines() {
+        assert!(!senses(MobileKind::Kitewyrm));
+        assert!(MobileKind::ALL.into_iter().filter(|mobile| !mobile.floats()).all(senses));
+        let mut game = duel(MobileKind::Kitewyrm);
+        let near = column_short_of(&game, 1, 20.0);
+        lay_at(&mut game, 0, near);
+        assert_eq!(crawls(&round(&mut game)), [], "nothing in sense");
+        // Under it, as it walks over: nothing.
+        let under = middle_column(&game, 1);
+        assert_eq!(gone(&lay_at(&mut game, 0, under)), [], "not even at its middle");
+        pass(&mut game, 0);
+        let effects = game.apply(Event::Walk { seat: 1, facing: Facing::Left, steps: 60 }).unwrap();
+        assert_eq!(gone(&effects), [], "{effects:?}");
+        assert_eq!(game.mines().len(), 2);
+    }
+
+    #[test]
+    fn a_blast_or_bolt_in_reach_sets_a_mine_off_and_its_blast_the_next() {
         let mut game = duel(MobileKind::Coilback);
         lay_at(&mut game, 0, 700);
-        lay_at(&mut game, 0, 700 + 12);
+        lay_at(&mut game, 0, 712);
         lay_at(&mut game, 0, 900);
         let mut effects = Vec::new();
         let blast = Blast {
@@ -454,15 +542,40 @@ mod unit {
             boost: 1.0,
         };
         game.explode(&blast, 20.0, None, 50, &mut effects);
-        let gone: Vec<MineId> = effects
-            .iter()
-            .filter_map(|e| if let Effect::MineGone { mine, tick: Some(50) } = e { Some(*mine) } else { None })
-            .collect();
-        assert_eq!(gone, [MineId(0)], "only the one in reach: {effects:?}");
-        assert_eq!(effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count(), 1, "smashed, not set off");
-        let strike = crate::shots::bolt::from_sky(&game, 900.5);
-        crate::shots::bolt::flash(&mut game, &strike, 12.0, 70, &mut effects);
-        assert_eq!(game.mines().iter().map(|mine| mine.id).collect::<Vec<_>>(), [MineId(1)], "the bolt took the third");
+        assert_eq!(gone(&effects), [MineId(0), MineId(1)], "a chain: {effects:?}");
+        assert_eq!(effects.iter().filter(|e| matches!(e, Effect::Exploded { radius, .. } if *radius == MINE_BLAST.value)).count(), 2);
+        assert!(effects.iter().all(|e| !matches!(e, Effect::MineGone { tick, .. } if *tick != Some(50))));
+        let strike = bolt::from_sky(&game, 900.5);
+        bolt::flash(&mut game, &strike, 12.0, 70, &mut effects);
+        assert_eq!(game.mines(), [], "the bolt set off the third");
+    }
+
+    #[test]
+    fn a_tornado_takes_a_mine_under_it_or_laid_in_it() {
+        let mut game = duel(MobileKind::Coilback);
+        lay_at(&mut game, 0, 600);
+        lay_at(&mut game, 0, 1000);
+        game.set_columns(vec![Column::new(WeatherKind::Tornado, 600)]);
+        let mut effects = Vec::new();
+        sweep(&mut game, &mut effects);
+        assert_eq!(effects, [Effect::MineGone { mine: MineId(0), tick: None }]);
+        let effects = lay_at(&mut game, 0, 605);
+        assert_eq!(gone(&effects), [MineId(2)], "{effects:?}");
+        assert_eq!(game.mines().iter().map(|mine| mine.id).collect::<Vec<_>>(), [MineId(1)]);
+    }
+
+    #[test]
+    fn a_layer_keeps_eight_mines_its_oldest_making_room() {
+        let mut game = duel(MobileKind::Coilback);
+        for x in 0..8 {
+            lay_at(&mut game, 0, 500 + 20 * x);
+        }
+        assert_eq!(game.mines().len(), MINE_CAP.value);
+        let effects = lay_at(&mut game, 0, 700);
+        assert_eq!(gone(&effects), [MineId(0)], "{effects:?}");
+        assert_eq!(game.mines().len(), MINE_CAP.value);
+        lay_at(&mut game, 1, 720);
+        assert_eq!(game.mines().len(), MINE_CAP.value + 1, "the other side's are its own");
     }
 
     #[test]
@@ -500,8 +613,8 @@ mod unit {
     #[test]
     fn walking_onto_a_mine_sets_it_off_under_the_walker() {
         let mut game = duel(MobileKind::Coilback);
-        let walker = game.players()[0];
-        lay_at(&mut game, 1, walker.footing.x + 40);
+        let ahead = middle_column(&game, 0) + 40;
+        lay_at(&mut game, 1, ahead);
         let effects = game
             .apply(Event::Walk {
                 seat: 0,
@@ -519,26 +632,28 @@ mod unit {
     }
 
     #[test]
-    fn a_shell_landing_on_a_mobile_lays_a_mine_that_goes_off_at_once() {
+    fn a_mine_landing_at_a_mobiles_middle_goes_off_at_once_and_one_at_its_edge_waits() {
         let mut game = duel(MobileKind::Coilback);
-        let under = game.players()[1].footing.x;
-        let effects = lay_at(&mut game, 0, under);
+        let edge = column_short_of(&game, 1, 0.0) + 3;
+        assert!(game.players()[1].pose().hit(game.players()[1].tuning().hitbox.value, Mine::middle_at(Footing { x: edge, y: 500 })));
+        assert_eq!(gone(&lay_at(&mut game, 0, edge)), [], "inside its hitbox, off its middle");
+        let middle = middle_column(&game, 1);
+        let effects = lay_at(&mut game, 0, middle);
         assert!(matches!(effects[..], [Effect::MineLaid { .. }, Effect::MineGone { tick: Some(0), .. }, ..]), "{effects:?}");
-        assert!((140..=180).contains(&damage_to(&effects, 1)), "{effects:?}");
+        assert!((134..=180).contains(&damage_to(&effects, 1)), "{effects:?}");
     }
 
     #[test]
     fn a_replayed_log_lays_and_moves_the_same_mines() {
         let mut game = duel(MobileKind::Coilback);
-        let setup = crate::game::testing::duel_setup(800);
-        let mut setup = setup;
+        let mut setup = crate::game::testing::duel_setup(800);
         setup.seats[0].mobile = MobileKind::Tinbadger;
         let mut fresh = Game::new(&setup, &NoAssets).unwrap();
         let mut events: Vec<Event> = Vec::new();
         // The opening forecasts, as `start` answered them.
         while let Some(roll) = fresh.pending_roll() {
             let event = match roll {
-                crate::game::Roll::Weather { .. } => Event::Weather(crate::weather::Forecast::new(crate::weather::WeatherKind::Force, 1)),
+                crate::game::Roll::Weather { .. } => Event::Weather(crate::weather::Forecast::new(WeatherKind::Force, 1)),
                 crate::game::Roll::Wind => Event::Wind(crate::units::Wind::default()),
                 crate::game::Roll::Drop { .. } => unreachable!(),
             };
@@ -559,10 +674,5 @@ mod unit {
         let replayed = Log { setup, events }.replay(&NoAssets).unwrap();
         assert_eq!(replayed.mines(), game.mines());
         assert_eq!(replayed.state_hash().unwrap(), game.state_hash().unwrap());
-    }
-
-    #[test]
-    fn every_mobile_so_far_is_sensed() {
-        assert!(MobileKind::ALL.into_iter().all(senses));
     }
 }

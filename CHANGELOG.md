@@ -63,6 +63,19 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Augerdillo (M5), an armadillo on a tracked drill rig that fires over its back: S1 a plain round,
+  S2 a drill that flies through mobiles, bores into the ground on a mirror of its arc and goes off
+  where it comes up, SS a curled armadillo that rolls through land and stops only in a mobile.
+- Flarecrow (M5), a crow signalman whose mortar fires over its back: S1 an electric ball whose
+  aftershock runs on down a line of mobiles, S2 three flares that each call Skyeye's beam where
+  they land, SS a cart that flies through land and mobiles and beams down on every enemy it
+  passes. Rear-firing mobiles read their angle as degrees above level behind them.
+- Kitewyrm (M5), a gecko flying a paper festival-dragon kite: it floats, so rolling shots and
+  walking blobs pass under it; S1 a fireball, S2 four that ripple out, SS an orb that calls five
+  mini paper dragons down on the spot it lands.
+- Starmote (M5), motes of moon-rock and crystal in a violet starfield on the sparse-starfield
+  archetype: A a loose ring of small motes around a crystal cluster, B larger motes beside a
+  crystal spire, with stepping stones that catch a fall off the high shoals.
 - Thistleback (M5), a hedgehog gardener with a wheelbarrow catapult: S1 a heavy cabbage, S2 a
   cabbage with two sprouts circling it, SS a pumpkin that bursts nine times in a ring and hurts
   most when it lands at a target's feet.

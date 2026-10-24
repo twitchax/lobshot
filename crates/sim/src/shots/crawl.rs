@@ -199,8 +199,9 @@ fn stick(terrain: &Terrain, open: Vec2, into: Vec2) -> Option<(Cell, Cell)> {
 }
 
 /// Walks a blob that touched the ground at `into`, coming from `open`, at stage tick `landed`, the
-/// `sense` way round, until its fuse burns down or it walks off the map. `frames` are the living
-/// mobiles' hitboxes: it walks through them, slower.
+/// `sense` way round, until its fuse burns down or it walks off the map. `frames` are the hitboxes
+/// of the living mobiles it can touch (`Game::grounded_frames`: not a floating one's): it walks
+/// through them, slower.
 pub(super) fn walk(terrain: &Terrain, open: Vec2, into: Vec2, landed: u32, sense: Sense, rules: &Walk, frames: &[(u8, HitFrame)]) -> Walked {
     let fuse = landed + rules.fuse;
     let Some((at, floor)) = stick(terrain, open, into) else {

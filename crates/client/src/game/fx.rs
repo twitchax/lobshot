@@ -109,9 +109,13 @@ struct Bolt {
     left: f32,
     /// Picks its zigzag, so it holds its shape while it's lit.
     seed: u32,
-    /// Skyeye's beam, at this level: straight, and whiter the higher it is (WP06).
-    beam: Option<u8>,
+    /// A beam's color, if it is one: straight, not a zigzag. Skyeye's whitens with its level
+    /// (WP06); a mobile's own satellite fires `LASER`.
+    beam: Option<Color>,
 }
+
+/// The lasers of a mobile's own satellite (Lensowl's).
+const LASER: Color = Color::srgb(0.55, 0.88, 1.0);
 
 impl Bolts {
     /// A bolt from `from` (the sky, or a side of the map) to where it struck.
@@ -130,20 +134,29 @@ impl Bolts {
 
     /// Skyeye's beam from the satellite to where it struck, at `level`.
     pub fn beam(&mut self, from: SimVec2, to: SimVec2, level: u8) {
+        self.shine(from, to, beam_color(level));
+    }
+
+    /// A mobile's own satellite's laser, from it to where it struck.
+    pub fn laser(&mut self, from: SimVec2, to: SimVec2) {
+        self.shine(from, to, LASER);
+    }
+
+    fn shine(&mut self, from: SimVec2, to: SimVec2, color: Color) {
         self.0.push(Bolt {
             from,
             to,
             left: BOLT_SECONDS,
             seed: 0,
-            beam: Some(level),
+            beam: Some(color),
         });
     }
 }
 
 /// A beam's color at `level`: green at level 1, white by the top (WP06).
-fn beam_color(level: u8, glow: f32) -> Color {
+fn beam_color(level: u8) -> Color {
     let white = (f32::from(level.saturating_sub(1)) / 5.0).clamp(0.0, 1.0);
-    Color::srgba(0.45 + 0.55 * white, 1.0, 0.5 + 0.5 * white, glow)
+    Color::srgb(0.45 + 0.55 * white, 1.0, 0.5 + 0.5 * white)
 }
 
 /// The bolt's zigzag: `SEGMENTS` steps from `from` to `to`, each joint pushed sideways by up to
@@ -178,11 +191,11 @@ fn draw_bolts(mut bolts: ResMut<Bolts>, time: Res<Time>, mut gizmos: Gizmos) {
     });
     for bolt in &bolts.0 {
         let glow = (bolt.left / BOLT_SECONDS).clamp(0.0, 1.0);
-        if let Some(level) = bolt.beam {
+        if let Some(color) = bolt.beam {
             let (from, to) = (world(bolt.from), world(bolt.to));
             // Three strokes side by side read as a fat beam.
             for offset in [-1.5, 0.0, 1.5] {
-                gizmos.line_2d(from + Vec2::X * offset, to + Vec2::X * offset, beam_color(level, glow));
+                gizmos.line_2d(from + Vec2::X * offset, to + Vec2::X * offset, color.with_alpha(glow));
             }
             continue;
         }
@@ -240,6 +253,19 @@ mod unit {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+
+    #[test]
+    fn skyeyes_beam_whitens_with_its_level_and_a_satellites_laser_is_its_own() {
+        let mut bolts = Bolts::default();
+        bolts.beam(SimVec2::ZERO, SimVec2::new(0.0, 100.0), 1);
+        bolts.beam(SimVec2::ZERO, SimVec2::new(0.0, 100.0), 6);
+        bolts.laser(SimVec2::ZERO, SimVec2::new(0.0, 100.0));
+        let colors: Vec<Option<Color>> = bolts.0.iter().map(|bolt| bolt.beam).collect();
+        assert_eq!(colors, [Some(beam_color(1)), Some(beam_color(6)), Some(LASER)]);
+        assert_ne!(beam_color(1), beam_color(6), "it whitens");
+        bolts.strike(SimVec2::ZERO, SimVec2::new(0.0, 100.0));
+        assert_eq!(bolts.0[3].beam, None, "a bolt zigzags");
+    }
 
     #[test]
     fn a_bolt_runs_end_to_end_and_holds_its_shape() {

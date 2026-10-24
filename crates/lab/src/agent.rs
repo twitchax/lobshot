@@ -881,6 +881,8 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         #[allow(clippy::cast_possible_truncation)]
         Effect::Beam { to, .. } => format!(" Skyeye's beam struck at x={}, y={}.", to.x.round() as i32, to.y.round() as i32),
         Effect::SkyeyeLevel { level } => format!(" Skyeye reached level {level}."),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::Laser { seat, to, .. } => format!(" {} satellite's laser struck at x={}, y={}.", names.whose(*seat), to.x.round() as i32, to.y.round() as i32),
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
@@ -1040,11 +1042,37 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Kitewyrm => format!(
+            "A kite dragon that floats {:.0} px over the ground: what rolls or walks along the ground (marbles, sponges, suds) passes under it, and a blast on the ground beneath only grazes it. Light shots. S1 is one fireball; S2 four, leaving one after another in two streams that spread apart with range, so all four land only up close; SS a red orb that calls five mini-dragons from a fan above where it lands, each flying straight into that spot, gravity and wind aside, and going off on the first thing in its way: land over a target shields it. It moves far and climbs almost anything.",
+            tuning::kitewyrm::HOVER.value
+        ),
+        MobileKind::Flarecrow => format!(
+            "Fires over its back: its aims run past 90 (170 is 10 degrees above level behind it), so turn your back to the target. S1 is an electric ball with a small blast and a flat {} aftershock on every mobile near where it lands, which runs on ({} each) to any mobile beside one it hit, and on down the line, once a turn. S2 fires three flares down one path, one after another: Skyeye's beam strikes wherever each lands, its weather up or not, so a short shot digs its way on toward the target; all its damage is the beams', which grow as Skyeye levels up. SS flies through land and mobiles alike and never goes off: each enemy it passes into takes a beam {}x as strong.",
+            tuning::flarecrow::S1_AFTERSHOCK.value,
+            tuning::flarecrow::S1_CHAIN.value,
+            tuning::flarecrow::SS_BEAM_BOOST.value
+        ),
+        MobileKind::Augerdillo => {
+            "Fires over its back: its aims run past 90, so 150 is 30 degrees above level on the side it faces away from; turn your back to the target. Heavy shots that the wind moves less. S1 is one round; S2 a drill that flies through mobiles, digs into the first ground it strikes, bores a mirror of its arc through it (the faster it struck, the deeper and farther) and goes off where it comes up, or is lost out of the map's bottom: drop it at a target's feet close by; SS an armadillo that rolls through the ground and goes off only in a mobile, any mobile, as a direct hit, worth most near its center. It walks little but climbs well.".to_owned()
+        }
+        MobileKind::Lensowl => format!(
+            "Every shot is a tracer that hurts nothing; once it lands, the satellite hovering over you fires lasers at it from where it hovers, and the first mobile or ground in a laser's way takes it, you included. S1 is one laser from {} px over your feet, aimed a little high when it fires leftward on screen, so it can sail over a target's head; S2 three from three times as high, which clears ground in the way, raining down left to right onto the tracer and spreading wider the farther off; SS sends the satellite over the landing to sweep five lasers straight down, left to right. Has a shield.",
+            tuning::lensowl::SATELLITE_HEIGHT.value
+        ),
+        MobileKind::Needlemouse => format!(
+            "A mouse knight on a wind-up toy horse, with the widest true angle range: every angle it can aim is true. Every shot is a tracer that hurts nothing; once it lands, the pincushion hovering over you fires pins at it, each flying straight at the tracer from where it leaves the cushion and striking the first mobile or ground in its way, you included. S1 is three pins from {} px over your feet, aimed a little high when they fly leftward on screen; S2 five from twice as high, which clears ground in the way; SS sends the cushion over the landing, where it sweeps back and forth as seven pins rain down onto the tracer. Its pins dig little.",
+            tuning::needlemouse::SATELLITE_HEIGHT.value
+        ),
         MobileKind::Tinbadger => {
-            use tuning::tinbadger::{MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_SENSE, SS_FUSE_SECONDS};
+            use tuning::tinbadger::{MINE_CAP, MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_SENSE, SS_FUSE_SECONDS};
             format!(
-                "A badger with a cart of wind-up tin beetles. S1 is three spinning cogs winding about one path, each its own hit, that dig a lot of land. S2 is two beetle shells that fly through mobiles and land as mines (`mines` in the view), which stay on the map: as your turn comes up, each of your mines within {} px of an enemy crawls up to {} px toward it before you act (a Mechanical enemy draws them from farther), and a mine goes off, {}-{} damage, when it touches any mobile, whoever walks onto it. Any blast in reach sets a mine off, and your mines go when you die. SS is a big beetle that lands, marches the way you face (turning round at walls it can't climb), and goes off when it touches a mobile or {} s after landing.",
-                MINE_SENSE.value, MINE_CRAWL_STEPS.value, MINE_DAMAGE.value.min, MINE_DAMAGE.value.max, SS_FUSE_SECONDS.value
+                "A badger with a cart of wind-up tin beetles. S1 is three spinning cogs winding about one path, each its own hit, that dig a lot of land. S2 is two beetle shells that fly through mobiles and land as mines (`mines` in the view), which stay on the map. A mine goes off, {}-{} damage, at the middle of any mobile: one landing there goes off at once, and so does one a mobile walks onto. As your turn comes up, before you act, each of your mines with a mobile within about {} px crawls up to {} px toward the nearest one's middle, whoever's it is, yours and you included (a Mechanical mobile draws them from farther, a Bionic one only from nearer). Any blast, beam or bolt in reach sets a mine off, a tornado takes it, you keep at most {} (your oldest goes), and yours go when you die; a mobile that floats passes over them. SS is a big beetle that lands and walks on the way it was flying (turning round at walls it can't climb), and goes off when it walks into a mobile or a mine, or {} s after landing.",
+                MINE_DAMAGE.value.min,
+                MINE_DAMAGE.value.max,
+                MINE_SENSE.value,
+                MINE_CRAWL_STEPS.value,
+                MINE_CAP.value,
+                SS_FUSE_SECONDS.value
             )
         }
     }
@@ -1469,6 +1497,27 @@ mod unit {
         };
         assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
         assert!(rules().contains("While Skyeye is up"));
+    }
+
+    #[test]
+    fn the_rules_say_flarecrow_fires_over_its_back() {
+        let rules = rules();
+        assert!(rules.contains("### Flarecrow (`flarecrow`)"), "{rules}");
+        assert!(rules.contains("Fires over its back"), "{rules}");
+        assert!(rules.contains("- S1: delay 250, aim 130 to 170"), "{rules}");
+    }
+
+    #[test]
+    fn the_log_says_where_a_satellites_laser_struck() {
+        let session = Session::new(&flat(1), &maps()).unwrap();
+        let names = Names { game: session.game(), you: 0 };
+        let laser = Effect::Laser {
+            seat: 0,
+            from: lobshot_sim::units::Vec2::new(300.0, 370.0),
+            to: lobshot_sim::units::Vec2::new(700.2, 480.6),
+            tick: 0,
+        };
+        assert_eq!(effect_line(&names, &laser), " Your satellite's laser struck at x=700, y=481.");
     }
 
     #[test]

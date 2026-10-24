@@ -24,7 +24,7 @@ use super::{
     Focus, GameRoot,
     fx::{Bolts, Dot, pop, puff, rising},
     world,
-    world::{MapArt, MineView, MobileView, Shown, depth, mine_sprite, mine_transform, shot_sprite},
+    world::{Glide, MapArt, MineView, MobileView, Shown, depth, mine_sprite, mine_transform, shot_sprite},
 };
 use crate::{
     assets::Rigs,
@@ -143,6 +143,17 @@ enum Cue {
         to: SimVec2,
         level: u8,
     },
+    /// A mobile's own satellite firing a laser (Lensowl's).
+    Laser {
+        from: SimVec2,
+        to: SimVec2,
+    },
+    /// A mobile's own satellite setting off to `at`, getting there in `seconds`.
+    Satellite {
+        seat: u8,
+        at: SimVec2,
+        seconds: f32,
+    },
     Bounce {
         at: SimVec2,
     },
@@ -170,15 +181,35 @@ enum Cue {
         color: Color,
     },
     SuddenDeath(SuddenDeathKind),
-    /// A mine is laid: it appears.
-    MineLaid(Mine),
-    /// A mine shows at `at` (its middle): where it stopped crawling, or fell to.
-    MineAt {
-        id: MineId,
-        at: SimVec2,
-    },
-    /// A mine hides: it set off crawling (a flyer walks its path), or it is gone.
-    MineHide(MineId),
+}
+
+/// What a scene does to a mine on screen, on its own schedule beside the cues (`stage_mine`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum MineCue {
+    /// It is laid: it appears.
+    Laid(Mine),
+    /// It shows at `at` (its middle): where it stopped crawling, or fell to.
+    At { id: MineId, at: SimVec2 },
+    /// It hides: it set off crawling (a flyer walks its path), or it is gone.
+    Hide(MineId),
+}
+
+/// What a mine's effect at `at` does to its mine on screen, and when; nothing for any other effect.
+fn mine_cues(effect: &Effect, at: f32, cues: &mut Vec<(f32, MineCue)>) {
+    let mut cue = |when: f32, mine: MineCue| cues.push((when, mine));
+    match *effect {
+        Effect::MineLaid { mine, .. } => cue(at, MineCue::Laid(mine)),
+        // Hidden while its flyer walks, then shown where the walk ended.
+        Effect::MineCrawled { mine, ref legs, .. } => {
+            cue(at, MineCue::Hide(mine));
+            if let Some(last) = legs.last() {
+                cue(at + pacing::flight_seconds(legs), MineCue::At { id: mine, at: last.flight.at(last.to) });
+            }
+        }
+        Effect::MineFell { mine, to } => cue(at, MineCue::At { id: mine, at: Mine::middle_at(to) }),
+        Effect::MineGone { mine, .. } => cue(at, MineCue::Hide(mine)),
+        _ => {}
+    }
 }
 
 /// How one strand of a helix winds about its path, for `ballistics::helix_point`.
@@ -205,6 +236,8 @@ enum About {
 struct Flyer {
     legs: Vec<Leg>,
     about: Option<About>,
+    /// Whether it is drawn as a streak turned along its motion (Needlemouse's pins), not a dot.
+    streak: bool,
     /// When it leaves and when it stops, in the scene's time.
     from: f32,
     until: f32,
@@ -231,6 +264,9 @@ struct Scene {
     elapsed: f32,
     cues: Vec<(f32, Cue)>,
     next: usize,
+    /// The mines' cues, and the next to play.
+    mines: Vec<(f32, MineCue)>,
+    next_mine: usize,
     flyers: Vec<Flyer>,
     moves: Vec<Move>,
     end: f32,
@@ -302,6 +338,16 @@ fn dot_sprite(dot: &Dot, color: Color, size: f32) -> Sprite {
     }
 }
 
+/// A streak 16 px long in `color`, lying along `+x` until it is turned.
+fn streak_sprite(dot: &Dot, color: Color) -> Sprite {
+    Sprite {
+        image: dot.0.clone(),
+        color,
+        custom_size: Some(Vec2::new(16.0, 3.6)),
+        ..default()
+    }
+}
+
 /// What a scene is made from.
 struct Props<'a> {
     dot: &'a Dot,
@@ -322,23 +368,51 @@ struct Shooter {
 const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
 const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
 const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+const FIRE: Color = Color::srgb_u8(0xff, 0x6a, 0x2a);
+/// Augerdillo's SS: a little armadillo curled into a ball, its shell's sandy tan.
+const CURLED: Color = Color::srgb_u8(0xe8, 0xb0, 0x7a);
+/// Lensowl's tracers: a star for S1 and S2, the SS's big green guide (SW-mob).
+const STAR: Color = Color::srgb_u8(0xff, 0xf2, 0xa8);
+const GUIDE: Color = Color::srgb_u8(0x7c, 0xf2, 0x9a);
+/// Needlemouse's: a bead of red thread, and its pins, steel.
+const THREAD: Color = Color::srgb_u8(0xe8, 0x43, 0x4f);
+const PIN: Color = Color::srgb_u8(0xe6, 0xea, 0xf4);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Kitewyrm's and Flarecrow's burn,
+    /// Lanternwing's strands glow, Augerdillo's SS is a curled armadillo, Lensowl's tracers shine,
+    /// Needlemouse's are thread red, the rest are dark.
     fn color(self, strand: bool) -> Color {
-        match self.mobile {
-            Some(MobileKind::Spoutpot) => WATER,
+        match (self.mobile, self.shot) {
+            (Some(MobileKind::Spoutpot), _) => WATER,
+            (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow), _) => FIRE,
+            (Some(MobileKind::Augerdillo), Some(Shot::Ss)) => CURLED,
+            (Some(MobileKind::Lensowl), Some(Shot::Ss)) => GUIDE,
+            (Some(MobileKind::Lensowl), _) => STAR,
+            (Some(MobileKind::Needlemouse), _) => THREAD,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
+    /// Whether a shell on `legs` is one of Needlemouse's pins, which leave its pincushion in
+    /// flight: drawn as streaks, not dots.
+    fn pins(self, legs: &[Leg]) -> bool {
+        self.mobile == Some(MobileKind::Needlemouse) && legs.first().is_some_and(|leg| leg.offset > 0)
+    }
+
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
-    /// in flight small.
+    /// in flight small; Kitewyrm's fireballs are one size however late they leave, and its SS orb
+    /// and the mini-dragons it calls big; Flarecrow's flares are small, and its SS cart bigger;
+    /// Augerdillo's curled armadillo is a size up; Lensowl's tracers are small, its SS guide large.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow | MobileKind::Augerdillo | MobileKind::Lensowl), Some(Shot::Ss)) => 14.0,
+            (Some(MobileKind::Kitewyrm), _) => 10.0,
+            (Some(MobileKind::Flarecrow), Some(Shot::S2)) => 7.0,
+            (Some(MobileKind::Lensowl | MobileKind::Needlemouse), _) => 8.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -371,12 +445,14 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
         flyers.push(Flyer {
             legs: legs.to_vec(),
             about,
+            streak: matches!(effect, Effect::Fired { .. }) && shooter.pins(legs),
             from: at,
             until,
             entity,
         });
     };
     match effect {
+        Effect::Fired { legs, .. } if shooter.pins(legs) => fly(legs, None, at + pacing::flight_seconds(legs), streak_sprite(props.dot, PIN)),
         Effect::Fired { legs, .. } => {
             let sprite = shooter.sprite(props).unwrap_or_else(|| dot_sprite(props.dot, shooter.color(false), shooter.size(legs)));
             fly(legs, None, at + pacing::flight_seconds(legs), sprite);
@@ -457,6 +533,16 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         }
         Effect::Bolt { from, to, .. } => cues.push((at, Cue::Bolt { from, to })),
         Effect::Beam { from, to, level, .. } => cues.push((at, Cue::Beam { from, to, level })),
+        Effect::Laser { from, to, .. } => cues.push((at, Cue::Laser { from, to })),
+        // Scheduled as it sets off.
+        Effect::Satellite { seat, at: to, from, to: arrives } => cues.push((
+            at,
+            Cue::Satellite {
+                seat,
+                at: to,
+                seconds: ticks(arrives.saturating_sub(from)),
+            },
+        )),
         Effect::Bounced { at: point, .. } => cues.push((at, Cue::Bounce { at: point })),
         // Scheduled at its end; it sparks from its start.
         Effect::Pierced { seat, from, to } => {
@@ -520,20 +606,10 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
             },
         )),
         Effect::SuddenDeath { kind } => cues.push((at, Cue::SuddenDeath(kind))),
-        Effect::MineLaid { mine, .. } => cues.push((at, Cue::MineLaid(mine))),
-        // Hidden while its flyer walks, then shown where the walk ended.
-        Effect::MineCrawled { mine, legs, .. } => {
-            cues.push((at, Cue::MineHide(mine)));
-            if let Some(last) = legs.last() {
-                cues.push((at + pacing::flight_seconds(&legs), Cue::MineAt { id: mine, at: last.flight.at(last.to) }));
-            }
-        }
-        Effect::MineFell { mine, to } => cues.push((at, Cue::MineAt { id: mine, at: Mine::middle_at(to) })),
-        Effect::MineGone { mine, .. } => cues.push((at, Cue::MineHide(mine))),
         Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
         Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
-        // Flyers took off above; the HUD shows the rest from the game itself (the wind, the
-        // moondisk, the reel).
+        // Flyers took off above, and mines are staged on their own (`mine_cues`); the HUD shows the
+        // rest from the game itself (the wind, the moondisk, the reel).
         Effect::Fired { .. }
         | Effect::Helix { .. }
         | Effect::Beacon { .. }
@@ -547,7 +623,11 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::Orbit { .. }
         | Effect::SkyeyeLevel { .. }
         | Effect::Spun { .. }
-        | Effect::DropRolled { .. } => {}
+        | Effect::DropRolled { .. }
+        | Effect::MineLaid { .. }
+        | Effect::MineCrawled { .. }
+        | Effect::MineFell { .. }
+        | Effect::MineGone { .. } => {}
     }
 }
 
@@ -561,6 +641,7 @@ fn born_in_flight(effect: &Effect) -> Option<(f32, SimVec2)> {
 /// Turns one event's effects into a scene.
 fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Shown)>, commands: &mut Commands) -> Scene {
     let mut cues = Vec::new();
+    let mut mines = Vec::new();
     let mut flyers = Vec::new();
     let schedule = pacing::schedule(&played.effects);
 
@@ -589,14 +670,18 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
             None => {}
         }
         flyers.extend(launched);
+        mine_cues(&effect, at, &mut mines);
         cue(effect, at, &mut cues);
     }
     // Stable, so cues at the same moment keep the sim's order (the turn passing last).
     cues.sort_by(|a, b| a.0.total_cmp(&b.0));
+    mines.sort_by(|a, b| a.0.total_cmp(&b.0));
     Scene {
         elapsed: 0.0,
         cues,
         next: 0,
+        mines,
+        next_mine: 0,
         flyers,
         moves: Vec::new(),
         end: schedule.end,
@@ -649,12 +734,17 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
         if *at > now {
             break;
         }
-        if let Some(staged) = stage_mine(cue, &dot, &mobiles, &hands, &mut mines) {
-            commands.spawn(staged);
-        } else {
-            run(cue, now, &mut scene.moves, &dot, &mut views, &mut hands, &mut commands);
-        }
+        run(cue, now, &mut scene.moves, &dot, &mut views, &mut hands, &mut commands);
         scene.next += 1;
+    }
+    while let Some(&(at, cue)) = scene.mines.get(scene.next_mine) {
+        if at > now {
+            break;
+        }
+        if let Some(laid) = stage_mine(cue, &dot, &mobiles, &hands, &mut mines) {
+            commands.spawn(laid);
+        }
+        scene.next_mine += 1;
     }
     for change in &scene.moves {
         let t = f64::from(((now - change.started) / FALL_SECONDS).clamp(0.0, 1.0));
@@ -664,17 +754,16 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
         adjust(&mut views, change.seat, |shown| shown.foot = foot);
     }
 
-    if now >= scene.end && scene.next >= scene.cues.len() {
+    if now >= scene.end && scene.next >= scene.cues.len() && scene.next_mine >= scene.mines.len() {
         timeline.scene = None;
     }
 }
 
 /// Plays a mine's cue on the mines on screen; returns a mine to spawn if one was laid that isn't
-/// there yet. `None` for any other cue, and for one it played.
-fn stage_mine(cue: &Cue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, mines: &mut MineParts) -> Option<impl Bundle> {
+/// there yet.
+fn stage_mine(cue: MineCue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, mines: &mut MineParts) -> Option<impl Bundle> {
     let place = |mines: &mut MineParts, id: MineId, at: Option<SimVec2>| {
-        for (view, mut transform, mut visibility) in mines.iter_mut().filter(|(view, ..)| view.id == id) {
-            let _ = view;
+        for (_, mut transform, mut visibility) in mines.iter_mut().filter(|(view, ..)| view.id == id) {
             if let Some(at) = at {
                 transform.translation = world(at).extend(transform.translation.z);
                 *visibility = Visibility::Inherited;
@@ -683,8 +772,8 @@ fn stage_mine(cue: &Cue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, 
             }
         }
     };
-    match *cue {
-        Cue::MineLaid(mine) => {
+    match cue {
+        MineCue::Laid(mine) => {
             if mines.iter().any(|(view, ..)| view.id == mine.id) {
                 place(mines, mine.id, Some(mine.middle()));
                 return None;
@@ -697,15 +786,14 @@ fn stage_mine(cue: &Cue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, 
                 mine_transform(mine.middle(), mine.facing),
             ))
         }
-        Cue::MineAt { id, at } => {
+        MineCue::At { id, at } => {
             place(mines, id, Some(at));
             None
         }
-        Cue::MineHide(id) => {
+        MineCue::Hide(id) => {
             place(mines, id, None);
             None
         }
-        _ => None,
     }
 }
 
@@ -769,6 +857,8 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         }
         Cue::Bolt { from, to } => hands.bolts.strike(from, to),
         Cue::Beam { from, to, level } => hands.bolts.beam(from, to, level),
+        Cue::Laser { from, to } => hands.bolts.laser(from, to),
+        Cue::Satellite { seat, at, seconds } => glide(views, seat, at, seconds, hands.time.elapsed_secs_f64()),
         Cue::Bounce { at } => {
             commands.spawn(puff(dot, at, 16.0, Color::srgb_u8(0xc9, 0xa8, 0x7c), 0.35));
         }
@@ -817,8 +907,6 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         Cue::Sound(sound) => {
             hands.sounds.write(Play(sound));
         }
-        // Mines' cues play on the mines (`stage_mine`).
-        Cue::MineLaid(_) | Cue::MineAt { .. } | Cue::MineHide(_) => {}
     }
 }
 
@@ -834,7 +922,15 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut FlyerParts, focus: &m
             && let (Some(at), Ok((mut transform, mut visibility))) = (flyer_at(&flyer.legs, flyer.about, now - flyer.from), transforms.get_mut(flyer.entity))
         {
             transform.translation = world(at).extend(depth::SHOTS);
-            if let Some(facing) = flyer_facing(&flyer.legs, now - flyer.from) {
+            if flyer.streak
+                && let Some(before) = flyer_at(&flyer.legs, flyer.about, now - flyer.from - STREAK_LOOKBACK)
+            {
+                transform.rotation = heading(world(before), world(at)).unwrap_or(transform.rotation);
+            }
+            // A picture with a front faces where it goes; a streak turns to its heading instead.
+            if !flyer.streak
+                && let Some(facing) = flyer_facing(&flyer.legs, now - flyer.from)
+            {
                 transform.scale.x = facing;
             }
             *visibility = Visibility::Inherited;
@@ -842,6 +938,21 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut FlyerParts, focus: &m
         }
         true
     });
+}
+
+/// Sends `seat`'s own satellite off to `at` at `start` on the app's clock, to get there in `seconds`.
+fn glide(views: &mut Query<(&MobileView, &mut Shown)>, seat: u8, to: SimVec2, seconds: f32, start: f64) {
+    adjust(views, seat, |shown| shown.glide = Some(Glide { to, start, seconds }));
+}
+
+/// How far back a streak looks to find which way it is going, seconds.
+const STREAK_LOOKBACK: f32 = 1.0 / 60.0;
+
+/// The turn that lays a streak along the way from `before` to `now`, in Bevy's world; `None` if it
+/// hasn't moved.
+fn heading(before: Vec2, now: Vec2) -> Option<Quat> {
+    let way = now - before;
+    (way.length_squared() > 0.0).then(|| Quat::from_rotation_z(way.y.atan2(way.x)))
 }
 
 /// Changes how one seat's mobile is shown.
@@ -943,8 +1054,8 @@ mod unit {
     fn a_crawling_mine_hides_while_its_flyer_walks_then_shows_where_it_stopped() {
         let walk = leg(0, TICKS_PER_SECOND, 0);
         let mut cues = Vec::new();
-        cue(
-            Effect::MineCrawled {
+        mine_cues(
+            &Effect::MineCrawled {
                 seat: 0,
                 mine: MineId(2),
                 legs: vec![walk],
@@ -952,10 +1063,13 @@ mod unit {
             3.0,
             &mut cues,
         );
-        assert!(matches!(cues[..], [(start, Cue::MineHide(MineId(2))), (end, Cue::MineAt { id: MineId(2), at })] if start == 3.0 && end == 4.0 && at == walk.flight.at(walk.to)));
+        assert!(matches!(cues[..], [(start, MineCue::Hide(MineId(2))), (end, MineCue::At { id: MineId(2), at })] if start == 3.0 && end == 4.0 && at == walk.flight.at(walk.to)));
         cues.clear();
-        cue(Effect::MineGone { mine: MineId(2), tick: None }, 5.0, &mut cues);
-        assert!(matches!(cues[..], [(at, Cue::MineHide(MineId(2)))] if at == 5.0));
+        mine_cues(&Effect::MineGone { mine: MineId(2), tick: None }, 5.0, &mut cues);
+        assert!(matches!(cues[..], [(at, MineCue::Hide(MineId(2)))] if at == 5.0));
+        let mut others = Vec::new();
+        cue(Effect::MineGone { mine: MineId(2), tick: None }, 5.0, &mut others);
+        assert!(others.is_empty(), "staged on their own");
     }
 
     #[test]
@@ -1022,6 +1136,68 @@ mod unit {
     }
 
     #[test]
+    fn a_satellite_sets_off_when_scheduled_and_glides_until_it_arrives() {
+        let mut cues = Vec::new();
+        let at = SimVec2::new(10.0, -20.0);
+        cue(
+            Effect::Satellite {
+                seat: 1,
+                at,
+                from: TICKS_PER_SECOND,
+                to: 3 * TICKS_PER_SECOND,
+            },
+            1.5,
+            &mut cues,
+        );
+        assert!(
+            matches!(cues[..], [(1.5, Cue::Satellite { seat: 1, at: to, seconds: 2.0 })] if to == at),
+            "one cue, when the sim scheduled it"
+        );
+        cues.clear();
+        cue(
+            Effect::Laser {
+                seat: 1,
+                from: at,
+                to: SimVec2::ZERO,
+                tick: 0,
+            },
+            2.0,
+            &mut cues,
+        );
+        assert!(matches!(cues[..], [(2.0, Cue::Laser { from, to })] if from == at && to == SimVec2::ZERO));
+    }
+
+    #[test]
+    fn lensowls_tracers_shine_and_its_ss_guide_is_big_and_green() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Lensowl),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S1).color(false), STAR);
+        assert_eq!(shooter(Shot::Ss).color(false), GUIDE);
+        assert!(shooter(Shot::Ss).size(&[leg(0, 10, 0)]) > shooter(Shot::S2).size(&[leg(0, 10, 0)]));
+    }
+
+    #[test]
+    fn needlemouses_pins_are_streaks_laid_along_their_flight() {
+        let shooter = Shooter {
+            mobile: Some(MobileKind::Needlemouse),
+            shot: Some(Shot::S1),
+        };
+        assert!(shooter.pins(&[leg(0, 10, 100)]), "a pin leaves the cushion in flight");
+        assert!(!shooter.pins(&[leg(0, 10, 0)]), "its tracer leaves the needle");
+        assert_eq!(shooter.color(false), THREAD);
+        let lensowl = Shooter {
+            mobile: Some(MobileKind::Lensowl),
+            ..shooter
+        };
+        assert!(!lensowl.pins(&[leg(0, 10, 100)]));
+        let down_right = heading(Vec2::ZERO, Vec2::new(1.0, -1.0)).unwrap();
+        assert!((down_right * Vec3::X - Vec3::new(1.0, -1.0, 0.0).normalize()).length() < 1e-5);
+        assert_eq!(heading(Vec2::ONE, Vec2::ONE), None, "still: keep the last turn");
+    }
+
+    #[test]
     fn spoutpots_shots_are_water_and_its_ss_blob_is_big() {
         let ss = Shooter {
             mobile: Some(MobileKind::Spoutpot),
@@ -1035,6 +1211,41 @@ mod unit {
             shot: Some(Shot::S2),
         };
         assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
+    }
+
+    #[test]
+    fn kitewyrms_shots_are_fire_and_its_mini_dragons_big() {
+        let s2 = Shooter {
+            mobile: Some(MobileKind::Kitewyrm),
+            shot: Some(Shot::S2),
+        };
+        assert_eq!(s2.color(false), FIRE);
+        assert_eq!(s2.size(&[leg(0, 10, 0)]), s2.size(&[leg(0, 10, 100)]), "a fireball leaving late is no smaller");
+        let ss = Shooter { shot: Some(Shot::Ss), ..s2 };
+        assert!(ss.size(&[leg(0, 10, 100)]) > s2.size(&[leg(0, 10, 0)]), "a mini-dragon, born at the orb's landing");
+    }
+
+    #[test]
+    fn flarecrows_flares_burn_small_and_its_ss_cart_is_bigger() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Flarecrow),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S2).color(false), FIRE);
+        let path = [leg(0, 10, 0)];
+        assert!(shooter(Shot::S2).size(&path) < shooter(Shot::S1).size(&path));
+        assert!(shooter(Shot::Ss).size(&path) > shooter(Shot::S1).size(&path));
+    }
+
+    #[test]
+    fn augerdillos_ss_is_a_curled_armadillo_and_its_drill_a_shell() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Augerdillo),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::Ss).color(false), CURLED);
+        assert!(shooter(Shot::Ss).size(&[leg(0, 10, 0)]) > shooter(Shot::S2).size(&[leg(0, 10, 0)]));
+        assert_eq!(shooter(Shot::S2).color(false), SHELL);
     }
 
     #[test]
