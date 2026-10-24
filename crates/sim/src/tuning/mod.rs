@@ -22,6 +22,7 @@ pub mod sparkhorn;
 pub mod spoutpot;
 pub mod sudsotter;
 pub mod thistleback;
+pub mod tinbadger;
 pub mod tuskrack;
 pub mod weather;
 

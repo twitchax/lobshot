@@ -79,17 +79,24 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
     let mut sudden_death = None;
     for (i, effect) in effects.iter().enumerate() {
         let time = match effect {
-            Effect::Volley { .. } | Effect::Dropped { .. } => {
+            Effect::Volley { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } => {
                 // A new stage waits until the one before has played out, falls included.
                 stage = Stage::starting(if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { stage.base });
-                if let Effect::Dropped { legs, .. } = effect {
+                match effect {
                     // A drop's landing is the stage's blast, for what follows it: a heal, the wind.
-                    stage.blast += flight_seconds(legs);
-                    stage.last_blast = stage.blast;
-                    busy = busy.max(stage.blast);
+                    Effect::Dropped { legs, .. } => {
+                        stage.blast += flight_seconds(legs);
+                        stage.last_blast = stage.blast;
+                        busy = busy.max(stage.blast);
+                    }
+                    // A crawling mine keeps the stage going until it stops.
+                    Effect::MineCrawled { legs, .. } => busy = busy.max(stage.base + flight_seconds(legs)),
+                    _ => {}
                 }
                 stage.base
             }
+            // Gone with what came before it: its layer's death, or a fall off the map.
+            Effect::MineGone { tick: None, .. } => at.last().copied().unwrap_or(stage.base),
             Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Guide { legs, .. } => {
                 busy = busy.max(stage.base + flight_seconds(legs));
                 stage.base
@@ -115,7 +122,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             | Effect::Laser { tick, .. }
             | Effect::ShieldStripped { tick, .. }
             | Effect::Pierced { to: tick, .. } => stage.blast_at(*tick),
-            Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } => stage.base + ticks_to_seconds(*tick),
+            Effect::Bounced { tick, .. } | Effect::Teleported { tick, .. } | Effect::MineLaid { tick, .. } | Effect::MineGone { tick: Some(tick), .. } => stage.base + ticks_to_seconds(*tick),
             Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::Healed { .. } | Effect::Frosted { .. } => stage.blast + DAMAGE_AFTER_BLAST,
             Effect::Died { death, .. } => match death {
                 Death::Blasted => stage.blast + DEATH_AFTER_BLAST,
@@ -123,7 +130,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 Death::Forfeited => stage.base,
             },
             // Everything that falls falls together, after the blasts that shook it loose.
-            Effect::Fell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
+            Effect::Fell { .. } | Effect::MineFell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
             Effect::Swapped { .. } => stage.base + FALL_SECONDS,
             Effect::WindChanged(_) => stage.blast,
             Effect::SuddenDeath { .. } => {
@@ -446,6 +453,60 @@ mod unit {
         ];
         let schedule = schedule(&effects);
         assert_eq!(schedule.at, [0.0, 0.0, 0.0, 0.0, 2.0]);
+    }
+
+    #[test]
+    fn a_crawling_mine_is_a_stage_of_its_own_after_the_turn_has_played_out() {
+        let walk = Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: Vec2::ZERO,
+                velocity: Vec2::new(64.0, 0.0),
+                accel: Vec2::ZERO,
+            },
+            from: 0,
+            to: TICKS_PER_SECOND,
+            offset: 0,
+        };
+        let mine = lobshot_sim::mines::Mine {
+            id: lobshot_sim::mines::MineId(3),
+            seat: 0,
+            at: Footing { x: 10, y: 20 },
+            facing: Facing::Right,
+        };
+        let effects = vec![
+            Effect::Volley { seat: 1, shot: Shot::S1 },
+            Effect::MineLaid { mine, tick: TICKS_PER_SECOND / 2 },
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::MineCrawled { seat: 0, mine: mine.id, legs: vec![walk] },
+            Effect::MineGone {
+                mine: mine.id,
+                tick: Some(TICKS_PER_SECOND),
+            },
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 15.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::Damaged { seat: 1, amount: 150 },
+            Effect::Died { seat: 1, death: Death::Blasted },
+            Effect::MineGone {
+                mine: lobshot_sim::mines::MineId(4),
+                tick: None,
+            },
+            Effect::TurnStarted { seat: 0 },
+        ];
+        let schedule = schedule(&effects);
+        let stage = 1.0 + FALL_SECONDS + TAIL_SECONDS;
+        assert_eq!(schedule.at[..4], [0.0, 0.5, 1.0, stage], "laid as it lands; the crawl waits for the shot");
+        assert_eq!(schedule.at[4..7], [stage + 1.0, stage + 1.0, stage + 1.0 + DAMAGE_AFTER_BLAST], "it goes off where its walk ends");
+        assert_eq!(schedule.at[8], schedule.at[7], "a mine gone with its layer goes with the death");
+        assert_eq!(schedule.end, stage + 1.0 + DEATH_AFTER_BLAST + FALL_SECONDS + TAIL_SECONDS);
     }
 
     #[test]
