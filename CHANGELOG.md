@@ -63,6 +63,11 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Lensowl (M5), an owl astronomer on a telescope rover: every shot is a tracer, and its clockwork
+  moon fires lasers down at where it lands (S1 one, S2 three from higher up, SS five swept across
+  the spot), stopped by the first thing in their way.
+- Needlemouse (M5), a mouse knight on a wind-up toy horse: the same tracer, with its pincushion
+  firing pins that converge on it (S1 three, S2 five from twice as high, SS seven swept across).
 - Augerdillo (M5), an armadillo on a tracked drill rig that fires over its back: S1 a plain round,
   S2 a drill that flies through mobiles, bores into the ground on a mirror of its arc and goes off
   where it comes up, SS a curled armadillo that rolls through land and stops only in a mobile.

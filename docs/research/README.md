@@ -17,6 +17,8 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`kitewyrm.md`](kitewyrm.md) | Dragon (Kitewyrm): what floating means, its mini-dragons, and why DBR's Dragon entry is unusable. |
 | [`flarecrow.md`](flarecrow.md) | Aduka (Flarecrow): rear fire, its aftershock chain, flares calling Thor, and the GN-aduka power fit. |
 | [`augerdillo.md`](augerdillo.md) | Nak (Augerdillo): the S2's mirrored bore, the SS that only stops in a mobile, its weak spot, and the community Nak formula fit. |
+| [`lensowl.md`](lensowl.md) | A.Sate (Lensowl): the tracer, its satellite's heights and lasers, the S1's side bias and the SS sweep. |
+| [`needlemouse.md`](needlemouse.md) | Knight (Needlemouse): its sword counts, where the swords come from, and its GunBound and DragonBound stats. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |
 | [`physics-fit.md`](physics-fit.md) | How the ballistics were fitted to the community aiming formulas, which formulas are acceptance tests, and why the rest are not. |
