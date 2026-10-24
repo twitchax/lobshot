@@ -63,6 +63,10 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Tinbadger (M5), a badger tinker with a crate-cart of wind-up tin beetles: S1 three cogs that wind
+  around one path, S2 two shells that lay mines (they crawl at the nearest mobile on its turn and
+  go off under a mobile's middle, or in any blast nearby), SS a big beetle that walks until it
+  meets a mobile or a mine. Mines stay on the map between turns and come back to a rejoining player.
 - Lensowl (M5), an owl astronomer on a telescope rover: every shot is a tracer, and its clockwork
   moon fires lasers down at where it lands (S1 one, S2 three from higher up, SS five swept across
   the spot), stopped by the first thing in their way.
