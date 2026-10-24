@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="40" viewBox="-12 -27 50 40">
+  <!-- Kitewyrm's head: a festival dragon's paper head on a rosette joint, a ruff of paper frills
+       behind it, a big lantern eye, gold antler horns, a blunt snout with round nostrils, whiskers,
+       and its jaws open on a glowing fireball. Its little gecko pilot rides between the horns, hands
+       on them, steering. The head lifts to aim; fireballs leave its mouth. Origin = pivot (the neck
+       joint); drawn at aim 0 (pointing +x), at 1.15 times its drafting size. Muzzle = (30, 0), in
+       the mouth. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- the skull and the snout, one paper shape -->
+    <path id="head" d="M 2.2,-4 C 2.6,-9.8 6.6,-13.4 11.4,-13.4 C 16,-13.4 19,-11.4 20.6,-8.8 L 26.6,-8.4 Q 30.6,-8 30.6,-4.6 Q 30.6,-1.2 27.4,-1 L 15,-1 C 14,2.4 11,4.6 7.4,4.2 C 3.8,3.8 2.2,0.6 2.2,-4 Z"/>
+    <clipPath id="headClip"><use href="#head"/></clipPath>
+    <path id="jaw" d="M 13.4,2 L 25.6,2.2 Q 28.2,2.4 27.8,4.4 Q 27.2,6.6 24.4,6.6 L 15.4,6.6 Q 12.4,6.4 12.6,4 Z"/>
+    <clipPath id="jawClip"><use href="#jaw"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+   <g transform="scale(1.15)">
+    <!-- the ruff: paper frills fanned behind the head, round the joint -->
+    <g stroke="#2a1a2e" stroke-width="0.7">
+      <path d="M 1,-7.6 L -4.6,-5.6 L -1.2,-3.6 Z" fill="#e9b949"/>
+      <path d="M 1,-5 L -6.2,-2.6 L -1.6,0.2 Z" fill="#e8434f"/>
+      <path d="M 1.4,-0.6 L -5.6,3.2 L 0.4,5 Z" fill="#e9b949"/>
+      <path d="M 3.4,2.6 L -2,8.4 L 4.6,7 Z" fill="#c93a44"/>
+    </g>
+    <!-- rosette joint -->
+    <circle r="4.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle r="2" fill="#c93a44"/>
+    <path d="M -3,-2 A 3.6 3.6 0 0 1 1.4,-3.6" stroke="#fff1a8" stroke-width="0.8" fill="none"/>
+
+    <!-- the lower jaw, with a row of teeth -->
+    <use href="#jaw" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#jawClip)">
+      <path d="M 12,4.4 Q 20,5.6 29,4 V 8 H 12 Z" fill="#c93a44"/>
+    </g>
+    <path d="M 16,2.2 L 17,3.6 L 18,2.3 M 20.4,2.3 L 21.4,3.7 L 22.4,2.3 M 24.4,2.4 L 25.2,3.6 L 26,2.4" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.4"/>
+
+    <!-- the fireball in its open mouth -->
+    <ellipse cx="24.6" cy="0.6" rx="4.6" ry="2.4" fill="#ff8a2a" stroke="#2a1a2e" stroke-width="0.6"/>
+    <ellipse cx="25.6" cy="0.4" rx="2.6" ry="1.3" fill="#ffd34a"/>
+    <ellipse cx="26.2" cy="0.2" rx="1.1" ry="0.6" fill="#fff6c8"/>
+
+    <!-- the skull and snout: red paper, shaded underneath, a gold crest band on the brow -->
+    <use href="#head" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#headClip)">
+      <path d="M 0,-1.6 C 8,0.8 18,-0.2 32,-3.6 V 6 H 0 Z" fill="#c93a44"/>
+      <path d="M 0,1.8 C 6,3.6 12,3.4 16,1.6 V 6 H 0 Z" fill="#9e2f3a"/>
+      <path d="M 4.4,-10.6 C 8,-13.6 13.6,-13.8 17.6,-11.4 L 19.6,-8.6 C 14,-11 8.6,-10.8 4.4,-8 Z" fill="#e9b949"/>
+      <path d="M 5.4,-11 C 8.4,-12.8 12.6,-13 15.6,-11.8" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
+      <path d="M 21,-7.4 Q 25.6,-7.8 28.6,-6.6" stroke="#ff9aa0" stroke-width="0.9" fill="none"/>
+      <path d="M 3.4,-6 Q 2.8,-2.6 4.4,0.4" stroke="#ff9aa0" stroke-width="0.8" fill="none"/>
+    </g>
+    <!-- round nostrils on the snout -->
+    <circle cx="27" cy="-6.6" r="1.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="27.3" cy="-6.6" r="0.6" fill="#2a1a2e"/>
+
+    <!-- whiskers streaming back from the snout -->
+    <path d="M 21.6,-1.4 C 18.6,0.4 16.4,4.6 11.6,6.6 C 9.6,7.4 8,6.8 7.6,5.8 M 24.2,-1.4 C 22.8,3.4 20.6,7.8 16.6,9.2 C 15,9.8 13.6,9.4 13.2,8.4" stroke="#2a1a2e" stroke-width="1.5" fill="none"/>
+    <path d="M 21.6,-1.4 C 18.6,0.4 16.4,4.6 11.6,6.6 C 9.6,7.4 8,6.8 7.6,5.8 M 24.2,-1.4 C 22.8,3.4 20.6,7.8 16.6,9.2 C 15,9.8 13.6,9.4 13.2,8.4" stroke="#e9b949" stroke-width="0.6" fill="none"/>
+
+    <!-- the big lantern eye, looking ahead -->
+    <circle cx="13" cy="-7" r="3.8" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="14.4" cy="-6.8" r="2.1" fill="#2a1a2e"/>
+    <circle cx="15" cy="-7.6" r="0.7" fill="#ffffff"/>
+    <path d="M 9.4,-10.2 Q 12.6,-12.4 16.4,-10.6" stroke="#2a1a2e" stroke-width="1" fill="none"/>
+
+    <!-- gold antler horns, swept up -->
+    <g stroke="#2a1a2e" stroke-width="2.4" fill="none">
+      <path d="M 6.6,-12 C 6.2,-15.6 7.6,-18.4 10.6,-19.6"/>
+      <path d="M 11.6,-13 C 12,-16.4 14,-18.6 16.8,-19.2 M 13,-16.8 L 11.6,-19"/>
+    </g>
+    <g stroke="#e9b949" stroke-width="1.1" fill="none">
+      <path d="M 6.6,-12 C 6.2,-15.6 7.6,-18.4 10.6,-19.6"/>
+      <path d="M 11.6,-13 C 12,-16.4 14,-18.6 16.8,-19.2 M 13,-16.8 L 11.6,-19"/>
+    </g>
+
+    <!-- the gecko pilot between the horns: tail curled up over its back, hands on the horns -->
+    <g transform="translate(3.6,0.6)">
+      <path d="M 7.6,-15.6 C 5.2,-16.6 5.4,-20 7.8,-20.2 C 9.4,-20.4 9.8,-18.6 8.6,-18" stroke="#2a1a2e" stroke-width="2.2" fill="none"/>
+      <path d="M 7.6,-15.6 C 5.2,-16.6 5.4,-20 7.8,-20.2 C 9.4,-20.4 9.8,-18.6 8.6,-18" stroke="#6cc04a" stroke-width="1.1" fill="none"/>
+      <ellipse cx="10" cy="-15.2" rx="3" ry="2.2" fill="#6cc04a" stroke="#2a1a2e" stroke-width="0.7"/>
+      <path d="M 8,-14.2 Q 10,-13.4 12,-14.2" stroke="#4a9a3a" stroke-width="0.8" fill="none"/>
+      <path d="M 12,-16 L 14.4,-17.2" stroke="#2a1a2e" stroke-width="1.6"/>
+      <path d="M 12,-16 L 14.4,-17.2" stroke="#6cc04a" stroke-width="0.7"/>
+      <circle cx="12.4" cy="-18.8" r="2.4" fill="#6cc04a" stroke="#2a1a2e" stroke-width="0.7"/>
+      <circle cx="13.4" cy="-19.4" r="1.3" fill="#fff1a8" stroke="#2a1a2e" stroke-width="0.4"/>
+      <circle cx="13.8" cy="-19.4" r="0.6" fill="#2a1a2e"/>
+      <path d="M 11,-17.8 Q 12,-17.2 13.4,-17.6" stroke="#2a1a2e" stroke-width="0.4" fill="none"/>
+    </g>
+   </g>
+  </g>
+</svg>

@@ -1,20 +1,23 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
-//! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
-//! helix strands (`helix`), orbiters (`orbit`), bouncing balls (`bounce`), blobs that walk the
-//! ground (`crawl`), homing missiles (`homing`), beams (`beam`) and a mobile's own satellite
-//! (`satellite`).
+//! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`) or ripple out one
+//! after another (`ripple`), bolts (`bolt`), helix strands (`helix`), orbiters (`orbit`), bouncing
+//! balls (`bounce`), blobs that walk the ground (`crawl`), homing missiles (`homing`), beams
+//! (`beam`) and a mobile's own satellite (`satellite`).
 
+mod augerdillo;
 mod beam;
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
 mod crawl;
+mod flarecrow;
 mod frostfin;
 mod helix;
 mod herdhound;
 mod homing;
 mod hookclaw;
+mod kitewyrm;
 mod lanternwing;
 mod lensowl;
 mod marblemole;
@@ -135,6 +138,16 @@ impl Gun<'_> {
     /// armed or it passed through Electricity (one bolt either way: the item is the weather,
     /// GF-tiro), and Skyeye's beam toward it if Skyeye is up (GF-tiro).
     pub fn follow_up(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
+        self.thunder(game, at, tick, marks, effects);
+        if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
+            skyeye::beam(game, at, tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
+        }
+    }
+
+    /// `follow_up`'s bolt alone: down the column of a projectile that landed at `at` at `tick`, a
+    /// beat later, if Thunder is armed or it passed through Electricity (Flarecrow's flares call
+    /// Skyeye themselves).
+    pub fn thunder(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
         if self.salvo.thunder || marks.charged {
             let strike = bolt::from_sky(game, at.x);
             bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick + ticks(BOLT_DELAY_SECONDS.value), effects);
@@ -147,9 +160,6 @@ impl Gun<'_> {
                 boost: 1.0,
             };
             bolt::zap(game, &strike, &thunder, effects);
-        }
-        if game.weather().is(WeatherKind::Skyeye) && !weatherproof(game, self.seat) {
-            skyeye::beam(game, at, tick + ticks(SKYEYE_DELAY_SECONDS.value), effects);
         }
     }
 
@@ -198,6 +208,9 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Kitewyrm => kitewyrm::fire(game, &gun, shot, effects),
+        MobileKind::Flarecrow => flarecrow::fire(game, &mut gun, shot, effects),
+        MobileKind::Augerdillo => augerdillo::fire(game, &gun, shot, effects),
         MobileKind::Lensowl => lensowl::fire(game, &gun, shot, effects),
         MobileKind::Needlemouse => needlemouse::fire(game, &gun, shot, effects),
     }
@@ -212,8 +225,8 @@ fn weatherproof(game: &Game, seat: u8) -> bool {
 }
 
 /// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
-/// for SearchBot's aim pass (Sudsotter's shots walk on from there). `target` is where the bot wants
-/// it.
+/// for SearchBot's aim pass (Sudsotter's shots walk on from there, Augerdillo's bore on or pass
+/// through the ground). `target` is where the bot wants it.
 pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
     match game.players().get(usize::from(seat))?.mobile {
         MobileKind::Coilback
@@ -225,8 +238,11 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
         | MobileKind::Herdhound
-        | MobileKind::Thistleback => None,
+        | MobileKind::Thistleback
+        | MobileKind::Kitewyrm
+        | MobileKind::Flarecrow => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
+        MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
         MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
         MobileKind::Needlemouse => Some(needlemouse::aim_point(game, seat, shot, flight)),
     }
@@ -252,6 +268,42 @@ fn teleport(game: &mut Game, gun: &Gun, effects: &mut Vec<Effect>) {
             tick: track.impact.tick,
         });
     }
+}
+
+/// Projectiles rippling out of one barrel, one after another: Tuskrack's rockets, Kitewyrm's
+/// fireballs.
+struct Rack {
+    /// Each one's aim (degrees) and power (bars) off the shot's, in the order they leave.
+    spread: &'static [(i16, f64)],
+    /// Ticks between one leaving and the next.
+    every: u32,
+    blast: f64,
+    damage: DamageRange,
+    /// Whether one that strikes a mobile carves the ground there.
+    direct_crater: bool,
+}
+
+/// Fires `rack`'s projectiles one after another from where the shooter stands, each its own launch.
+fn ripple(game: &mut Game, gun: &Gun, rack: &Rack, effects: &mut Vec<Effect>) {
+    let launches: Vec<(Flight, u32)> = (0_u32..)
+        .zip(rack.spread)
+        .filter_map(|(order, &(aim, bars))| Some((gun.launch(game, aim, bars)?, order * rack.every)))
+        .collect();
+    let (paths, mut landings) = land_in_order(
+        game,
+        launches.len(),
+        |game, index| game.track_launched(launches[index].0, launches[index].1),
+        |game, _, track, out| {
+            let crater = if rack.direct_crater || !matches!(track.impact.contact, Contact::Mobile(_)) {
+                rack.blast
+            } else {
+                0.0
+            };
+            gun.land(game, &gun.blast_on(track, rack.blast, rack.damage), crater, &track.impact, track.marks, out);
+        },
+    );
+    effects.extend(paths.into_iter().map(|legs| Effect::Fired { seat: gun.seat, legs }));
+    effects.append(&mut landings);
 }
 
 /// Flies several projectiles at once. Each lands (`land`, with its index) in the order it hits,

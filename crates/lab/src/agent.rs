@@ -1004,6 +1004,19 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Kitewyrm => format!(
+            "A kite dragon that floats {:.0} px over the ground: what rolls or walks along the ground (marbles, sponges, suds) passes under it, and a blast on the ground beneath only grazes it. Light shots. S1 is one fireball; S2 four, leaving one after another in two streams that spread apart with range, so all four land only up close; SS a red orb that calls five mini-dragons from a fan above where it lands, each flying straight into that spot, gravity and wind aside, and going off on the first thing in its way: land over a target shields it. It moves far and climbs almost anything.",
+            tuning::kitewyrm::HOVER.value
+        ),
+        MobileKind::Flarecrow => format!(
+            "Fires over its back: its aims run past 90 (170 is 10 degrees above level behind it), so turn your back to the target. S1 is an electric ball with a small blast and a flat {} aftershock on every mobile near where it lands, which runs on ({} each) to any mobile beside one it hit, and on down the line, once a turn. S2 fires three flares down one path, one after another: Skyeye's beam strikes wherever each lands, its weather up or not, so a short shot digs its way on toward the target; all its damage is the beams', which grow as Skyeye levels up. SS flies through land and mobiles alike and never goes off: each enemy it passes into takes a beam {}x as strong.",
+            tuning::flarecrow::S1_AFTERSHOCK.value,
+            tuning::flarecrow::S1_CHAIN.value,
+            tuning::flarecrow::SS_BEAM_BOOST.value
+        ),
+        MobileKind::Augerdillo => {
+            "Fires over its back: its aims run past 90, so 150 is 30 degrees above level on the side it faces away from; turn your back to the target. Heavy shots that the wind moves less. S1 is one round; S2 a drill that flies through mobiles, digs into the first ground it strikes, bores a mirror of its arc through it (the faster it struck, the deeper and farther) and goes off where it comes up, or is lost out of the map's bottom: drop it at a target's feet close by; SS an armadillo that rolls through the ground and goes off only in a mobile, any mobile, as a direct hit, worth most near its center. It walks little but climbs well.".to_owned()
+        }
         MobileKind::Lensowl => format!(
             "Every shot is a tracer that hurts nothing; once it lands, the satellite hovering over you fires lasers at it from where it hovers, and the first mobile or ground in a laser's way takes it, you included. S1 is one laser from {} px over your feet, aimed a little high when it fires leftward on screen, so it can sail over a target's head; S2 three from three times as high, which clears ground in the way, raining down left to right onto the tracer and spreading wider the farther off; SS sends the satellite over the landing to sweep five lasers straight down, left to right. Has a shield.",
             tuning::lensowl::SATELLITE_HEIGHT.value
@@ -1404,6 +1417,14 @@ mod unit {
         };
         assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
         assert!(rules().contains("While Skyeye is up"));
+    }
+
+    #[test]
+    fn the_rules_say_flarecrow_fires_over_its_back() {
+        let rules = rules();
+        assert!(rules.contains("### Flarecrow (`flarecrow`)"), "{rules}");
+        assert!(rules.contains("Fires over its back"), "{rules}");
+        assert!(rules.contains("- S1: delay 250, aim 130 to 170"), "{rules}");
     }
 
     #[test]

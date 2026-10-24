@@ -25,8 +25,9 @@ use crate::{
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
     tuning::{
-        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, lensowl, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, lensowl, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter, thistleback,
+        tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -61,13 +62,16 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Kitewyrm,
+    Flarecrow,
+    Augerdillo,
     Lensowl,
     Needlemouse,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 16] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -79,6 +83,9 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Kitewyrm,
+        Self::Flarecrow,
+        Self::Augerdillo,
         Self::Lensowl,
         Self::Needlemouse,
     ];
@@ -115,7 +122,10 @@ impl MobileKind {
             | Self::Sudsotter
             | Self::Frostfin
             | Self::Herdhound
-            | Self::Thistleback => return None,
+            | Self::Thistleback
+            | Self::Kitewyrm
+            | Self::Flarecrow
+            | Self::Augerdillo => return None,
         };
         Some(foot - Vec2::new(0.0, height))
     }
@@ -134,9 +144,20 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Kitewyrm => &kitewyrm::MOBILE,
+            Self::Flarecrow => &flarecrow::MOBILE,
+            Self::Augerdillo => &augerdillo::MOBILE,
             Self::Lensowl => &lensowl::MOBILE,
             Self::Needlemouse => &needlemouse::MOBILE,
         }
+    }
+
+    /// Whether it floats over the ground (Kitewyrm's, `tuning::kitewyrm::FLOATS`): what walks,
+    /// rolls or burrows along the ground passes under it and can't strike it, and a mine has nothing
+    /// of it to go for. Shots that travel on the ground sense mobiles through `Game::grounded_frames`.
+    #[must_use]
+    pub fn floats(self) -> bool {
+        self == Self::Kitewyrm && kitewyrm::FLOATS.value
     }
 }
 
@@ -451,7 +472,8 @@ pub enum Effect {
     /// A bolt of lightning from `from` (in the sky, or off a side of the map) to `to`, where it
     /// struck a mobile or the ground, at `tick`. Its crater (`Exploded`, if it struck the ground)
     /// and the damage it deals follow. Sparkhorn's shots, the Thunder item and the slot machine's
-    /// bolt.
+    /// bolt; also Flarecrow's S1 aftershock arcing from where it landed, or from a mobile it hit,
+    /// to a mobile's center, its damage next.
     Bolt {
         from: Vec2,
         to: Vec2,
@@ -1196,9 +1218,19 @@ impl Game {
 
     /// Every living mobile's hitbox, by seat, for collision loops.
     pub(crate) fn hit_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|_| true)
+    }
+
+    /// `hit_frames` for what travels along the ground: every living mobile's hitbox but a floating
+    /// one's (`MobileKind::floats`).
+    pub(crate) fn grounded_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|p| !p.mobile.floats())
+    }
+
+    fn frames_where(&self, keep: impl Fn(&Player) -> bool) -> Vec<(u8, HitFrame)> {
         (0_u8..)
             .zip(&self.players)
-            .filter(|(_, p)| p.alive)
+            .filter(|(_, p)| p.alive && keep(p))
             .map(|(seat, p)| (seat, HitFrame::new(&p.pose(), p.tuning().hitbox.value)))
             .collect()
     }
@@ -1717,7 +1749,7 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use super::{
-        testing::{answer_rolls, damage_to, direct_hit_power, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
+        testing::{answer_rolls, damage_to, direct_hit_power, direct_hit_power_of, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
         *,
     };
     use crate::{drops::DropKind, map::NoAssets};
@@ -1739,6 +1771,20 @@ mod unit {
         assert!(wide >= 33 && tall >= 58, "{wide} x {tall}");
         assert!(check_spawn_spacing(&[100, 100 + 2 * wide, 900]).is_ok());
         assert!(check_spawn_spacing(&[900, 100, 99 + 2 * wide]).is_err(), "order doesn't matter");
+    }
+
+    #[test]
+    fn only_a_floating_mobile_is_left_out_of_what_the_ground_can_touch() {
+        assert_eq!(MobileKind::ALL.iter().filter(|m| m.floats()).collect::<Vec<_>>(), [&MobileKind::Kitewyrm]);
+        let game = duel_of(MobileKind::Kitewyrm, MobileKind::Coilback, 800);
+        let seats = |frames: Vec<(u8, HitFrame)>| frames.into_iter().map(|(seat, _)| seat).collect::<Vec<u8>>();
+        assert_eq!(seats(game.hit_frames()), [0, 1]);
+        assert_eq!(seats(game.grounded_frames()), [1]);
+        // Its body floats over its feet: nothing just above the ground under it is inside it.
+        let kitewyrm = game.players()[0];
+        let hover = crate::tuning::kitewyrm::HOVER.value;
+        assert!(!kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover - 1.0)));
+        assert!(kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover + 1.0)));
     }
 
     #[test]
@@ -2004,6 +2050,18 @@ mod unit {
         let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
         assert!(blasts >= 9, "the pumpkin's ring went off: {effects:?}");
         assert_eq!(beams(&effects).len(), 1, "one pumpkin, one beam");
+    }
+
+    #[test]
+    fn flarecrows_flares_call_skyeye_with_or_without_its_weather_and_no_more_under_it() {
+        // Its back to the target, so its shots fly at it.
+        let mut setup = duel_setup(800);
+        setup.seats[0].mobile = MobileKind::Flarecrow;
+        setup.seats[0].facing = Facing::Left;
+        let calm = start(&setup);
+        let power = direct_hit_power_of(&calm, Shot::S2, 130);
+        assert_eq!(beams(&shoot(&mut calm.clone(), 0, Shot::S2, 130, power)).len(), 3);
+        assert_eq!(beams(&shoot(&mut under(calm, WeatherKind::Skyeye), 0, Shot::S2, 130, power)).len(), 3, "GF-lee");
     }
 
     #[test]

@@ -61,12 +61,14 @@ pub fn build_previews(sources: &Path, out: &Out, rigs: &[(MobileKind, MobileRig)
     Ok(())
 }
 
-/// The mobile at its aim range's ends and middle, plus 0 to show the cannon clears the body, on a
-/// plain ground line; the last pose carries the gameplay geometry from `sim::tuning`.
+/// The mobile at its aim range's ends and middle, plus level (0, or 180 for a mobile that fires
+/// over its back) to show the cannon clears the body, on a plain ground line; the last pose carries
+/// the gameplay geometry from `sim::tuning`.
 fn poses(mobile: &Mobile, kind: MobileKind) -> Res<Pixmap> {
     let tuning = kind.tuning();
     let aim = tuning.s1.aim.value;
-    let aims = [0.0, f64::from(aim.min), f64::from(aim.true_min + aim.true_max) / 2.0, f64::from(aim.max)];
+    let level = if aim.backward() { 180.0 } else { 0.0 };
+    let aims = [level, f64::from(aim.min), f64::from(aim.true_min + aim.true_max) / 2.0, f64::from(aim.max)];
     // Room over the tallest mobile, and over its satellite if it has one.
     #[allow(clippy::cast_possible_truncation)]
     let satellite = kind.satellite(Vec2::ZERO, Shot::S1).map_or(0.0, |at| (-at.y) as f32 + 24.0);

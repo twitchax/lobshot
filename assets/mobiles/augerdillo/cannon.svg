@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="18" viewBox="-7 -9 46 18">
+  <!-- Augerdillo's mortar: a stubby steel tube on a swivel hub, a red band round it and a brass
+       mouth, with the gold drill shell's spiral tip poking out. Origin = pivot (the hub); drawn at
+       aim 0 (pointing +x). Muzzle = (26, 0), the mouth. It only ever aims over the back (130 to
+       170 degrees), turned upside down, so its light falls on its +y side, which faces up then. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="tube" d="M 2,-4.4 L 22.4,-6 L 22.4,6 L 2,4.4 Z"/>
+    <clipPath id="tubeClip"><use href="#tube"/></clipPath>
+    <path id="bit" d="M 24.6,-3.8 L 34.6,0 L 24.6,3.8 Z"/>
+    <clipPath id="bitClip"><use href="#bit"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the drill shell's spiral tip, in the mouth -->
+    <use href="#bit" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <g clip-path="url(#bitClip)">
+      <path d="M 24,-3.8 L 36,0 L 24,0 Z" fill="#b9822c"/>
+      <path d="M 26.4,-4.6 L 25.2,4.6 M 29.2,-4.6 L 28,4.6 M 32,-4.6 L 30.8,4.6" stroke="#8a5a22" stroke-width="1" fill="none"/>
+      <path d="M 25.4,2.4 L 33,0.6" stroke="#fff1a8" stroke-width="0.8" fill="none"/>
+    </g>
+    <!-- the tube: steel, shaded on its -y side, lit on its +y side -->
+    <use href="#tube" fill="#8a88a6" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#tubeClip)">
+      <path d="M 0,-6 H 24 V -2 H 0 Z" fill="#5a5870"/>
+      <path d="M 3.6,2.8 L 21,3.4" stroke="#b4b2cc" stroke-width="1.1" fill="none"/>
+      <!-- the red band -->
+      <path d="M 13.6,-6 H 17.6 V 6 H 13.6 Z" fill="#e8434f"/>
+      <path d="M 13.6,-6 H 17.6 V -2 H 13.6 Z" fill="#b93a2c"/>
+      <path d="M 14,2.9 H 17.2" stroke="#ff9a7e" stroke-width="1" fill="none"/>
+    </g>
+    <path d="M 13.6,-5.6 V 5.6 M 17.6,-5.8 V 5.8" stroke="#2a1a2e" stroke-width="0.6" fill="none"/>
+    <!-- the brass mouth -->
+    <rect x="21.6" y="-7" width="4.4" height="14" rx="1.4" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 21.9,-6.6 H 25.6 V -2.6 H 21.9 Z" fill="#b9822c"/>
+    <path d="M 22.6,3.6 H 25" stroke="#fff1a8" stroke-width="0.8" fill="none"/>
+    <!-- rivets -->
+    <g fill="#3e3c52"><circle cx="6" cy="0" r="0.6"/><circle cx="10" cy="0" r="0.6"/></g>
+    <!-- the swivel hub -->
+    <circle r="4.6" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -3.2,0 A 3.2 3.2 0 0 0 3.2,0" stroke="#b4b2cc" stroke-width="0.8" fill="none"/>
+    <circle r="1.6" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+  </g>
+</svg>
