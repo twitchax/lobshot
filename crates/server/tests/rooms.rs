@@ -151,30 +151,36 @@ async fn a_player_who_rejoins_mid_game_gets_the_mines_left_on_the_map() {
     ] {
         human.send(&msg).await;
     }
-    // Follow the game to Pip's first turn, then lay two mines with a soft lob.
+    // Lay mines with soft lobs on Pip's turns. The spawns and the wind are rolled, so a lob's
+    // shells may land on the bot (going off at once) or leave the map: lob again until a mine is
+    // down, rather than wait on one lob forever.
     let mut replica = Replica::default();
     let mut seat = None;
-    loop {
-        let msg = human.recv().await;
-        replica.absorb(&msg).unwrap();
-        if let ServerMsg::Room(RoomView { stage: Stage::Playing { seats }, .. }) = &msg {
-            seat = seats.iter().position(|&id| id == me).and_then(|seat| u8::try_from(seat).ok());
-        }
-        if let (Some(seat), Some(game)) = (seat, replica.game())
-            && game.phase() == (Phase::Turn { seat })
-            && game.pending_roll().is_none()
-        {
-            break;
-        }
-    }
     let shot = Action::Shoot {
         shot: Shot::S2,
         aim: 45,
         power: Power::nearest(1.3),
     };
-    human.send(&ClientMsg::Act(shot)).await;
+    let mut lobs = 0;
     while replica.game().is_none_or(|game| game.mines().is_empty()) {
-        replica.absorb(&human.recv().await).unwrap();
+        let msg = human.recv().await;
+        replica.absorb(&msg).unwrap();
+        if let ServerMsg::Room(RoomView { stage: Stage::Playing { seats }, .. }) = &msg {
+            seat = seats.iter().position(|&id| id == me).and_then(|seat| u8::try_from(seat).ok());
+        }
+        let Some(seat) = seat else { continue };
+        if replica
+            .game()
+            .is_some_and(|game| game.phase() == (Phase::Turn { seat }) && game.pending_roll().is_none() && game.mines().is_empty())
+        {
+            assert!(lobs < 8, "no mine down after {lobs} lobs");
+            human.send(&ClientMsg::Act(shot)).await;
+            lobs += 1;
+            // Wait out the lob: until a mine is down or the turn has passed.
+            while replica.game().is_some_and(|game| game.phase() == (Phase::Turn { seat }) && game.mines().is_empty()) {
+                replica.absorb(&human.recv().await).unwrap();
+            }
+        }
     }
     let laid = replica.game().unwrap().mines().to_vec();
     let fired = replica.log().unwrap().events.len();
