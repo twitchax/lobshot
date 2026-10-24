@@ -7,19 +7,24 @@ use std::collections::HashMap;
 
 use bevy::{
     asset::RenderAssetUsages,
+    ecs::system::SystemParam,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     sprite::Anchor,
 };
 use lobshot_assets::ART_SCALE;
 use lobshot_sim::{
-    game::Phase,
+    game::{Phase, Shot},
     map::MapRef,
     terrain::Terrain,
     units::{Facing, Vec2 as SimVec2},
 };
 
-use super::{GameRoot, Timeline, world};
+use super::{
+    GameRoot, Timeline, TurnClock,
+    input::{Controls, my_turn},
+    world,
+};
 use crate::{
     assets::Rigs,
     model::{Match, Screen, Session},
@@ -119,7 +124,34 @@ pub struct Shown {
     pub aim: i16,
     /// How brittle Frostfin's ice has left it (`Player::brittle`).
     pub brittle: u8,
+    /// Where a scene last sent its own satellite, if it has one (`Effect::Satellite`); between
+    /// scenes it hovers home, over its feet.
+    pub glide: Option<Glide>,
 }
+
+/// A glide a scene sets a mobile's own satellite on: where to, when it set off on the app's clock,
+/// and how long it takes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Glide {
+    pub to: SimVec2,
+    pub start: f64,
+    pub seconds: f32,
+}
+
+/// A mobile's own satellite on screen (Lensowl's, Needlemouse's), apart from its body: it neither
+/// leans nor mirrors with it.
+#[derive(Component)]
+pub struct SatelliteView {
+    pub seat: u8,
+    /// Where it is drawn now, before its bob.
+    at: SimVec2,
+    /// The glide it is on, and where it set off from.
+    gliding: Option<(Glide, SimVec2)>,
+}
+
+/// How fast a satellite settles back over its mobile, or onto a new shot's height: the share of
+/// the way left it closes each second, as a rate.
+const SETTLE_RATE: f32 = 8.0;
 
 /// The name and HP bar over a mobile (not rotated or mirrored with it).
 #[derive(Component)]
@@ -321,6 +353,7 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
             alive: player.alive,
             aim: player.tuning().s1.aim.value.true_min,
             brittle: player.brittle,
+            glide: None,
         };
         let hitbox = player.tuning().hitbox.value;
         let color = team_color(player.team);
@@ -442,7 +475,69 @@ fn dress_mobiles(
                 Transform::from_xyz(as_f32(socket.at.0), as_f32(-socket.at.1), z).with_scale(Vec3::splat(scale)),
             ));
         });
+        let home = player.mobile.satellite(player.footing.world(), Shot::S1);
+        if let (Some(file), Some(at)) = (&rig.satellite, home) {
+            commands.spawn((
+                GameRoot,
+                SatelliteView { seat: view.seat, at, gliding: None },
+                Sprite::from_image(server.load(lobshot_assets::part_path(player.mobile, file))),
+                Transform::from_translation(world(at).extend(depth::MOBILES + 1.0)).with_scale(Vec3::splat(scale)),
+            ));
+        }
     }
+}
+
+/// What a satellite's hover needs to know besides its mobile: the game, whose turn it is and the
+/// shot its player has picked, and the clock.
+#[derive(SystemParam)]
+struct Hovering<'w> {
+    game: Option<Res<'w, Match>>,
+    session: Res<'w, Session>,
+    clock: Res<'w, TurnClock>,
+    controls: Option<Res<'w, Controls>>,
+    time: Res<'w, Time>,
+}
+
+/// Places each satellite: along the glide a scene set it on, or else settling over its mobile at
+/// the height of the shot its player has picked (S1's for everyone else), bobbing gently.
+fn hover_satellites(hovering: Hovering, views: Query<(&MobileView, &Shown)>, mut satellites: Query<(&mut SatelliteView, &mut Transform, &mut Visibility)>) {
+    let Some(game) = hovering.game.as_deref() else { return };
+    let mine = my_turn(&hovering.session, &hovering.clock, game);
+    let now = hovering.time.elapsed_secs_f64();
+    let settle = 1.0 - (-SETTLE_RATE * hovering.time.delta_secs()).exp();
+    for (mut satellite, mut transform, mut visibility) in &mut satellites {
+        let seat = satellite.seat;
+        let Some((_, shown)) = views.iter().find(|(view, _)| view.seat == seat) else { continue };
+        let Some(player) = game.predicted.players().get(usize::from(seat)) else { continue };
+        let shot = hovering.controls.as_deref().filter(|_| mine == Some(seat)).map_or(Shot::S1, |controls| controls.shot);
+        satellite.at = if let Some(glide) = shown.glide {
+            let from = match satellite.gliding {
+                Some((current, from)) if current == glide => from,
+                _ => satellite.at,
+            };
+            satellite.gliding = Some((glide, from));
+            glide_at(from, glide, now)
+        } else {
+            satellite.gliding = None;
+            let home = player.mobile.satellite(shown.foot, shot).unwrap_or(shown.foot);
+            satellite.at + (home - satellite.at) * f64::from(settle)
+        };
+        let bob = as_f32((now * 2.4 + f64::from(seat)).sin()) * 2.0;
+        transform.translation = (world(satellite.at) + Vec2::new(0.0, bob)).extend(depth::MOBILES + 1.0);
+        *visibility = if shown.alive { Visibility::Inherited } else { Visibility::Hidden };
+    }
+}
+
+/// Where a satellite gliding from `from` is at `now`: easing in and out along the way, there once
+/// the glide's time is up.
+fn glide_at(from: SimVec2, glide: Glide, now: f64) -> SimVec2 {
+    let t = if glide.seconds > 0.0 {
+        ((now - glide.start) / f64::from(glide.seconds)).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let eased = t * t * (3.0 - 2.0 * t);
+    from + (glide.to - from) * eased
 }
 
 /// The HP and shield bars' fills, and which each is.
@@ -522,6 +617,7 @@ fn follow_game(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time
         shown.shield = player.shield;
         shown.alive = player.alive;
         shown.brittle = player.brittle;
+        shown.glide = None;
     }
 }
 
@@ -555,9 +651,43 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, pose_mobiles, tag_brittle)
+            (
+                build_map,
+                slice_drawn,
+                load_rigs,
+                spawn_mobiles,
+                dress_mobiles,
+                follow_game,
+                pose_mobiles,
+                hover_satellites,
+                tag_brittle,
+            )
                 .chain()
                 .run_if(in_state(Screen::Game)),
         );
+    }
+}
+
+#[cfg(test)]
+mod unit {
+    // Exact float equality is the claim at a glide's ends: it starts where it was and stops on its
+    // mark.
+    #![allow(clippy::float_cmp)]
+
+    // The runner only runs `wasm_bindgen_test`s; this makes `#[test]` one.
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn a_satellite_glides_easing_in_and_out_and_arrives_on_time() {
+        let (from, to) = (SimVec2::new(100.0, 50.0), SimVec2::new(300.0, 50.0));
+        let glide = Glide { to, start: 10.0, seconds: 2.0 };
+        assert_eq!(glide_at(from, glide, 10.0), from);
+        assert_eq!(glide_at(from, glide, 11.0), SimVec2::new(200.0, 50.0), "halfway at half time");
+        assert!(glide_at(from, glide, 10.2).x - from.x < 0.1 * (to.x - from.x), "slow off the mark");
+        assert_eq!(glide_at(from, glide, 12.0), to);
+        assert_eq!(glide_at(from, glide, 30.0), to, "and it stays");
+        assert_eq!(glide_at(from, Glide { seconds: 0.0, ..glide }, 10.0), to, "an instant glide is a jump");
     }
 }

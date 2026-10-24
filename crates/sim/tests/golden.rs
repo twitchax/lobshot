@@ -109,6 +109,20 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         99,
         0xc1c7_a661_a1b1_0db2,
     ),
+    (
+        "roster_lensowl",
+        include_str!("golden/roster_lensowl.json"),
+        include_bytes!("golden/roster_lensowl.bin"),
+        65,
+        0xccec_dcac_4263_b4ab,
+    ),
+    (
+        "roster_needlemouse",
+        include_str!("golden/roster_needlemouse.json"),
+        include_bytes!("golden/roster_needlemouse.bin"),
+        32,
+        0x7865_b192_30c5_643b,
+    ),
 ];
 
 #[test]
@@ -290,6 +304,8 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
         ("roster_flarecrow", play(roster_flarecrow(), &winds)),
         ("roster_augerdillo", play(roster_augerdillo(), &winds)),
+        ("roster_lensowl", play(roster_lensowl(), &winds)),
+        ("roster_needlemouse", play(roster_needlemouse(), &winds)),
     ]
 }
 
@@ -563,6 +579,40 @@ fn roster_augerdillo() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Augerdillo, 650, Facing::Left, &[]), seat(Team::B, 1350, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Lensowl (A.Sate's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_lensowl() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Lensowl, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Needlemouse (Knight's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_needlemouse() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Needlemouse, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

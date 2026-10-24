@@ -121,6 +121,8 @@ pub fn role(mobile: Option<MobileKind>) -> &'static str {
         Some(MobileKind::Kitewyrm) => "A kite dragon that floats. Breathes fireballs; its SS calls dragons.",
         Some(MobileKind::Flarecrow) => "A crow signalman. Its flares call the satellite's beam down.",
         Some(MobileKind::Augerdillo) => "A drilling armadillo. Fires over its back; its drills burrow.",
+        Some(MobileKind::Lensowl) => "A stargazing owl. Its satellite lasers where its tracers land.",
+        Some(MobileKind::Needlemouse) => "A mouse knight on a toy horse. Its pincushion rains pins on its tracers.",
         None => "Any of them: the room picks when the game starts.",
     }
 }

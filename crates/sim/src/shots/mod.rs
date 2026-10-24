@@ -2,9 +2,11 @@
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
 //! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`) or ripple out one
 //! after another (`ripple`), bolts (`bolt`), helix strands (`helix`), orbiters (`orbit`), bouncing
-//! balls (`bounce`), blobs that walk the ground (`crawl`) and homing missiles (`homing`).
+//! balls (`bounce`), blobs that walk the ground (`crawl`), homing missiles (`homing`), beams
+//! (`beam`) and a mobile's own satellite (`satellite`).
 
 mod augerdillo;
+mod beam;
 pub(crate) mod bolt;
 mod bounce;
 mod coilback;
@@ -17,8 +19,11 @@ mod homing;
 mod hookclaw;
 mod kitewyrm;
 mod lanternwing;
+mod lensowl;
 mod marblemole;
+mod needlemouse;
 mod orbit;
+mod satellite;
 pub(crate) mod skyeye;
 mod sparkhorn;
 mod spoutpot;
@@ -206,6 +211,8 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Kitewyrm => kitewyrm::fire(game, &gun, shot, effects),
         MobileKind::Flarecrow => flarecrow::fire(game, &mut gun, shot, effects),
         MobileKind::Augerdillo => augerdillo::fire(game, &gun, shot, effects),
+        MobileKind::Lensowl => lensowl::fire(game, &gun, shot, effects),
+        MobileKind::Needlemouse => needlemouse::fire(game, &gun, shot, effects),
     }
 }
 
@@ -236,6 +243,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Flarecrow => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
         MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
+        MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
+        MobileKind::Needlemouse => Some(needlemouse::aim_point(game, seat, shot, flight)),
     }
 }
 

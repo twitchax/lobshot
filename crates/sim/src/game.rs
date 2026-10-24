@@ -26,7 +26,8 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, lensowl, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter, thistleback,
+        tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -64,11 +65,13 @@ pub enum MobileKind {
     Kitewyrm,
     Flarecrow,
     Augerdillo,
+    Lensowl,
+    Needlemouse,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -83,6 +86,8 @@ impl MobileKind {
         Self::Kitewyrm,
         Self::Flarecrow,
         Self::Augerdillo,
+        Self::Lensowl,
+        Self::Needlemouse,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -97,6 +102,32 @@ impl MobileKind {
         #[allow(clippy::cast_possible_truncation)]
         let room = (wide.ceil() as i32, tall.ceil() as i32);
         room
+    }
+
+    /// Where this mobile's own satellite hovers while `shot` is picked, if it stands at `foot`:
+    /// straight up over its feet, whatever the slope. `None` for a mobile without one. It fires
+    /// from there, or (for an SS) from over where its tracer lands (`shots::satellite`).
+    #[must_use]
+    pub fn satellite(self, foot: Vec2, shot: Shot) -> Option<Vec2> {
+        let height = match self {
+            Self::Lensowl => lensowl::satellite(shot),
+            Self::Needlemouse => needlemouse::satellite(shot),
+            Self::Coilback
+            | Self::Lanternwing
+            | Self::Hookclaw
+            | Self::Sparkhorn
+            | Self::Marblemole
+            | Self::Spoutpot
+            | Self::Tuskrack
+            | Self::Sudsotter
+            | Self::Frostfin
+            | Self::Herdhound
+            | Self::Thistleback
+            | Self::Kitewyrm
+            | Self::Flarecrow
+            | Self::Augerdillo => return None,
+        };
+        Some(foot - Vec2::new(0.0, height))
     }
 
     #[must_use]
@@ -116,6 +147,8 @@ impl MobileKind {
             Self::Kitewyrm => &kitewyrm::MOBILE,
             Self::Flarecrow => &flarecrow::MOBILE,
             Self::Augerdillo => &augerdillo::MOBILE,
+            Self::Lensowl => &lensowl::MOBILE,
+            Self::Needlemouse => &needlemouse::MOBILE,
         }
     }
 
@@ -553,6 +586,23 @@ pub enum Effect {
     Guide {
         seat: u8,
         legs: Vec<Leg>,
+    },
+    /// `seat`'s own satellite (Lensowl's, Needlemouse's) glides to `at`, leaving where it was at
+    /// stage tick `from` and arriving at `to`: where it fires from next. It goes back over its
+    /// mobile, at the height of the shot picked (`MobileKind::satellite`), once the scene is over.
+    Satellite {
+        seat: u8,
+        at: Vec2,
+        from: u32,
+        to: u32,
+    },
+    /// `seat`'s satellite fired a laser from `from` to what it struck (`to`) at `tick`; its blast's
+    /// `Exploded` and damage follow, if it struck something.
+    Laser {
+        seat: u8,
+        from: Vec2,
+        to: Vec2,
+        tick: u32,
     },
 }
 
@@ -2012,6 +2062,14 @@ mod unit {
         let power = direct_hit_power_of(&calm, Shot::S2, 130);
         assert_eq!(beams(&shoot(&mut calm.clone(), 0, Shot::S2, 130, power)).len(), 3);
         assert_eq!(beams(&shoot(&mut under(calm, WeatherKind::Skyeye), 0, Shot::S2, 130, power)).len(), 3, "GF-lee");
+    }
+
+    #[test]
+    fn skyeye_beams_once_for_each_satellite_laser() {
+        let mut game = under(duel_of(MobileKind::Lensowl, MobileKind::Coilback, 800), WeatherKind::Skyeye);
+        let effects = shoot(&mut game, 0, Shot::Ss, 40, Power::nearest(1.6));
+        let lasers = effects.iter().filter(|e| matches!(e, Effect::Laser { .. })).count();
+        assert_eq!((lasers, beams(&effects).len()), (5, 5), "one beam a laser (GF-asate): {effects:?}");
     }
 
     #[test]

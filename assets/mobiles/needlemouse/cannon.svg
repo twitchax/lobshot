@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="14" viewBox="-8 -7 40 14">
+  <!-- Needlemouse's sword: a sewing needle with a button for a guard, held at the button. Red
+       thread runs through its eye. Origin = pivot (the mouse's grip, behind the button); drawn at
+       aim 0 (pointing +x). Muzzle = (30, 0), the needle's point. Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.79" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the grip: the needle's eye end, wrapped in thread, its loop trailing -->
+    <path d="M -6,-1.6 Q -7.6,0 -6,1.6" stroke="#2a1a2e" stroke-width="2.4" fill="none"/>
+    <path d="M -6,-1.6 Q -7.6,0 -6,1.6" stroke="#e8434f" stroke-width="1.1" fill="none"/>
+    <rect x="-5.4" y="-1.8" width="7" height="3.6" rx="1.6" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M -3.6,-1.8 L -2.4,1.8 M -1.2,-1.8 L 0,1.8" stroke="#9e2a36" stroke-width="0.6"/>
+    <!-- the blade: steel, tapering to the point -->
+    <path d="M 2,-1.9 L 24,-1.2 L 30,0 L 24,1.2 L 2,1.9 Z" fill="#d8dce6" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 4,0.7 L 24,0.5 L 28.6,0.1" stroke="#9aa0b4" stroke-width="0.9" fill="none"/>
+    <path d="M 4,-0.9 L 22,-0.6" stroke="#ffffff" stroke-width="0.7" fill="none"/>
+    <!-- the button guard -->
+    <circle cx="2.6" r="3.4" fill="#f2c23c" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="2" cy="-0.9" r="0.55" fill="#2a1a2e"/><circle cx="3.2" cy="-0.9" r="0.55" fill="#2a1a2e"/>
+    <circle cx="2" cy="0.9" r="0.55" fill="#2a1a2e"/><circle cx="3.2" cy="0.9" r="0.55" fill="#2a1a2e"/>
+    <path d="M 0.4,-1.8 A 2.6 2.6 0 0 1 2.4,-2.8" stroke="#fff1a8" stroke-width="0.7" fill="none"/>
+  </g>
+</svg>

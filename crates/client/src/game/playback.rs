@@ -23,7 +23,7 @@ use super::{
     Focus, GameRoot,
     fx::{Bolts, Dot, pop, puff, rising},
     world,
-    world::{MapArt, MobileView, Shown, depth},
+    world::{Glide, MapArt, MobileView, Shown, depth},
 };
 use crate::{
     model::{ApplyEvents, Match, Played, Screen, Session},
@@ -141,6 +141,17 @@ enum Cue {
         to: SimVec2,
         level: u8,
     },
+    /// A mobile's own satellite firing a laser (Lensowl's).
+    Laser {
+        from: SimVec2,
+        to: SimVec2,
+    },
+    /// A mobile's own satellite setting off to `at`, getting there in `seconds`.
+    Satellite {
+        seat: u8,
+        at: SimVec2,
+        seconds: f32,
+    },
     Bounce {
         at: SimVec2,
     },
@@ -194,6 +205,8 @@ enum About {
 struct Flyer {
     legs: Vec<Leg>,
     about: Option<About>,
+    /// Whether it is drawn as a streak turned along its motion (Needlemouse's pins), not a dot.
+    streak: bool,
     /// When it leaves and when it stops, in the scene's time.
     from: f32,
     until: f32,
@@ -279,6 +292,16 @@ fn dot_sprite(dot: &Dot, color: Color, size: f32) -> Sprite {
     }
 }
 
+/// A streak 16 px long in `color`, lying along `+x` until it is turned.
+fn streak_sprite(dot: &Dot, color: Color) -> Sprite {
+    Sprite {
+        image: dot.0.clone(),
+        color,
+        custom_size: Some(Vec2::new(16.0, 3.6)),
+        ..default()
+    }
+}
+
 /// What a scene is made from.
 struct Props<'a> {
     dot: &'a Dot,
@@ -300,31 +323,48 @@ const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
 const FIRE: Color = Color::srgb_u8(0xff, 0x6a, 0x2a);
 /// Augerdillo's SS: a little armadillo curled into a ball, its shell's sandy tan.
 const CURLED: Color = Color::srgb_u8(0xe8, 0xb0, 0x7a);
+/// Lensowl's tracers: a star for S1 and S2, the SS's big green guide (SW-mob).
+const STAR: Color = Color::srgb_u8(0xff, 0xf2, 0xa8);
+const GUIDE: Color = Color::srgb_u8(0x7c, 0xf2, 0x9a);
+/// Needlemouse's: a bead of red thread, and its pins, steel.
+const THREAD: Color = Color::srgb_u8(0xe8, 0x43, 0x4f);
+const PIN: Color = Color::srgb_u8(0xe6, 0xea, 0xf4);
 
 impl Shooter {
     /// Its projectiles' color: Spoutpot's are water, Kitewyrm's and Flarecrow's burn,
-    /// Lanternwing's strands glow, Augerdillo's SS is a curled armadillo, the rest are dark.
+    /// Lanternwing's strands glow, Augerdillo's SS is a curled armadillo, Lensowl's tracers shine,
+    /// Needlemouse's are thread red, the rest are dark.
     fn color(self, strand: bool) -> Color {
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), _) => WATER,
             (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow), _) => FIRE,
             (Some(MobileKind::Augerdillo), Some(Shot::Ss)) => CURLED,
+            (Some(MobileKind::Lensowl), Some(Shot::Ss)) => GUIDE,
+            (Some(MobileKind::Lensowl), _) => STAR,
+            (Some(MobileKind::Needlemouse), _) => THREAD,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
+    /// Whether a shell on `legs` is one of Needlemouse's pins, which leave its pincushion in
+    /// flight: drawn as streaks, not dots.
+    fn pins(self, legs: &[Leg]) -> bool {
+        self.mobile == Some(MobileKind::Needlemouse) && legs.first().is_some_and(|leg| leg.offset > 0)
+    }
+
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
     /// in flight small; Kitewyrm's fireballs are one size however late they leave, and its SS orb
     /// and the mini-dragons it calls big; Flarecrow's flares are small, and its SS cart bigger;
-    /// Augerdillo's curled armadillo is a size up.
+    /// Augerdillo's curled armadillo is a size up; Lensowl's tracers are small, its SS guide large.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
-            (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow | MobileKind::Augerdillo), Some(Shot::Ss)) => 14.0,
+            (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow | MobileKind::Augerdillo | MobileKind::Lensowl), Some(Shot::Ss)) => 14.0,
             (Some(MobileKind::Kitewyrm), _) => 10.0,
             (Some(MobileKind::Flarecrow), Some(Shot::S2)) => 7.0,
+            (Some(MobileKind::Lensowl | MobileKind::Needlemouse), _) => 8.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -340,12 +380,14 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
         flyers.push(Flyer {
             legs: legs.to_vec(),
             about,
+            streak: matches!(effect, Effect::Fired { .. }) && shooter.pins(legs),
             from: at,
             until,
             entity,
         });
     };
     match effect {
+        Effect::Fired { legs, .. } if shooter.pins(legs) => fly(legs, None, at + pacing::flight_seconds(legs), streak_sprite(props.dot, PIN)),
         Effect::Fired { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, shooter.color(false), shooter.size(legs))),
         // Lanternwing's and Spoutpot's S2: each strand flies until it strikes.
         Effect::Helix {
@@ -417,6 +459,16 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         }
         Effect::Bolt { from, to, .. } => cues.push((at, Cue::Bolt { from, to })),
         Effect::Beam { from, to, level, .. } => cues.push((at, Cue::Beam { from, to, level })),
+        Effect::Laser { from, to, .. } => cues.push((at, Cue::Laser { from, to })),
+        // Scheduled as it sets off.
+        Effect::Satellite { seat, at: to, from, to: arrives } => cues.push((
+            at,
+            Cue::Satellite {
+                seat,
+                at: to,
+                seconds: ticks(arrives.saturating_sub(from)),
+            },
+        )),
         Effect::Bounced { at: point, .. } => cues.push((at, Cue::Bounce { at: point })),
         // Scheduled at its end; it sparks from its start.
         Effect::Pierced { seat, from, to } => {
@@ -673,6 +725,8 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         }
         Cue::Bolt { from, to } => hands.bolts.strike(from, to),
         Cue::Beam { from, to, level } => hands.bolts.beam(from, to, level),
+        Cue::Laser { from, to } => hands.bolts.laser(from, to),
+        Cue::Satellite { seat, at, seconds } => glide(views, seat, at, seconds, hands.time.elapsed_secs_f64()),
         Cue::Bounce { at } => {
             commands.spawn(puff(dot, at, 16.0, Color::srgb_u8(0xc9, 0xa8, 0x7c), 0.35));
         }
@@ -736,11 +790,31 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut Query<(&mut Transform
             && let (Some(at), Ok((mut transform, mut visibility))) = (flyer_at(&flyer.legs, flyer.about, now - flyer.from), transforms.get_mut(flyer.entity))
         {
             transform.translation = world(at).extend(depth::SHOTS);
+            if flyer.streak
+                && let Some(before) = flyer_at(&flyer.legs, flyer.about, now - flyer.from - STREAK_LOOKBACK)
+            {
+                transform.rotation = heading(world(before), world(at)).unwrap_or(transform.rotation);
+            }
             *visibility = Visibility::Inherited;
             focus.0 = Some(at);
         }
         true
     });
+}
+
+/// Sends `seat`'s own satellite off to `at` at `start` on the app's clock, to get there in `seconds`.
+fn glide(views: &mut Query<(&MobileView, &mut Shown)>, seat: u8, to: SimVec2, seconds: f32, start: f64) {
+    adjust(views, seat, |shown| shown.glide = Some(Glide { to, start, seconds }));
+}
+
+/// How far back a streak looks to find which way it is going, seconds.
+const STREAK_LOOKBACK: f32 = 1.0 / 60.0;
+
+/// The turn that lays a streak along the way from `before` to `now`, in Bevy's world; `None` if it
+/// hasn't moved.
+fn heading(before: Vec2, now: Vec2) -> Option<Quat> {
+    let way = now - before;
+    (way.length_squared() > 0.0).then(|| Quat::from_rotation_z(way.y.atan2(way.x)))
 }
 
 /// Changes how one seat's mobile is shown.
@@ -873,6 +947,68 @@ mod unit {
         let fired = Effect::Fired { seat: 0, legs: legs.clone() };
         assert_eq!(born_in_flight(&fired), Some((1.0, legs[0].flight.at(0))));
         assert_eq!(born_in_flight(&Effect::Fired { seat: 0, legs: vec![leg(0, 10, 0)] }), None);
+    }
+
+    #[test]
+    fn a_satellite_sets_off_when_scheduled_and_glides_until_it_arrives() {
+        let mut cues = Vec::new();
+        let at = SimVec2::new(10.0, -20.0);
+        cue(
+            Effect::Satellite {
+                seat: 1,
+                at,
+                from: TICKS_PER_SECOND,
+                to: 3 * TICKS_PER_SECOND,
+            },
+            1.5,
+            &mut cues,
+        );
+        assert!(
+            matches!(cues[..], [(1.5, Cue::Satellite { seat: 1, at: to, seconds: 2.0 })] if to == at),
+            "one cue, when the sim scheduled it"
+        );
+        cues.clear();
+        cue(
+            Effect::Laser {
+                seat: 1,
+                from: at,
+                to: SimVec2::ZERO,
+                tick: 0,
+            },
+            2.0,
+            &mut cues,
+        );
+        assert!(matches!(cues[..], [(2.0, Cue::Laser { from, to })] if from == at && to == SimVec2::ZERO));
+    }
+
+    #[test]
+    fn lensowls_tracers_shine_and_its_ss_guide_is_big_and_green() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Lensowl),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S1).color(false), STAR);
+        assert_eq!(shooter(Shot::Ss).color(false), GUIDE);
+        assert!(shooter(Shot::Ss).size(&[leg(0, 10, 0)]) > shooter(Shot::S2).size(&[leg(0, 10, 0)]));
+    }
+
+    #[test]
+    fn needlemouses_pins_are_streaks_laid_along_their_flight() {
+        let shooter = Shooter {
+            mobile: Some(MobileKind::Needlemouse),
+            shot: Some(Shot::S1),
+        };
+        assert!(shooter.pins(&[leg(0, 10, 100)]), "a pin leaves the cushion in flight");
+        assert!(!shooter.pins(&[leg(0, 10, 0)]), "its tracer leaves the needle");
+        assert_eq!(shooter.color(false), THREAD);
+        let lensowl = Shooter {
+            mobile: Some(MobileKind::Lensowl),
+            ..shooter
+        };
+        assert!(!lensowl.pins(&[leg(0, 10, 100)]));
+        let down_right = heading(Vec2::ZERO, Vec2::new(1.0, -1.0)).unwrap();
+        assert!((down_right * Vec3::X - Vec3::new(1.0, -1.0, 0.0).normalize()).length() < 1e-5);
+        assert_eq!(heading(Vec2::ONE, Vec2::ONE), None, "still: keep the last turn");
     }
 
     #[test]

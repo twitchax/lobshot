@@ -27,8 +27,9 @@ const TOLERANCE_BARS: f64 = 0.05;
 /// mobile's GunBound counterpart (Armor, Mage, Boomer, Lightning, Grub, Turtle, Ice, Trico). J.Frog
 /// came after the chart: Sudsotter's is Creedo's own cbchui-style figure for it (CR-frog). Dragon
 /// isn't on it: Kitewyrm's is the chart's power for JD and Lightning, the shots GF-lee weighs Light,
-/// as it weighs Dragon's.
-const CBCHUI: [(MobileKind, f64); 10] = [
+/// as it weighs Dragon's. A.Sate's (Lensowl's) is on the chart, and CR-sate's fixed-power method
+/// agrees.
+const CBCHUI: [(MobileKind, f64); 11] = [
     (MobileKind::Coilback, 2.45),
     (MobileKind::Lanternwing, 2.38),
     (MobileKind::Hookclaw, 2.25),
@@ -39,7 +40,18 @@ const CBCHUI: [(MobileKind, f64); 10] = [
     (MobileKind::Frostfin, 2.33),
     (MobileKind::Thistleback, 2.65),
     (MobileKind::Kitewyrm, 2.30),
+    (MobileKind::Lensowl, 2.50),
 ];
+
+/// Mobiles the chart leaves out whose shot weight the sources tie to a charted one's, with that
+/// one: Knight's (Needlemouse's) weighs what Lightning's (Sparkhorn's) does (WP06-list, CR-1sd,
+/// CR-3bar). Each is fitted to its twin's chart power (`twin_power`).
+const WEIGHS_AS: [(MobileKind, MobileKind); 1] = [(MobileKind::Needlemouse, MobileKind::Sparkhorn)];
+
+/// The chart power of `twin`, a charted mobile.
+fn twin_power(twin: MobileKind) -> f64 {
+    CBCHUI.iter().find(|&&(mobile, _)| mobile == twin).map(|&(_, bars)| bars).expect("the twin is on the chart")
+}
 
 /// GF-ice's 70-degree table for Ice, in eighths of a screen and bars: the entries in the acceptance
 /// set (docs/research/frostfin.md says which are out, and why).
@@ -341,6 +353,19 @@ fn formula_inferred_power_by_mobile() {
     for (mobile, weight) in INFERRED {
         let bars = inferred_cbchui(weight);
         assert_bars(&format!("inferred {mobile:?}"), ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())), bars);
+    }
+}
+
+#[test]
+fn formula_twinned_power_by_mobile() {
+    // Each mobile whose shot weight the sources tie to a charted one's lands 60 degrees one screen
+    // away at that one's chart power.
+    for (mobile, twin) in WEIGHS_AS {
+        assert_bars(
+            &format!("{mobile:?} as {twin:?}"),
+            ideal_power(&duel_of(mobile, 800), 60, tuned_for(mobile, Wind::default())),
+            twin_power(twin),
+        );
     }
 }
 
@@ -776,7 +801,8 @@ fn fit_augerdillo() {
 #[ignore = "a tool, not a test: rewrites the fitted constants"]
 fn tool_fit() {
     let inferred = INFERRED.map(|(mobile, weight)| (mobile, inferred_cbchui(weight)));
-    for (mobile, bars) in CBCHUI.into_iter().skip(1).chain(inferred) {
+    let twinned = WEIGHS_AS.map(|(mobile, twin)| (mobile, twin_power(twin)));
+    for (mobile, bars) in CBCHUI.into_iter().skip(1).chain(inferred).chain(twinned) {
         let gravity = fit_gravity(mobile, bars);
         let file = format!("{}.rs", mobile.tuning().name.to_lowercase());
         rewrite(&file, "GRAVITY", &format!("{gravity:.1}"));
