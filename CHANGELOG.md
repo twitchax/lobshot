@@ -63,6 +63,9 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Score mode (M6): each team has its players + 1 lives; the dead pick a drop point on the map
+  and drop back in 4 turns later, nudged by the wind. Rooms, practice and the lab all play it, and
+  bots pick their drop points. Modes are a room option (Solo by default).
 - Tinbadger (M5), a badger tinker with a crate-cart of wind-up tin beetles: S1 three cogs that wind
   around one path, S2 two shells that lay mines (they crawl at the nearest mobile on its turn and
   go off under a mobile's middle, or in any blast nearby), SS a big beetle that walks until it
@@ -97,7 +100,8 @@ why the version moved the way it did.
 
 ### Changed
 
-- Protocol and log wire versions are 3: logs from M2 and M3 builds don't load.
+- Protocol and log wire versions are 4 (the room's mode and the drop-in pick): logs from earlier
+  builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
   practice now rolls its wind up to the room's max.
 - SearchBot walks: when it has no good shot from where it stands, it tries a few spots within its
@@ -106,5 +110,6 @@ why the version moved the way it did.
 ### Fixed
 
 - A shot's power above four bars no longer decodes, so a client can't fire one.
+- Walking off the map no longer starts the next turn's clock twice on the walker's own screen.
 - A shot fired from inside a weather column is caught by it: a Mirror sends it back, Force boosts
   it, a Tornado flings it up. It used to pass through.

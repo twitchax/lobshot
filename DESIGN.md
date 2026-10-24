@@ -115,6 +115,14 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   level 1 beam deals 50 to 100 (CR-aduka), scaled by GF-vgg's averages to 100 to 200 at level 6.
 - **Turn order** is GunBound's delay system: base + shot + item + 10 per second of turn time
   (Turtle 12). The lowest accumulated delay moves next.
+- **Modes** are rules in `sim::mode` over the same turn order, so replays, bots and the lab play
+  them unchanged. The room's mode rides in its options and the log's setup; how a game ends is
+  decided in one place (`mode::out`), and each mode sets who comes back and after how long
+  (`RespawnRule`). A dead player picks a drop point on anyone's turn (`Action::Respawn`), and the
+  mobile drops in, nudged a little by the wind, when its delay runs out. **Score** (GunBound
+  Classic, `docs/research/modes-score.md`): each team has its players + 1 lives, every death
+  costs one, a team is out at no lives or no one standing, and the dead drop back in 4 turns
+  after picking, at full HP, with no slot machine. Tag and Jewel build on the same ground.
 
 ## Protocol
 
