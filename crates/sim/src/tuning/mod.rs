@@ -11,6 +11,7 @@ pub mod frostfin;
 pub mod herdhound;
 pub mod hookclaw;
 pub mod items;
+pub mod kitewyrm;
 pub mod lanternwing;
 pub mod marblemole;
 pub mod score;

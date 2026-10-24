@@ -82,6 +82,7 @@ fn drill_strikes(mobile: MobileKind) -> bool {
         | MobileKind::Herdhound
         | MobileKind::Thistleback
         | MobileKind::Augerdillo => true,
+        MobileKind::Kitewyrm => false,
     }
 }
 

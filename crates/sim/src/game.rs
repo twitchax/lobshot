@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -61,12 +61,13 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Kitewyrm,
     Augerdillo,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -78,6 +79,7 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Kitewyrm,
         Self::Augerdillo,
     ];
 
@@ -109,8 +111,17 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Kitewyrm => &kitewyrm::MOBILE,
             Self::Augerdillo => &augerdillo::MOBILE,
         }
+    }
+
+    /// Whether it floats over the ground (Kitewyrm's, `tuning::kitewyrm::FLOATS`): what walks,
+    /// rolls or burrows along the ground passes under it and can't strike it, and a mine has nothing
+    /// of it to go for. Shots that travel on the ground sense mobiles through `Game::grounded_frames`.
+    #[must_use]
+    pub fn floats(self) -> bool {
+        self == Self::Kitewyrm && kitewyrm::FLOATS.value
     }
 }
 
@@ -1153,9 +1164,19 @@ impl Game {
 
     /// Every living mobile's hitbox, by seat, for collision loops.
     pub(crate) fn hit_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|_| true)
+    }
+
+    /// `hit_frames` for what travels along the ground: every living mobile's hitbox but a floating
+    /// one's (`MobileKind::floats`).
+    pub(crate) fn grounded_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|p| !p.mobile.floats())
+    }
+
+    fn frames_where(&self, keep: impl Fn(&Player) -> bool) -> Vec<(u8, HitFrame)> {
         (0_u8..)
             .zip(&self.players)
-            .filter(|(_, p)| p.alive)
+            .filter(|(_, p)| p.alive && keep(p))
             .map(|(seat, p)| (seat, HitFrame::new(&p.pose(), p.tuning().hitbox.value)))
             .collect()
     }
@@ -1696,6 +1717,20 @@ mod unit {
         assert!(wide >= 33 && tall >= 58, "{wide} x {tall}");
         assert!(check_spawn_spacing(&[100, 100 + 2 * wide, 900]).is_ok());
         assert!(check_spawn_spacing(&[900, 100, 99 + 2 * wide]).is_err(), "order doesn't matter");
+    }
+
+    #[test]
+    fn only_a_floating_mobile_is_left_out_of_what_the_ground_can_touch() {
+        assert_eq!(MobileKind::ALL.iter().filter(|m| m.floats()).collect::<Vec<_>>(), [&MobileKind::Kitewyrm]);
+        let game = duel_of(MobileKind::Kitewyrm, MobileKind::Coilback, 800);
+        let seats = |frames: Vec<(u8, HitFrame)>| frames.into_iter().map(|(seat, _)| seat).collect::<Vec<u8>>();
+        assert_eq!(seats(game.hit_frames()), [0, 1]);
+        assert_eq!(seats(game.grounded_frames()), [1]);
+        // Its body floats over its feet: nothing just above the ground under it is inside it.
+        let kitewyrm = game.players()[0];
+        let hover = crate::tuning::kitewyrm::HOVER.value;
+        assert!(!kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover - 1.0)));
+        assert!(kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover + 1.0)));
     }
 
     #[test]

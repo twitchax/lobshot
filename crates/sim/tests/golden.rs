@@ -89,11 +89,18 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         0xc8a1_51a2_4657_e6be,
     ),
     (
+        "roster_kitewyrm",
+        include_str!("golden/roster_kitewyrm.json"),
+        include_bytes!("golden/roster_kitewyrm.bin"),
+        32,
+        0x7e8c_672f_9187_edd9,
+    ),
+    (
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
         62,
-        0xb726_9b7d_8902_5848,
+        0xc590_c0e9_e2d2_e4b3,
     ),
 ];
 
@@ -253,6 +260,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
         ("roster_augerdillo", play(roster_augerdillo(), &winds)),
     ]
 }
@@ -476,6 +484,23 @@ fn roster_thistleback() -> Setup {
         seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Kitewyrm against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_kitewyrm() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Kitewyrm, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(9, 150).unwrap(),
         sudden_death: None,
     }
 }

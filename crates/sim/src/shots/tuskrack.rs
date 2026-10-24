@@ -3,16 +3,13 @@
 //! the SS ripples nine missiles, and those that strike a mobile carve nothing (WP06). Every
 //! projectile lands on its own, in the order it hits (`land_in_order`).
 
-use super::{Gun, land_in_order};
+use super::{Gun, Rack, land_in_order, ripple};
 use crate::{
     ballistics::{self, Flight},
-    game::{Contact, Effect, Game, Leg, Shot},
-    tuning::{
-        DamageRange,
-        tuskrack::{
-            S1_MISSILE_BLAST, S1_MISSILE_DAMAGE, S1_RIPPLE_SECONDS, S1_SPREAD, S2_BURST_SECONDS, S2_GRENADE_BLAST, S2_GRENADE_DAMAGE, S2_SPREAD, SS_DIRECT_CRATER, SS_MISSILE_BLAST, SS_MISSILE_DAMAGE,
-            SS_RIPPLE_SECONDS, SS_SPREAD,
-        },
+    game::{Effect, Game, Leg, Shot},
+    tuning::tuskrack::{
+        S1_MISSILE_BLAST, S1_MISSILE_DAMAGE, S1_RIPPLE_SECONDS, S1_SPREAD, S2_BURST_SECONDS, S2_GRENADE_BLAST, S2_GRENADE_DAMAGE, S2_SPREAD, SS_DIRECT_CRATER, SS_MISSILE_BLAST, SS_MISSILE_DAMAGE,
+        SS_RIPPLE_SECONDS, SS_SPREAD,
     },
     units::{Facing, Vec2, ticks, to_radians},
     weather::Marks,
@@ -46,41 +43,6 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             effects,
         ),
     }
-}
-
-/// Missiles rippling off the rack.
-struct Rack {
-    /// Each missile's aim (degrees) and power (bars) off the shot's, in the order they leave.
-    spread: &'static [(i16, f64)],
-    /// Ticks between one missile leaving and the next.
-    every: u32,
-    blast: f64,
-    damage: DamageRange,
-    /// Whether a missile that strikes a mobile carves the ground there.
-    direct_crater: bool,
-}
-
-/// Fires `rack`'s missiles one after another from where the shooter stands, each its own launch.
-fn ripple(game: &mut Game, gun: &Gun, rack: &Rack, effects: &mut Vec<Effect>) {
-    let launches: Vec<(Flight, u32)> = (0_u32..)
-        .zip(rack.spread)
-        .filter_map(|(order, &(aim, bars))| Some((gun.launch(game, aim, bars)?, order * rack.every)))
-        .collect();
-    let (paths, mut landings) = land_in_order(
-        game,
-        launches.len(),
-        |game, index| game.track_launched(launches[index].0, launches[index].1),
-        |game, _, track, out| {
-            let crater = if rack.direct_crater || !matches!(track.impact.contact, Contact::Mobile(_)) {
-                rack.blast
-            } else {
-                0.0
-            };
-            gun.land(game, &gun.blast_on(track, rack.blast, rack.damage), crater, &track.impact, track.marks, out);
-        },
-    );
-    effects.extend(paths.into_iter().map(|legs| Effect::Fired { seat: gun.seat, legs }));
-    effects.append(&mut landings);
 }
 
 /// S2: the bundle flies until it bursts, then each grenade flies on from there with its own turn
