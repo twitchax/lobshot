@@ -297,23 +297,29 @@ struct Shooter {
 const SHELL: Color = Color::srgb_u8(0x2a, 0x22, 0x1c);
 const GLOW: Color = Color::srgb_u8(0xd6, 0x9b, 0xff);
 const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
+const FIRE: Color = Color::srgb_u8(0xff, 0x6a, 0x2a);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Lanternwing's strands glow, the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Kitewyrm's fire, Lanternwing's strands glow,
+    /// the rest are dark.
     fn color(self, strand: bool) -> Color {
         match self.mobile {
             Some(MobileKind::Spoutpot) => WATER,
+            Some(MobileKind::Kitewyrm) => FIRE,
             _ if strand => GLOW,
             _ => SHELL,
         }
     }
 
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
-    /// in flight small.
+    /// in flight small; Kitewyrm's fireballs are one size however late they leave, and its SS orb
+    /// and the mini-dragons it calls big.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
+            (Some(MobileKind::Kitewyrm), Some(Shot::Ss)) => 14.0,
+            (Some(MobileKind::Kitewyrm), _) => 10.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -878,6 +884,18 @@ mod unit {
             shot: Some(Shot::S2),
         };
         assert_eq!((lantern.color(true), lantern.color(false)), (GLOW, SHELL));
+    }
+
+    #[test]
+    fn kitewyrms_shots_are_fire_and_its_mini_dragons_big() {
+        let s2 = Shooter {
+            mobile: Some(MobileKind::Kitewyrm),
+            shot: Some(Shot::S2),
+        };
+        assert_eq!(s2.color(false), FIRE);
+        assert_eq!(s2.size(&[leg(0, 10, 0)]), s2.size(&[leg(0, 10, 100)]), "a fireball leaving late is no smaller");
+        let ss = Shooter { shot: Some(Shot::Ss), ..s2 };
+        assert!(ss.size(&[leg(0, 10, 100)]) > s2.size(&[leg(0, 10, 0)]), "a mini-dragon, born at the orb's landing");
     }
 
     #[test]

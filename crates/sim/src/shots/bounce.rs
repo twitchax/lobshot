@@ -2,7 +2,9 @@
 //! map's sides it bounces, losing speed, until it is slow enough to rest; its fuse lights at its
 //! first bounce, and it goes off when the fuse burns down, or at once on touching a mobile. The
 //! balls fly together, event by event in tick order, so one going off carves the ground the others
-//! bounce on, and a resting ball whose ground is blown away falls.
+//! bounce on, and a resting ball whose ground is blown away falls. A floating mobile's body hovers
+//! over the ground (`tuning::kitewyrm::HOVER`), so a ball rolling along passes under it and only one
+//! bouncing into its belly strikes it, as SW-mob says of Dragon: nothing here asks whether it floats.
 
 use crate::{
     ballistics::Flight,

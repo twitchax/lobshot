@@ -108,12 +108,17 @@ mod unit {
 
     use pretty_assertions::assert_eq;
 
+    use super::{
+        super::bounce::{self, Bounce},
+        S2_FRICTION, S2_FUSE_SECONDS, S2_MAX_BOUNCES, S2_REST_SPEED, S2_RESTITUTION,
+    };
     use crate::{
+        ballistics::Flight,
         game::{
-            Effect, Event, MobileKind, Shot,
+            Contact, Effect, Event, MobileKind, Shot,
             testing::{damage_to, direct_hit_power, duel_of, explosions, shoot},
         },
-        units::{Facing, Power, TICKS_PER_SECOND},
+        units::{Facing, Power, TICKS_PER_SECOND, Vec2, ticks},
     };
 
     #[test]
@@ -157,6 +162,34 @@ mod unit {
         assert!(damage_to(&effects, 1) > 0, "{effects:?}");
         let first = effects.iter().find_map(|e| if let Effect::Exploded { tick, .. } = e { Some(*tick) } else { None }).unwrap();
         assert!(first < 3 * TICKS_PER_SECOND, "the first goes off on touching it, not on a fuse: {first}");
+    }
+
+    #[test]
+    fn s2_marbles_roll_under_a_floating_mobile() {
+        // A marble rolled along the ground at a mobile: a Coilback sets it off at once, a Kitewyrm
+        // floats over it, and it rolls on underneath until its fuse (SW-mob).
+        let rules = Bounce {
+            restitution: S2_RESTITUTION.value,
+            friction: S2_FRICTION.value,
+            rest_speed: S2_REST_SPEED.value,
+            fuse: ticks(S2_FUSE_SECONDS.value),
+            max_bounces: S2_MAX_BOUNCES.value,
+        };
+        for (target, sets_off) in [(MobileKind::Coilback, true), (MobileKind::Kitewyrm, false)] {
+            let mut game = duel_of(MobileKind::Marblemole, target, 400);
+            let ground = f64::from(game.players()[1].footing.y);
+            // A marble's hops die out within a few dozen pixels: start it just short of the target.
+            let rolling = Flight {
+                origin: Vec2::new(650.0, ground - 1.5),
+                velocity: Vec2::new(150.0, 0.0),
+                accel: Vec2::new(0.0, game.players()[0].tuning().gravity.value),
+            };
+            let mut landed = Vec::new();
+            bounce::roll(&mut game, &[rolling], &rules, |_, _, impact, _, _| landed.push(*impact));
+            let [impact] = landed[..] else { panic!("{landed:?}") };
+            assert_eq!(impact.contact == Contact::Mobile(1), sets_off, "{target:?}: {impact:?}");
+            assert_eq!(impact.tick < rules.fuse, sets_off, "{target:?}: {impact:?}");
+        }
     }
 
     #[test]
