@@ -14,6 +14,11 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`herdhound.md`](herdhound.md) | Kalsiddon (Herdhound): its guides and homing missiles, from Creedo's and the official guides. |
 | [`thistleback.md`](thistleback.md) | Trico (Thistleback): its orbiting S2 and nine-blast SS, from the GunBound wiki and OB. |
 | [`sudsotter.md`](sudsotter.md) | J.Frog (Sudsotter): Creedo's frog guide, its walking shots and its weather-proofing. |
+| [`kitewyrm.md`](kitewyrm.md) | Dragon (Kitewyrm): what floating means, its mini-dragons, and why DBR's Dragon entry is unusable. |
+| [`flarecrow.md`](flarecrow.md) | Aduka (Flarecrow): rear fire, its aftershock chain, flares calling Thor, and the GN-aduka power fit. |
+| [`augerdillo.md`](augerdillo.md) | Nak (Augerdillo): the S2's mirrored bore, the SS that only stops in a mobile, its weak spot, and the community Nak formula fit. |
+| [`lensowl.md`](lensowl.md) | A.Sate (Lensowl): the tracer, its satellite's heights and lasers, the S1's side bias and the SS sweep. |
+| [`needlemouse.md`](needlemouse.md) | Knight (Needlemouse): its sword counts, where the swords come from, and its GunBound and DragonBound stats. |
 | [`modes-score.md`](modes-score.md) | Score mode: team lives, what a death costs, and how the dead drop back in, with every pick. Gathered on 2026-10-24. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |

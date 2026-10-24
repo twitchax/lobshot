@@ -9,6 +9,8 @@
 pub mod maps;
 pub mod tests;
 
+use std::collections::BTreeSet;
+
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -193,6 +195,11 @@ pub struct MobileRig {
     pub second_barrel: Option<Cannon>,
     /// Where the rider sits.
     pub rider_socket: Socket,
+    /// The source SVG of the mobile's own satellite (Lensowl's, Needlemouse's), next to the rig:
+    /// drawn hovering over it, apart from the body, where `MobileKind::satellite` puts it, its
+    /// pivot at the point it fires from. Most rigs have none.
+    #[serde(default)]
+    pub satellite: Option<String>,
 }
 
 /// One cutout part.
@@ -284,6 +291,12 @@ impl MobileRig {
         Ok(rig)
     }
 
+    /// Every source SVG it draws from, each once: its parts', and its satellite's if it has one.
+    #[must_use]
+    pub fn files(&self) -> BTreeSet<&str> {
+        self.parts.iter().map(|part| part.file.as_str()).chain(self.satellite.as_deref()).collect()
+    }
+
     /// The cannon, then the second barrel if there is one.
     pub fn barrels(&self) -> impl Iterator<Item = &Cannon> {
         std::iter::once(&self.cannon).chain(&self.second_barrel)
@@ -362,7 +375,23 @@ mod unit {
         let rig = MobileRig::from_ron(source).unwrap();
         assert!(rig.parts[1].aim && !rig.parts[0].spin);
         assert_eq!(rig.second_barrel, None, "a rig without one has no second barrel");
+        assert_eq!(rig.satellite, None, "nor a satellite");
+        assert_eq!(rig.files(), BTreeSet::from(["body.svg", "cannon.svg"]));
         assert!(MobileRig::from_ron(&source.replace(r#"part: "cannon""#, r#"part: "nope""#)).is_err());
+    }
+
+    #[test]
+    fn reads_a_rig_with_a_satellite() {
+        let source = r#"MobileRig(
+            name: "Lensowl",
+            parts: [(id: "body", file: "body.svg", at: (0.0, 0.0), z: 0), (id: "cannon", file: "cannon.svg", at: (14.0, -36.0), z: 3, aim: true)],
+            cannon: (part: "cannon", muzzle: (30.0, 0.0)),
+            rider_socket: (at: (-12.0, -50.0), z: 4),
+            satellite: Some("satellite.svg"),
+        )"#;
+        let rig = MobileRig::from_ron(source).unwrap();
+        assert_eq!(rig.files(), BTreeSet::from(["body.svg", "cannon.svg", "satellite.svg"]));
+        assert_eq!(MobileRig::from_ron(&to_ron(&rig).unwrap()).unwrap(), rig, "round trips");
     }
 
     #[test]

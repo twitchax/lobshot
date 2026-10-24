@@ -3,16 +3,21 @@
 //! every source is silent. Source keys (`SW-mds`, `CR-mob`, ...) are defined in `docs/research/`;
 //! a test checks every key cited here exists there. Balance work edits this module and nothing else.
 
+pub mod augerdillo;
 pub mod bot;
 pub mod coilback;
 pub mod drops;
+pub mod flarecrow;
 pub mod frostfin;
 pub mod herdhound;
 pub mod hookclaw;
 pub mod items;
+pub mod kitewyrm;
 pub mod lanternwing;
+pub mod lensowl;
 pub mod marblemole;
 pub mod modes;
+pub mod needlemouse;
 pub mod score;
 pub mod sparkhorn;
 pub mod spoutpot;
@@ -283,6 +288,20 @@ impl AimRange {
     pub fn is_true(self, aim: i16) -> bool {
         (self.true_min..=self.true_max).contains(&aim)
     }
+
+    /// Whether the range points over the mobile's back (Nak and Aduka fire from the rear, DBR): its
+    /// aims run past 90.
+    #[must_use]
+    pub fn backward(self) -> bool {
+        self.min > 90
+    }
+
+    /// `aim` as a player reads it: degrees above level, whichever way the shot leaves (180 - aim
+    /// over the back).
+    #[must_use]
+    pub fn elevation(self, aim: i16) -> i16 {
+        if self.backward() { 180 - aim } else { aim }
+    }
 }
 
 /// A direct hit's damage: `max` dead center, `min` at the hitbox's edge.
@@ -391,5 +410,23 @@ mod unit {
         }
         assert_eq!(WeaponType::Electric.against(ArmorClass::Mechanical), 1.04);
         assert_eq!(WeaponType::Explosion.against(ArmorClass::Shield), 1.0);
+    }
+
+    #[test]
+    fn a_range_past_90_points_backward_and_reads_as_its_elevation() {
+        let ahead = AimRange {
+            min: 10,
+            max: 55,
+            true_min: 25,
+            true_max: 40,
+        };
+        let behind = AimRange {
+            min: 130,
+            max: 170,
+            true_min: 130,
+            true_max: 170,
+        };
+        assert!(!ahead.backward() && behind.backward());
+        assert_eq!((ahead.elevation(30), behind.elevation(150)), (30, 30));
     }
 }

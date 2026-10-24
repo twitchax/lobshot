@@ -240,11 +240,23 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   leave from its tusk, a second barrel, and leave their target brittle to Physical damage) and
   Herdhound (a sheepdog mech, Kalsiddon's: its missiles loop, then home on its whistle) and
   Thistleback (a hedgehog gardener with a wheelbarrow catapult, Trico's: S2 sprouts orbit a
-  cabbage, SS a pumpkin bursts nine times and hurts most at a target's feet).
+  cabbage, SS a pumpkin bursts nine times and hurts most at a target's feet) and Kitewyrm (a gecko
+  flying a paper festival-dragon kite over a cart, Dragon's: it floats, its body hovering 16 px
+  over the ground so rolling shots pass under it; its SS loosens five mini paper dragons that
+  converge on the landing) and Flarecrow (a crow signalman with a flare mortar over its back,
+  Aduka's: it fires from the rear, its S2 flares call Skyeye's beam wherever they land, and its SS
+  flies through everything, beaming down on each enemy it passes) and Augerdillo (an armadillo on a tracked drill rig, Nak's:
+  it fires from the rear; its S2 drill flies through mobiles, bores into the ground on a mirror of
+  its arc and goes off where it comes up; its SS rolls through land and stops only in a mobile) and
+  Lensowl (an owl astronomer on a telescope rover, A.Sate's: every shot is a tracer, and a
+  clockwork moon over it fires lasers at where the tracer lands) and Needlemouse (a mouse knight on
+  a wind-up toy horse, Knight's: the same tracer, with a pincushion raining pins on it).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:
-  a giant tree's roots over a dusk marsh, A low arches, B a higher lattice).
+  a giant tree's roots over a dusk marsh, A low arches, B a higher lattice) and Starmote (sparse
+  starfield: motes of moon-rock and crystal in a violet void, A a loose ring of motes, B larger
+  motes beside a crystal spire).
 
 ## Testing
 

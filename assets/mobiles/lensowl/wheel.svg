@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="-10 -10 20 20">
+  <!-- Lensowl's wheel: a brass-rimmed rover wheel with a rubber tyre and an eight-pointed star of
+       spokes. Origin = axle; spins (the star's points make rotation readable). -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.49" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#ol)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Ring shading only: it spins, and a baked light would spin with it. -->
+    <circle r="8.4" fill="#2e2a40"/>
+    <circle r="7.4" fill="#433a59"/>
+    <circle r="6" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.7"/>
+    <circle r="5.1" fill="#283563"/>
+    <!-- the star of spokes, brass on navy -->
+    <path d="M 0,-4.6 L 1.1,-1.1 L 4.6,0 L 1.1,1.1 L 0,4.6 L -1.1,1.1 L -4.6,0 L -1.1,-1.1 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M 3.2,-3.2 L 0.9,0 L 3.2,3.2 L 0,0.9 L -3.2,3.2 L -0.9,0 L -3.2,-3.2 L 0,-0.9 Z" fill="#b9822c" stroke="#2a1a2e" stroke-width="0.5"/>
+    <circle r="1.5" fill="#fff1a8" stroke="#2a1a2e" stroke-width="0.6"/>
+  </g>
+</svg>

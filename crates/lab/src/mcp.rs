@@ -284,7 +284,8 @@ mod unit {
         let early = call(&mut server, 1, "view", &json!({}));
         assert_eq!(early["isError"], true);
         assert!(text(&early).contains("new_game"));
-        call(&mut server, 2, "new_game", &json!({ "map": "flat", "seed": 1 }));
+        // A mobile that fires forward, whatever Random would roll as the roster grows.
+        call(&mut server, 2, "new_game", &json!({ "mobile": "coilback", "map": "flat", "seed": 1 }));
         let wide = call(&mut server, 3, "act", &json!({ "action": { "Shoot": { "shot": "S1", "aim": 170, "power": 40 } } }));
         assert_eq!(wide["isError"], true);
         assert!(text(&wide).contains("can't aim"), "{}", text(&wide));
