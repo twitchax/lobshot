@@ -129,3 +129,59 @@ Left out, and why:
 | 70°, 1¼ and 1½ screens (`[GN-aduka]`) | 3.25, 3.65 | 3.12, 3.43 | As above. |
 | 3-bar ½ screen = 80° at 2.55, 1½ screens = 60° at 2.85 (`[CR-aduka]`) | 2.55, 2.85 | 2.64, 2.95 | A rule of thumb that "may need to adjust your power level" between angles. |
 | 81° "unfull", about 3.8, just short of one screen (`[CR-aduka]`) | 3.8 | 4.03 at one screen | Not at a stated distance. |
+
+## More sources, and what they contradict
+
+A second pass read the GameFAQs guides, Wikipedia's 2006 text and a few later guides. Keys
+`[GF-lee]`, `[GF-vgg]`, `[GF-cyber]`, `[CR-all]` and `[NAMU]` are defined in `weather.md`,
+`[GF-tiro]`, `[WP06]`, `[AK]` and `[SW-weather]` in `mechanics.md`, and `[GB-wiki]` in
+`thistleback.md`. None changes a number in `sim::tuning`; they are here for the record.
+
+- **Two Adukas.** Softnyx's April 2004 patch turned S2 from two markers into three tracers and made
+  the SS pass through everything (`[GF-lee]`: "THE ONLY CHANGE THAT OCCURRED HERE IS THAT YOU SHOOT
+  THREE INSTEAD OF TWO"; `[CR-aduka]`, `[GF-cyber]`). `[GF-tiro]` (March 2004) describes the old one,
+  so it is set aside for S2 and the SS. `[SW-mob]` and `[DB-mob]` share their Aduka text word for
+  word: one source, not two.
+- **S1 damage (CONTRADICTION).** 140–160 with its aftershock `[SW-mob]`; typically 160 `[CR-aduka]`;
+  175 `[GF-lee]`; "150 damage on hit. Out of the 150, 64 damage is splash" `[GF-max]`; "130 + 82
+  Splash" `[GF-cyber]`; 150 `[BR-tut]`. `[GF-lee]` gives it "practically non-existent" bunge.
+- **Delays (CONTRADICTION).** 760 / 910 / 1310 (`[CR-aduka]`, `[GF-vgg]`, `[OB]`) against 820 / 960
+  / 1320 (`[GF-lee]`, `[NEO-ramza]`).
+- **The tracers.** "The tracer shots don't spread and follow themselves much like Boomerlauncher's
+  multiple boomers: if the first tracer shot hits the second will land at the same spot too" and
+  "do not deal any damage by themselves" `[GF-lee]`. `[DBR]` launches three identical tracers 0.2 s
+  apart.
+- **Force on S2 (CONTRADICTION).** `[GF-lee]` (2004-06-04): "corrected the workings of Aduka shot 2
+  (it does get status effects)". `[CR-aduka]`: "shot 2 doesn't get any help from the force effect";
+  `[SW-weather]`: "shots which do not deal damage by themselves will be unaffected by Force". Lobshot
+  follows Creedo and StrategyWiki: the beams are Skyeye's, whatever the flare flew through.
+- **Thor's damage by level (CONTRADICTION).** S2 about 150, 180, then 220–250 `[CR-aduka]`; a
+  level 1 beam 100+ up to 600+ at level 6 `[GF-lee]` (uncertain, its author says); averages 150+ to
+  300+ `[GF-vgg]`; "an average max of 350 per hit" at level 6 `[GF-max]`; about 250 a shot
+  `[GF-smash]`. Skyeye's table (`tuning::weather::SKYEYE_DAMAGE`) is the weather's, shared.
+- **The SS.** It "continues to go, until flying/dropping out of the level" `[GF-vgg]`, "each time
+  that it passes through a mobile, it triggers Thor to fire a single laser" `[GF-lee]`, and it
+  "bypasses teammates" `[GF-vgg]`; `[GF-cyber]` dissents ("fire at any player the shot hits"). An
+  arc that crosses an enemy going up and again coming down hits twice, "una de subida y otra de
+  bajada" `[TP-aduka]` (single source): lobshot's SS does the same, a beam for each entry. Its damage:
+  80–250 `[SW-mob]`, 100–200 `[WP06]`, 150 to 230 by level `[BR-tut]`. `[GF-lee]` gives the SS 30
+  degrees of angle, not 40 (**CONTRADICTION**; `[CR-mob]` and `[GF-vgg]` give 40).
+- **Rear fire is cosmetic** for players: "This has absolutely no tactical effect since any tank can
+  face either direction at will, but it does look cool" (`[GF-nak]`, of Nak). Guides quote angles
+  as elevations toward the target (`[CR-aduka]`), as lobshot's HUD does.
+- **One satellite for everyone.** "If anyone else is using aduka, your shots get stronger at a
+  faster rate, even if the other aduka is on the enemy's team" `[CR-all]`; it hangs "in the air at
+  the map centre" `[NAMU]`, in a "fixed position" `[GB-wiki]`.
+
+### Sources added by this pass
+
+- `[GF-nak]` https://gamefaqs.gamespot.com/pc/582632-gunbound/faqs/25277 (exploder's Nakmachine
+  FAQ, 2003-08-25; archive 20190526114140)
+- `[GF-smash]` https://gamefaqs.gamespot.com/pc/582632-gunbound/faqs/31866 (Smashnuke's A.Sate
+  FAQ v1.2, 2004–2005; archive 20190526114147)
+- `[NEO-ramza]` https://www.neoseeker.com/gunbound/faqs/83681-e.html (RamzaBeoulve259's FAQ v0.92,
+  2003–04; archive 20180316021125)
+- `[TP-aduka]` https://www.teamperu.com/foros/temas/aduka.1290/ ("GUIA DEL ADUKA", Team Peru forum,
+  2006, Spanish)
+- `[BR-tut]` http://tutoriaison-games.blogspot.com/2011/01/tutorial-completo-sobre-aduka.html (a
+  Brazilian Aduka tutorial, 2011; low quality)
