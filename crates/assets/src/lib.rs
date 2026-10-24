@@ -182,6 +182,19 @@ pub struct MobileRig {
     pub second_barrel: Option<Cannon>,
     /// Where the rider sits.
     pub rider_socket: Socket,
+    /// Pictures the mobile's shots are drawn with, in place of the plain shell: by `id`, `s1`, `s2`
+    /// and `ss` for each shot's projectiles, and `mine` for what its mines look like on the map.
+    /// Each renders centered on its SVG's origin, like a part. Most rigs have none.
+    #[serde(default)]
+    pub sprites: Vec<ShotSprite>,
+}
+
+/// One picture a mobile's shots are drawn with (`MobileRig::sprites`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ShotSprite {
+    pub id: String,
+    /// The source SVG, next to the rig; the rendered PNG has the same stem.
+    pub file: String,
 }
 
 /// One cutout part.
@@ -276,6 +289,12 @@ impl MobileRig {
     /// The cannon, then the second barrel if there is one.
     pub fn barrels(&self) -> impl Iterator<Item = &Cannon> {
         std::iter::once(&self.cannon).chain(&self.second_barrel)
+    }
+
+    /// The sprite named `id`, if the rig draws one.
+    #[must_use]
+    pub fn sprite(&self, id: &str) -> Option<&ShotSprite> {
+        self.sprites.iter().find(|sprite| sprite.id == id)
     }
 }
 

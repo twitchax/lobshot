@@ -22,71 +22,78 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x8fcc_ce26_c171_0a72),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6866_509e_4c41_c242),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0xda74_aba2_ec7f_b4c6,
+        0xc87f_b1cc_874b_85b6,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xc819_eb26_3258_611c),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0xe58c_5c04_105d_a1ed),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x37fb_1473_307b_617c),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x2565_e5e4_e96e_15f5),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0xfaa6_4f74_91a0_96ed,
+        0xfce9_a80d_e666_52f5,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0xb543_930f_5ae5_ef4d,
+        0x8497_8edb_509e_9a55,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0xc504_6940_80e8_0724,
+        0xd1ce_6772_71c6_10c4,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0x5bce_095d_f719_1bd5,
+        0xcd9f_9e5a_0e5d_541d,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0xfc6b_b7ec_055b_d900,
+        0x84a4_c844_ff20_c100,
     ),
     (
         "roster_frostfin",
         include_str!("golden/roster_frostfin.json"),
         include_bytes!("golden/roster_frostfin.bin"),
         54,
-        0x4659_5909_07ca_6682,
+        0x08b2_1fef_8553_b0d2,
     ),
     (
         "roster_herdhound",
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         54,
-        0x327a_2cb0_ffd4_2c06,
+        0xd230_7eda_7410_5ef6,
     ),
     (
         "roster_thistleback",
         include_str!("golden/roster_thistleback.json"),
         include_bytes!("golden/roster_thistleback.bin"),
         63,
-        0xc8a1_51a2_4657_e6be,
+        0x8aa7_380d_032a_6e6e,
+    ),
+    (
+        "roster_tinbadger",
+        include_str!("golden/roster_tinbadger.json"),
+        include_bytes!("golden/roster_tinbadger.bin"),
+        52,
+        0x9cff_78a0_e716_2ebb,
     ),
 ];
 
@@ -164,6 +171,30 @@ fn roster_frostfin_frosts_its_target() {
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
 }
 
+#[test]
+fn roster_tinbadger_lays_mines_that_outlive_their_turn() {
+    // Tinbadger fires all three shots; its S2's mines stay on the map past the turn that laid
+    // them, and crawl as its turn comes up.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_tinbadger").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut laid, mut crawled, mut outlived) = (Vec::new(), 0, 0, false);
+    for event in &log.events {
+        let before = game.mines().to_vec();
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::MineLaid { .. } => laid += 1,
+                Effect::MineCrawled { .. } => crawled += 1,
+                _ => {}
+            }
+        }
+        outlived |= matches!(event, Event::Pass { .. } | Event::Shoot { seat: 1, .. }) && !before.is_empty();
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(laid >= 2 && crawled >= 1 && outlived, "laid {laid}, crawled {crawled}, outlived a turn: {outlived}");
+}
+
 // ── Recording ────────────────────────────────────────────────────────────────
 
 /// Re-records every golden game and prints the `GOLDEN` table. Native only (it writes files).
@@ -225,6 +256,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_tinbadger", play(roster_tinbadger(), &winds)),
     ]
 }
 
@@ -445,6 +477,24 @@ fn roster_thistleback() -> Setup {
             period: 560,
         },
         seats: vec![armed(Team::A, MobileKind::Thistleback, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Tinbadger against Coilback on hills in wind: its S1, S2 and SS each fire, and its mines stay on
+/// the map from turn to turn.
+fn roster_tinbadger() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 80,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Tinbadger, 420, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,

@@ -21,12 +21,13 @@ use crate::{
     drops::{self, Drop, Falling},
     items::{self, Item, Loadout, MAX_ITEMS},
     map::{MapAssets, MapRef},
+    mines::{self, Mine, MineId, Minefield},
     movement::{self, Footing, Landing, Step},
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tinbadger, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -61,11 +62,12 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Tinbadger,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -77,6 +79,7 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Tinbadger,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -107,6 +110,7 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Tinbadger => &tinbadger::MOBILE,
         }
     }
 }
@@ -536,6 +540,32 @@ pub enum Effect {
         seat: u8,
         legs: Vec<Leg>,
     },
+    /// Tinbadger's S2 laid `mine` where its shell came down, at `tick` (`sim::mines`). It stays on
+    /// the map, turn after turn, until it is `MineGone`.
+    MineLaid {
+        mine: Mine,
+        tick: u32,
+    },
+    /// `seat`'s `mine` crawled toward an enemy as `seat`'s turn came up, starting a stage: `legs` is
+    /// its walk, from tick 0 (a resting leg at its end). What it does where it stops follows: a
+    /// blast, if it touched a mobile.
+    MineCrawled {
+        seat: u8,
+        mine: MineId,
+        legs: Vec<Leg>,
+    },
+    /// `mine`'s ground was blown away: it fell to `to`, with the mobiles that fell.
+    MineFell {
+        mine: MineId,
+        to: Footing,
+    },
+    /// `mine` is off the map: it went off at `tick` (its `Exploded` follows) or a blast or bolt
+    /// smashed it then, or it went with the effect before it (`None`): it fell out of the map, or
+    /// its layer died.
+    MineGone {
+        mine: MineId,
+        tick: Option<u32>,
+    },
 }
 
 /// What a projectile touched.
@@ -680,6 +710,8 @@ pub struct Game {
     pub(crate) drops: Vec<Falling>,
     /// The seat whose spin the server owes a `Roll::Drop` for.
     spin_owed: Option<u8>,
+    /// Mines on the map (Tinbadger's S2), which outlive the turn that laid them.
+    pub(crate) mines: Minefield,
 }
 
 impl Game {
@@ -746,6 +778,7 @@ impl Game {
             sudden_death: setup.sudden_death,
             drops: Vec::new(),
             spin_owed: None,
+            mines: Minefield::default(),
         };
         game.start_next_turn(&mut Vec::new());
         Ok(game)
@@ -799,6 +832,12 @@ impl Game {
     #[must_use]
     pub fn drops(&self) -> &[Falling] {
         &self.drops
+    }
+
+    /// The mines on the map, in the order they were laid.
+    #[must_use]
+    pub fn mines(&self) -> &[Mine] {
+        self.mines.mines()
     }
 
     /// What the server must roll before anyone may act, if anything: wind first, then forecasts,
@@ -1028,7 +1067,8 @@ impl Game {
             }
             self.players[index].moves_left -= 1;
             taken += 1;
-            if died {
+            // Onto a mine: it goes off under the walker, which stops there.
+            if died || mines::under(self, seat) {
                 break;
             }
         }
@@ -1039,6 +1079,14 @@ impl Game {
             self.kill(seat, Death::Bunged, effects);
             // Walking off the map ends the turn like a pass.
             self.end_turn(seat, Ending::Pass, Centis(0), effects);
+            return;
+        }
+        if mines::trip(self, 0, effects) {
+            self.settle_all(effects);
+            if !self.players[index].alive || self.decided() {
+                // Blown up by a mine: that ends the turn like a pass.
+                self.end_turn(seat, Ending::Pass, Centis(0), effects);
+            }
         }
     }
 
@@ -1303,6 +1351,7 @@ impl Game {
                 self.hurt(seat, harm(seat, &player.target()), effects);
             }
         }
+        mines::smash(self, blast.center, blast.radius, tick, effects);
     }
 
     /// Deals `amount` to a living mobile: its shield soaks what it can, then its HP takes the rest.
@@ -1342,6 +1391,7 @@ impl Game {
         player.alive = false;
         player.hp = player.hp.max(0);
         effects.push(Effect::Died { seat, death });
+        mines::orphan(self, seat, effects);
     }
 
     /// Drops every living mobile whose ground is gone, and re-reads every tilt.
@@ -1362,6 +1412,7 @@ impl Game {
                 Landing::OffMap => self.kill(seat, Death::Bunged, effects),
             }
         }
+        mines::settle(self, effects);
     }
 
     /// Stands `seat` at `footing`, tilted to the ground there.
@@ -1447,14 +1498,21 @@ impl Game {
     /// Hands the turn to whoever has the least delay. As it starts, their shield regenerates
     /// (not under Lock), their SS lock counts down (twice under Lock), and Balm heals them.
     fn start_next_turn(&mut self, effects: &mut Vec<Effect>) {
-        if self.check_over(effects) {
-            return;
-        }
-        let next = turn::next(self.players.iter().enumerate().filter(|(_, p)| p.alive).map(|(seat, p)| (seat, &p.clock)));
-        let Some(seat) = next.and_then(|seat| u8::try_from(seat).ok()) else {
-            self.phase = Phase::Over { winner: None };
-            effects.push(Effect::GameOver { winner: None });
-            return;
+        let seat = loop {
+            if self.check_over(effects) {
+                return;
+            }
+            let next = turn::next(self.players.iter().enumerate().filter(|(_, p)| p.alive).map(|(seat, p)| (seat, &p.clock)));
+            let Some(seat) = next.and_then(|seat| u8::try_from(seat).ok()) else {
+                self.phase = Phase::Over { winner: None };
+                effects.push(Effect::GameOver { winner: None });
+                return;
+            };
+            // Its mines crawl first; one that blows up its own layer hands the turn on.
+            mines::crawl(self, seat, effects);
+            if self.players[usize::from(seat)].alive {
+                break seat;
+            }
         };
         self.phase = Phase::Turn { seat };
         effects.push(Effect::TurnStarted { seat });

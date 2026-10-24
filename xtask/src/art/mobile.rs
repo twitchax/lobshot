@@ -75,7 +75,7 @@ pub fn build_mobiles(sources: &Path, out: &Out) -> Res<Vec<(MobileKind, MobileRi
     let mut rigs = Vec::with_capacity(MobileKind::ALL.len());
     for mobile in MobileKind::ALL {
         let rig = load_rig(sources, mobile)?;
-        let files: BTreeSet<&str> = rig.parts.iter().map(|part| part.file.as_str()).collect();
+        let files: BTreeSet<&str> = rig.parts.iter().map(|part| part.file.as_str()).chain(rig.sprites.iter().map(|sprite| sprite.file.as_str())).collect();
         for file in files {
             let path = sources.join("mobiles").join(mobile_slug(mobile)).join(file);
             let png = encode_png(&Svg::load(&path)?.render_centered(ART_SCALE)?)?;

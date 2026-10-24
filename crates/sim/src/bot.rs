@@ -32,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     game::{Contact, Death, Effect, Event, Game, Impact, Phase, Player, Shot},
     items::{Item, Loadout},
+    mines,
     referee::XorShift,
     shots,
     tuning::{self, AimRange, Barrel, bot::Noise},
@@ -398,14 +399,17 @@ impl Candidate {
     }
 }
 
-/// What a shot's effects are worth to `seat`: damage to enemies, a bonus per kill, and twice the
-/// cost of any harm to its own side, itself included.
+/// What a shot's effects are worth to `seat`: damage to enemies, a bonus per kill, twice the cost
+/// of any harm to its own side, itself included, and what each mine it lays near an enemy may do
+/// later (`MINE_WORTH`).
 fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
     let team = |s: u8| game.players().get(usize::from(s)).map(|p| p.team);
     let mine = team(seat);
+    let lasts = |id| !effects.iter().any(|effect| matches!(*effect, Effect::MineGone { mine, .. } if mine == id));
     effects
         .iter()
         .map(|effect| match *effect {
+            Effect::MineLaid { mine: laid, .. } if lasts(laid.id) && mines::armed(game, &laid) => tuning::bot::MINE_WORTH.value,
             Effect::Damaged { seat: hit, amount } | Effect::Shielded { seat: hit, amount } => {
                 let amount = f64::from(amount);
                 if team(hit) == mine { -2.0 * amount } else { amount }

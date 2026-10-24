@@ -13,13 +13,14 @@ use bevy::{
 };
 use lobshot_assets::ART_SCALE;
 use lobshot_sim::{
-    game::Phase,
+    game::{MobileKind, Phase},
     map::MapRef,
+    mines::MineId,
     terrain::Terrain,
     units::{Facing, Vec2 as SimVec2},
 };
 
-use super::{GameRoot, Timeline, world};
+use super::{GameRoot, Timeline, fx::Dot, world};
 use crate::{
     assets::Rigs,
     model::{Match, Screen, Session},
@@ -540,6 +541,107 @@ fn tag_brittle(overlays: Query<(&Overlay, &Children)>, views: Query<(&MobileView
     }
 }
 
+/// A mine on the map (`lobshot_sim::mines`). Between scenes it sits where the predicted game has
+/// it; during one, the playback's cues place and hide it as the scene shows it laid, crawling and
+/// gone.
+#[derive(Component)]
+pub struct MineView {
+    pub id: MineId,
+}
+
+/// How big a mine is drawn, px: its sprite's own size (`mine.svg` in a rig).
+const MINE_SIZE: Vec2 = Vec2::new(18.0, 18.0);
+
+/// The tin grey a mine is drawn in until its layer's sprite arrives.
+const TIN: Color = Color::srgb_u8(0x9a, 0xa4, 0xad);
+
+/// An armed mine (an enemy in sense: it crawls as its layer's turn comes up) glows red, as
+/// GunBound's antenna turns red (SW-mob).
+const ARMED: Color = Color::srgb_u8(0xff, 0x8a, 0x80);
+
+/// A mine's tint: red when armed, else its own colors (or tin, drawn as a dot).
+#[must_use]
+pub fn mine_tint(armed: bool, dot: bool) -> Color {
+    match (armed, dot) {
+        (true, _) => ARMED,
+        (false, true) => TIN,
+        (false, false) => Color::WHITE,
+    }
+}
+
+/// The picture `mobile`'s rig draws `id` with (`MobileRig::sprites`), once its rig has loaded.
+pub fn shot_sprite(rigs: &Rigs, server: &AssetServer, mobile: MobileKind, id: &str) -> Option<Handle<Image>> {
+    let sprite = rigs.get(mobile)?.sprite(id)?;
+    Some(server.load(lobshot_assets::part_path(mobile, &sprite.file)))
+}
+
+/// A mine's sprite: its layer's `mine` picture, or a tin-grey dot until that has loaded.
+pub fn mine_sprite(rigs: &Rigs, server: &AssetServer, dot: &Dot, mobile: MobileKind) -> Sprite {
+    match shot_sprite(rigs, server, mobile, "mine") {
+        Some(image) => Sprite {
+            image,
+            custom_size: Some(MINE_SIZE),
+            ..default()
+        },
+        None => Sprite {
+            image: dot.0.clone(),
+            color: TIN,
+            custom_size: Some(MINE_SIZE),
+            ..default()
+        },
+    }
+}
+
+/// Where a mine is drawn: its middle, flipped the way it faces, just in front of the ground.
+pub fn mine_transform(at: SimVec2, facing: Facing) -> Transform {
+    Transform::from_translation(world(at).extend(depth::MOBILES - 1.0)).with_scale(Vec3::new(if facing == Facing::Right { 1.0 } else { -1.0 }, 1.0, 1.0))
+}
+
+/// Between scenes, the mines on screen match the predicted game's: new ones appear, gone ones go,
+/// and each sits where it is.
+fn follow_mines(
+    game: Option<Res<Match>>,
+    timeline: Res<Timeline>,
+    rigs: Res<Rigs>,
+    server: Res<AssetServer>,
+    dot: Option<Res<Dot>>,
+    mut views: Query<(Entity, &MineView, &mut Transform, &mut Visibility, &mut Sprite)>,
+    mut commands: Commands,
+) {
+    let (Some(game), Some(dot)) = (game, dot) else { return };
+    if timeline.busy() {
+        return;
+    }
+    let mines = game.predicted.mines();
+    for (entity, view, mut transform, mut visibility, mut sprite) in &mut views {
+        let Some(mine) = mines.iter().find(|mine| mine.id == view.id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        *transform = mine_transform(mine.middle(), mine.facing);
+        *visibility = Visibility::Inherited;
+        // Drawn as a dot before its layer's rig arrived: dress it now.
+        if sprite.image == dot.0
+            && let Some(layer) = game.predicted.players().get(usize::from(mine.seat))
+        {
+            *sprite = mine_sprite(&rigs, &server, &dot, layer.mobile);
+        }
+        sprite.color = mine_tint(lobshot_sim::mines::armed(&game.predicted, mine), sprite.image == dot.0);
+    }
+    for mine in mines {
+        if views.iter().any(|(_, view, ..)| view.id == mine.id) {
+            continue;
+        }
+        let Some(layer) = game.predicted.players().get(usize::from(mine.seat)) else { continue };
+        commands.spawn((
+            GameRoot,
+            MineView { id: mine.id },
+            mine_sprite(&rigs, &server, &dot, layer.mobile),
+            mine_transform(mine.middle(), mine.facing),
+        ));
+    }
+}
+
 /// The current turn's seat, if the game is on.
 #[must_use]
 pub fn current_seat(game: &Match) -> Option<u8> {
@@ -555,7 +657,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, pose_mobiles, tag_brittle)
+            (build_map, slice_drawn, load_rigs, spawn_mobiles, dress_mobiles, follow_game, follow_mines, pose_mobiles, tag_brittle)
                 .chain()
                 .run_if(in_state(Screen::Game)),
         );

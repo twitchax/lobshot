@@ -14,6 +14,7 @@ use lobshot_sim::{
     ballistics::{self, Spin},
     game::{Death, Effect, Event, Leg, MobileKind, Shot, SuddenDeathKind, Team},
     items::Item,
+    mines::{Mine, MineId},
     movement::Footing,
     tuning::TURN_TIME_LIMIT,
     units::{TICKS_PER_SECOND, Vec2 as SimVec2},
@@ -23,9 +24,10 @@ use super::{
     Focus, GameRoot,
     fx::{Bolts, Dot, pop, puff, rising},
     world,
-    world::{MapArt, MobileView, Shown, depth},
+    world::{MapArt, MineView, MobileView, Shown, depth, mine_sprite, mine_transform, shot_sprite},
 };
 use crate::{
+    assets::Rigs,
     model::{ApplyEvents, Match, Played, Screen, Session},
     sound::Play,
     ui::theme,
@@ -168,6 +170,15 @@ enum Cue {
         color: Color,
     },
     SuddenDeath(SuddenDeathKind),
+    /// A mine is laid: it appears.
+    MineLaid(Mine),
+    /// A mine shows at `at` (its middle): where it stopped crawling, or fell to.
+    MineAt {
+        id: MineId,
+        at: SimVec2,
+    },
+    /// A mine hides: it set off crawling (a flyer walks its path), or it is gone.
+    MineHide(MineId),
 }
 
 /// How one strand of a helix winds about its path, for `ballistics::helix_point`.
@@ -258,6 +269,18 @@ fn flyer_at(legs: &[Leg], about: Option<About>, seconds: f32) -> Option<SimVec2>
     last
 }
 
+/// Which way a flyer is moving across the screen `seconds` into its stage, so a picture with a front
+/// (a walking beetle) faces where it goes: `None` before it leaves, after it stops, and while it
+/// moves straight up or down.
+fn flyer_facing(legs: &[Leg], seconds: f32) -> Option<f32> {
+    // A clock reading in seconds, back to whole ticks.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let tick = (f64::from(seconds) * f64::from(TICKS_PER_SECOND)) as u32;
+    let leg = legs.iter().find(|leg| tick.checked_sub(leg.offset).is_some_and(|local| (leg.from..leg.to).contains(&local)))?;
+    let across = leg.flight.velocity_at(tick - leg.offset).x;
+    (across != 0.0).then_some(if across > 0.0 { 1.0 } else { -1.0 })
+}
+
 fn enqueue(mut played: MessageReader<Played>, mut timeline: ResMut<Timeline>) {
     for scene in played.read() {
         timeline.queue.push_back(scene.clone());
@@ -285,6 +308,8 @@ struct Props<'a> {
     server: &'a AssetServer,
     /// Each seat's mobile, for what its shots look like.
     mobiles: &'a [MobileKind],
+    /// The mobiles' rigs, for the pictures some of their shots are drawn with.
+    rigs: &'a Rigs,
 }
 
 /// Whose volley a scene is showing, and which shot.
@@ -318,6 +343,23 @@ impl Shooter {
             _ => 10.0,
         }
     }
+
+    /// Its projectiles' picture, if its rig draws them with one (`MobileRig::sprites`, by shot), at
+    /// its own size: a square `size` px across.
+    fn sprite(self, props: &Props) -> Option<Sprite> {
+        let (mobile, shot) = (self.mobile?, self.shot?);
+        let (id, size) = match shot {
+            Shot::S1 => ("s1", 16.0),
+            Shot::S2 => ("s2", 18.0),
+            Shot::Ss => ("ss", 26.0),
+        };
+        let image = shot_sprite(props.rigs, props.server, mobile, id)?;
+        Some(Sprite {
+            image,
+            custom_size: Some(Vec2::splat(size)),
+            ..default()
+        })
+    }
 }
 
 /// What an effect sends flying at `at`: a shell, the strands of a helix, an orbit's projectiles, a
@@ -335,7 +377,10 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
         });
     };
     match effect {
-        Effect::Fired { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, shooter.color(false), shooter.size(legs))),
+        Effect::Fired { legs, .. } => {
+            let sprite = shooter.sprite(props).unwrap_or_else(|| dot_sprite(props.dot, shooter.color(false), shooter.size(legs)));
+            fly(legs, None, at + pacing::flight_seconds(legs), sprite);
+        }
         // Lanternwing's and Spoutpot's S2: each strand flies until it strikes.
         Effect::Helix {
             legs, amplitude, hertz, strands, merge, ..
@@ -347,7 +392,8 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
                     phase: strand.phase,
                     merge: *merge,
                 };
-                fly(legs, Some(About::Strand(winding)), at + ticks(strand.to), dot_sprite(props.dot, shooter.color(true), 9.0));
+                let sprite = shooter.sprite(props).unwrap_or_else(|| dot_sprite(props.dot, shooter.color(true), 9.0));
+                fly(legs, Some(About::Strand(winding)), at + ticks(strand.to), sprite);
             }
         }
         // Thistleback's S2: a cabbage on the path and two sprouts circling it, each flying until it
@@ -370,6 +416,11 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
         Effect::Beacon { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0x7f, 0xf0, 0xff), 16.0)),
         // Herdhound's whistle: small and bright, where its missiles are headed.
         Effect::Guide { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0xff, 0xe2, 0x6b), 7.0)),
+        // A mine crawling from where it sat: its own picture walks the path.
+        Effect::MineCrawled { seat, legs, .. } => {
+            let Some(&mobile) = props.mobiles.get(usize::from(*seat)) else { return flyers };
+            fly(legs, None, at + pacing::flight_seconds(legs), mine_sprite(props.rigs, props.server, props.dot, mobile));
+        }
         Effect::Dropped { drop, legs, .. } if !legs.is_empty() => {
             let sprite = Sprite {
                 image: props.server.load(lobshot_assets::drop_path(drop.kind)),
@@ -469,6 +520,16 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
             },
         )),
         Effect::SuddenDeath { kind } => cues.push((at, Cue::SuddenDeath(kind))),
+        Effect::MineLaid { mine, .. } => cues.push((at, Cue::MineLaid(mine))),
+        // Hidden while its flyer walks, then shown where the walk ended.
+        Effect::MineCrawled { mine, legs, .. } => {
+            cues.push((at, Cue::MineHide(mine)));
+            if let Some(last) = legs.last() {
+                cues.push((at + pacing::flight_seconds(&legs), Cue::MineAt { id: mine, at: last.flight.at(last.to) }));
+            }
+        }
+        Effect::MineFell { mine, to } => cues.push((at, Cue::MineAt { id: mine, at: Mine::middle_at(to) })),
+        Effect::MineGone { mine, .. } => cues.push((at, Cue::MineHide(mine))),
         Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
         Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
         // Flyers took off above; the HUD shows the rest from the game itself (the wind, the
@@ -557,23 +618,25 @@ struct Stagehands<'w> {
     bolts: ResMut<'w, Bolts>,
     sounds: MessageWriter<'w, Play>,
     game: Option<Res<'w, Match>>,
+    rigs: Res<'w, Rigs>,
 }
 
-fn play(
-    mut timeline: ResMut<Timeline>,
-    mut hands: Stagehands,
-    mut views: Query<(&MobileView, &mut Shown)>,
-    mut transforms: Query<(&mut Transform, &mut Visibility), Without<MobileView>>,
-    mut commands: Commands,
-) {
+/// The flyers' sprites: everything a scene moves that is neither a mobile nor a mine.
+type FlyerParts<'w, 's> = Query<'w, 's, (&'static mut Transform, &'static mut Visibility), (Without<MobileView>, Without<MineView>)>;
+
+/// The mines on screen.
+type MineParts<'w, 's> = Query<'w, 's, (&'static MineView, &'static mut Transform, &'static mut Visibility), Without<MobileView>>;
+
+fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<(&MobileView, &mut Shown)>, mut transforms: FlyerParts, mut mines: MineParts, mut commands: Commands) {
     let Some(dot) = hands.dot.as_deref().map(|dot| Dot(dot.0.clone())) else { return };
+    let mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
     if timeline.scene.is_none() {
         let Some(next) = timeline.queue.pop_front() else { return };
-        let mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
         let props = Props {
             dot: &dot,
             server: &hands.server,
             mobiles: &mobiles,
+            rigs: &hands.rigs,
         };
         timeline.scene = Some(stage(next, &props, &mut views, &mut commands));
     }
@@ -586,7 +649,11 @@ fn play(
         if *at > now {
             break;
         }
-        run(cue, now, &mut scene.moves, &dot, &mut views, &mut hands, &mut commands);
+        if let Some(staged) = stage_mine(cue, &dot, &mobiles, &hands, &mut mines) {
+            commands.spawn(staged);
+        } else {
+            run(cue, now, &mut scene.moves, &dot, &mut views, &mut hands, &mut commands);
+        }
         scene.next += 1;
     }
     for change in &scene.moves {
@@ -599,6 +666,46 @@ fn play(
 
     if now >= scene.end && scene.next >= scene.cues.len() {
         timeline.scene = None;
+    }
+}
+
+/// Plays a mine's cue on the mines on screen; returns a mine to spawn if one was laid that isn't
+/// there yet. `None` for any other cue, and for one it played.
+fn stage_mine(cue: &Cue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, mines: &mut MineParts) -> Option<impl Bundle> {
+    let place = |mines: &mut MineParts, id: MineId, at: Option<SimVec2>| {
+        for (view, mut transform, mut visibility) in mines.iter_mut().filter(|(view, ..)| view.id == id) {
+            let _ = view;
+            if let Some(at) = at {
+                transform.translation = world(at).extend(transform.translation.z);
+                *visibility = Visibility::Inherited;
+            } else {
+                *visibility = Visibility::Hidden;
+            }
+        }
+    };
+    match *cue {
+        Cue::MineLaid(mine) => {
+            if mines.iter().any(|(view, ..)| view.id == mine.id) {
+                place(mines, mine.id, Some(mine.middle()));
+                return None;
+            }
+            let mobile = *mobiles.get(usize::from(mine.seat))?;
+            Some((
+                GameRoot,
+                MineView { id: mine.id },
+                mine_sprite(&hands.rigs, &hands.server, dot, mobile),
+                mine_transform(mine.middle(), mine.facing),
+            ))
+        }
+        Cue::MineAt { id, at } => {
+            place(mines, id, Some(at));
+            None
+        }
+        Cue::MineHide(id) => {
+            place(mines, id, None);
+            None
+        }
+        _ => None,
     }
 }
 
@@ -710,12 +817,14 @@ fn run(cue: &Cue, now: f32, moves: &mut Vec<Move>, dot: &Dot, views: &mut Query<
         Cue::Sound(sound) => {
             hands.sounds.write(Play(sound));
         }
+        // Mines' cues play on the mines (`stage_mine`).
+        Cue::MineLaid(_) | Cue::MineAt { .. } | Cue::MineHide(_) => {}
     }
 }
 
 /// Moves each flyer along its path once it has left (the camera following), and clears those that
 /// have stopped.
-fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut Query<(&mut Transform, &mut Visibility), Without<MobileView>>, focus: &mut Focus, commands: &mut Commands) {
+fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut FlyerParts, focus: &mut Focus, commands: &mut Commands) {
     flyers.retain(|flyer| {
         if now > flyer.until {
             commands.entity(flyer.entity).despawn();
@@ -725,6 +834,9 @@ fn fly(flyers: &mut Vec<Flyer>, now: f32, transforms: &mut Query<(&mut Transform
             && let (Some(at), Ok((mut transform, mut visibility))) = (flyer_at(&flyer.legs, flyer.about, now - flyer.from), transforms.get_mut(flyer.entity))
         {
             transform.translation = world(at).extend(depth::SHOTS);
+            if let Some(facing) = flyer_facing(&flyer.legs, now - flyer.from) {
+                transform.scale.x = facing;
+            }
             *visibility = Visibility::Inherited;
             focus.0 = Some(at);
         }
@@ -825,6 +937,51 @@ mod unit {
         cues.clear();
         cue(Effect::Swapped { seat: 0, with: 2 }, 2.0, &mut cues);
         assert!(matches!(cues[..], [(at, Cue::Swap { seat: 0, with: 2 })] if at == 2.0 - FALL_SECONDS));
+    }
+
+    #[test]
+    fn a_crawling_mine_hides_while_its_flyer_walks_then_shows_where_it_stopped() {
+        let walk = leg(0, TICKS_PER_SECOND, 0);
+        let mut cues = Vec::new();
+        cue(
+            Effect::MineCrawled {
+                seat: 0,
+                mine: MineId(2),
+                legs: vec![walk],
+            },
+            3.0,
+            &mut cues,
+        );
+        assert!(matches!(cues[..], [(start, Cue::MineHide(MineId(2))), (end, Cue::MineAt { id: MineId(2), at })] if start == 3.0 && end == 4.0 && at == walk.flight.at(walk.to)));
+        cues.clear();
+        cue(Effect::MineGone { mine: MineId(2), tick: None }, 5.0, &mut cues);
+        assert!(matches!(cues[..], [(at, Cue::MineHide(MineId(2)))] if at == 5.0));
+    }
+
+    #[test]
+    fn a_walking_flyer_faces_the_way_it_goes() {
+        let second = TICKS_PER_SECOND;
+        let walk = |x: f64, offset| Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: SimVec2::new(0.0, 0.0),
+                velocity: SimVec2::new(x, 0.0),
+                accel: SimVec2::new(0.0, 0.0),
+            },
+            from: 0,
+            to: second,
+            offset,
+        };
+        let legs = [walk(60.0, 0), walk(-60.0, second), walk(0.0, 2 * second)];
+        assert_eq!(flyer_facing(&legs, 0.5), Some(1.0));
+        assert_eq!(flyer_facing(&legs, 1.5), Some(-1.0), "turned round at a wall");
+        assert_eq!(flyer_facing(&legs, 2.5), None, "at rest it keeps its last facing");
+    }
+
+    #[test]
+    fn an_armed_mine_glows_red() {
+        assert_ne!(world::mine_tint(true, false), world::mine_tint(false, false));
+        assert_eq!(world::mine_tint(true, true), world::mine_tint(true, false), "red, sprite or dot");
+        assert_eq!(world::mine_tint(false, false), Color::WHITE, "its own colors at rest");
     }
 
     #[test]

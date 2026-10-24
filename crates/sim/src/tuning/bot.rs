@@ -50,3 +50,7 @@ pub const EASY: Noise = Noise {
 /// plays (`LOBSHOT_BOT_DELAY_MS`'s default), and practice and the lab charge it. Turn time adds to
 /// delay, so it decides when a bot moves again.
 pub const THINK: Tuned<Centis> = picked(Centis(120), "Long enough to read as a turn: a person's quick one.");
+
+/// What SearchBot counts a mine it lays within sense of an enemy as worth, in damage: a mine does
+/// nothing the turn it lands, so a bot that only counted damage done would never lay one.
+pub const MINE_WORTH: Tuned<f64> = picked(80.0, "About half of a mine's 140-180 (tuning::tinbadger): the enemy may walk off, or blast it, before it crawls in.");

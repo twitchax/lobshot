@@ -21,6 +21,8 @@ mod sparkhorn;
 mod spoutpot;
 mod sudsotter;
 mod thistleback;
+mod tinbadger;
+pub(crate) mod trundle;
 mod tuskrack;
 
 use crate::{
@@ -193,6 +195,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Tinbadger => tinbadger::fire(game, &gun, shot, effects),
     }
 }
 
@@ -220,6 +223,7 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Herdhound
         | MobileKind::Thistleback => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
+        MobileKind::Tinbadger => tinbadger::aim_point(game, seat, shot, flight),
     }
 }
 

@@ -118,6 +118,7 @@ pub fn role(mobile: Option<MobileKind>) -> &'static str {
         Some(MobileKind::Frostfin) => "A sledding narwhal. Its tusk's ice leaves foes brittle.",
         Some(MobileKind::Herdhound) => "A sheepdog mech. Its missiles loop, then home on its whistle.",
         Some(MobileKind::Thistleback) => "A hedgehog gardener. Lobs heavy cabbages; its SS digs deep.",
+        Some(MobileKind::Tinbadger) => "A tinker badger. Its tin beetles lie in wait, then crawl at foes.",
         None => "Any of them: the room picks when the game starts.",
     }
 }

@@ -282,7 +282,10 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != me.team);
     let mut damage: Vec<Hurt> = Vec::new();
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
-    for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
+    for effect in effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. }))
+    {
         match effect {
             Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Guide { legs, .. } | Effect::Orbit { legs, .. } => {
                 if let Some(leg) = legs.last() {
@@ -333,6 +336,14 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
             let _ = write!(summary, " Comes down at x={x}, y={y}, {:.0} px from seat {seat}.", gap(nearest, p));
         }
     }
+    let laid = effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. }))
+        .filter(|e| matches!(e, Effect::MineLaid { .. }))
+        .count();
+    if laid > 0 {
+        let _ = write!(summary, " Lays {laid} mine{} that stay on the map.", if laid == 1 { "" } else { "s" });
+    }
     if to_friends > 0 {
         let _ = write!(summary, " Costs your side {to_friends}.");
     }
@@ -376,6 +387,9 @@ pub struct View {
     pub players: Vec<PlayerView>,
     /// Slot-machine drops still falling.
     pub drops: Vec<DropView>,
+    /// Mines on the map (Tinbadger's S2): each crawls toward an enemy near it as its layer's turn
+    /// comes up, and goes off on touching a mobile.
+    pub mines: Vec<MineView>,
     /// What you may do, on your turn.
     pub options: Option<Options>,
     /// What happened since you last looked, in order.
@@ -486,6 +500,16 @@ pub struct DropView {
     pub lands_at_turn: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct MineView {
+    /// The seat that laid it: it crawls as that seat's turn comes up.
+    pub seat: u8,
+    pub yours: bool,
+    /// Where it sits: the ground under it.
+    pub x: i32,
+    pub y: i32,
+}
+
 /// What the agent may do this turn.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Options {
@@ -576,6 +600,16 @@ fn view(session: &Session, happened: &[Happened]) -> View {
                 kind: f.drop.kind,
                 x: f.drop.x,
                 lands_at_turn: f.lands,
+            })
+            .collect(),
+        mines: game
+            .mines()
+            .iter()
+            .map(|mine| MineView {
+                seat: mine.seat,
+                yours: mine.seat == you,
+                x: mine.at.x,
+                y: mine.at.y,
             })
             .collect(),
         options: your_turn.then(|| options(game, you)),
@@ -785,7 +819,7 @@ fn shot_line(names: &Names<'_>, h: &Happened) -> String {
     let mut blasts: Vec<String> = h
         .effects
         .iter()
-        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. }))
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. }))
         .filter_map(|e| match e {
             Effect::Exploded { at, .. } => {
                 let [x, y] = point(*at);
@@ -851,6 +885,10 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
         Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
+        Effect::MineLaid { mine, .. } => format!(" {} mine landed at x={}.", names.whose(mine.seat), mine.at.x),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::MineCrawled { legs, .. } => legs.last().map_or_else(String::new, |leg| format!(" A mine crawled to x={}.", leg.flight.at(leg.to).x.round() as i32)),
+        Effect::MineGone { tick: Some(_), .. } => " A mine went off.".to_owned(),
         Effect::GameOver { winner } => match winner {
             Some(team) => format!(" Game over: team {team:?} won."),
             None => " Game over: a draw.".to_owned(),
@@ -1001,6 +1039,13 @@ fn about(mobile: MobileKind) -> String {
         }
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
+        }
+        MobileKind::Tinbadger => {
+            use tuning::tinbadger::{MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_SENSE, SS_FUSE_SECONDS};
+            format!(
+                "A badger with a cart of wind-up tin beetles. S1 is three spinning cogs winding about one path, each its own hit, that dig a lot of land. S2 is two beetle shells that fly through mobiles and land as mines (`mines` in the view), which stay on the map: as your turn comes up, each of your mines within {} px of an enemy crawls up to {} px toward it before you act (a Mechanical enemy draws them from farther), and a mine goes off, {}-{} damage, when it touches any mobile, whoever walks onto it. Any blast in reach sets a mine off, and your mines go when you die. SS is a big beetle that lands, marches the way you face (turning round at walls it can't climb), and goes off when it touches a mobile or {} s after landing.",
+                MINE_SENSE.value, MINE_CRAWL_STEPS.value, MINE_DAMAGE.value.min, MINE_DAMAGE.value.max, SS_FUSE_SECONDS.value
+            )
         }
     }
 }
@@ -1342,6 +1387,36 @@ mod unit {
         }
         assert!(rules.contains("- Big Heal (`BigHeal`): Heals 25% of your max HP at once (30% for a Bionic mobile)."), "{rules}");
         assert!(rules.contains("Bionic armor") && rules.contains("a pass's, 200"), "{rules}");
+    }
+
+    #[test]
+    fn the_view_and_the_log_show_mines_on_the_map() {
+        let mut new = flat(5);
+        new.mobile = Some("tinbadger".into());
+        new.against = vec!["coilback".into()];
+        let mut session = Session::new(&new, &maps()).unwrap();
+        let facing = face(&session);
+        session.act(Action::Walk { facing, steps: 0 }).unwrap();
+        let request = TraceRequest {
+            shot: Shot::S2,
+            aim: 45,
+            power: Power::nearest(1.3).twentieths(),
+            item: None,
+        };
+        let trace = session.trace(&request).unwrap();
+        assert!(trace.summary.contains("Lays 2 mines that stay on the map."), "{}", trace.summary);
+        // A soft lob: the mines land between the two, far from where the bot's shot comes down.
+        session
+            .act(Action::Shoot {
+                shot: Shot::S2,
+                aim: 45,
+                power: Power::nearest(1.3),
+            })
+            .unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert!(view.happened.iter().any(|line| line.contains("Your mine landed at x=")), "{:?}", view.happened);
+        assert!(!view.mines.is_empty() && view.mines.iter().all(|mine| mine.yours && mine.seat == 0), "{:?}", view.mines);
+        assert!(rules().contains("mines (`mines` in the view)"), "{}", rules());
     }
 
     #[test]

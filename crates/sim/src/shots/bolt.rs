@@ -5,7 +5,7 @@
 use crate::{
     damage::{self, Blast},
     game::{Contact, Effect, Game, MAX_SEATS},
-    tuning::SKY,
+    tuning::{BOLT_REACH, SKY},
     units::Vec2,
 };
 
@@ -66,8 +66,10 @@ pub(crate) fn toward(game: &Game, through: Vec2, direction: Vec2) -> Strike {
 }
 
 /// Shows a strike at `tick` (`Bolt`) and, where it struck the ground, carves a crater of `crater`.
+/// It smashes any mine near where it struck (`mines::smash`).
 pub(crate) fn flash(game: &mut Game, strike: &Strike, crater: f64, tick: u32, effects: &mut Vec<Effect>) {
     effects.push(Effect::Bolt { from: strike.from, to: strike.at, tick });
+    crate::mines::smash(game, strike.at, BOLT_REACH.value, tick, effects);
     if strike.contact == Contact::Terrain {
         let dirty = game.terrain.carve(strike.at, crater);
         effects.push(Effect::Exploded {
