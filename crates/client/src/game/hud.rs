@@ -8,6 +8,7 @@ use lobshot_sim::{
     drops::DropKind,
     game::{Effect, Game, Shot, SsState},
     items::Item,
+    tuning::AimRange,
     units::Vec2 as SimVec2,
     weather::{Weather, WeatherKind},
 };
@@ -379,6 +380,16 @@ fn ss_label(ss: SsState) -> String {
     }
 }
 
+/// The aim as a player reads it: degrees above level, over the back too (`AimRange::elevation`).
+fn angle_label(aim: i16, last: Option<i16>, range: Option<AimRange>) -> String {
+    let shown = |aim: i16| range.map_or(aim, |range| range.elevation(aim));
+    // The default font is ASCII only, so no degree sign until lobshot ships a font.
+    match last {
+        Some(last) => format!("Angle {} (last {})", shown(aim), shown(last)),
+        None => format!("Angle {}", shown(aim)),
+    }
+}
+
 /// The sudden-death readout under the turn.
 fn sudden_label(sudden: Sudden) -> String {
     match sudden {
@@ -448,11 +459,13 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
                 }
             }
             Readout::Turn => whose.clone(),
-            Readout::Angle => match controls.last_aim {
-                // The default font is ASCII only, so no degree sign until lobshot ships a font.
-                Some(last) => format!("Angle {} (last {last})", controls.aim),
-                None => format!("Angle {}", controls.aim),
-            },
+            Readout::Angle => {
+                let range = session
+                    .my_seat()
+                    .and_then(|seat| game.predicted.players().get(usize::from(seat)))
+                    .map(|me| controls.shot.tuning(me.tuning()).aim.value);
+                angle_label(controls.aim, controls.last_aim, range)
+            }
             Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
             Readout::Sudden => String::new(),
             Readout::Weather => weather_label(game.predicted.weather()),
@@ -959,6 +972,15 @@ mod unit {
         assert_eq!(delay_label(760, Some(760), true), "760", "your own stands as it is");
         assert_eq!(delay_label(700, Some(760), false), "-60");
         assert_eq!(delay_label(700, None, false), "700");
+    }
+
+    #[test]
+    fn the_angle_reads_as_degrees_above_level_over_the_back_too() {
+        use lobshot_sim::game::MobileKind;
+        let behind = MobileKind::Flarecrow.tuning().s1.aim.value;
+        assert_eq!(angle_label(150, Some(140), Some(behind)), "Angle 30 (last 40)");
+        assert_eq!(angle_label(30, None, Some(MobileKind::Coilback.tuning().s1.aim.value)), "Angle 30");
+        assert_eq!(angle_label(30, None, None), "Angle 30");
     }
 
     #[test]

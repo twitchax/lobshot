@@ -300,12 +300,12 @@ const WATER: Color = Color::srgb_u8(0x4a, 0xa8, 0xf0);
 const FIRE: Color = Color::srgb_u8(0xff, 0x6a, 0x2a);
 
 impl Shooter {
-    /// Its projectiles' color: Spoutpot's are water, Kitewyrm's fire, Lanternwing's strands glow,
-    /// the rest are dark.
+    /// Its projectiles' color: Spoutpot's are water, Kitewyrm's and Flarecrow's burn,
+    /// Lanternwing's strands glow, the rest are dark.
     fn color(self, strand: bool) -> Color {
         match self.mobile {
             Some(MobileKind::Spoutpot) => WATER,
-            Some(MobileKind::Kitewyrm) => FIRE,
+            Some(MobileKind::Kitewyrm | MobileKind::Flarecrow) => FIRE,
             _ if strand => GLOW,
             _ => SHELL,
         }
@@ -313,13 +313,14 @@ impl Shooter {
 
     /// How big a shell on `legs` is drawn: Spoutpot's SS blob is big, and the balls born from it
     /// in flight small; Kitewyrm's fireballs are one size however late they leave, and its SS orb
-    /// and the mini-dragons it calls big.
+    /// and the mini-dragons it calls big; Flarecrow's flares are small, and its SS cart bigger.
     fn size(self, legs: &[Leg]) -> f32 {
         let born_in_flight = legs.first().is_some_and(|leg| leg.offset > 0);
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), Some(Shot::Ss)) if !born_in_flight => 18.0,
-            (Some(MobileKind::Kitewyrm), Some(Shot::Ss)) => 14.0,
+            (Some(MobileKind::Kitewyrm | MobileKind::Flarecrow), Some(Shot::Ss)) => 14.0,
             (Some(MobileKind::Kitewyrm), _) => 10.0,
+            (Some(MobileKind::Flarecrow), Some(Shot::S2)) => 7.0,
             _ if born_in_flight => 8.0,
             _ => 10.0,
         }
@@ -896,6 +897,18 @@ mod unit {
         assert_eq!(s2.size(&[leg(0, 10, 0)]), s2.size(&[leg(0, 10, 100)]), "a fireball leaving late is no smaller");
         let ss = Shooter { shot: Some(Shot::Ss), ..s2 };
         assert!(ss.size(&[leg(0, 10, 100)]) > s2.size(&[leg(0, 10, 0)]), "a mini-dragon, born at the orb's landing");
+    }
+
+    #[test]
+    fn flarecrows_flares_burn_small_and_its_ss_cart_is_bigger() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Flarecrow),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S2).color(false), FIRE);
+        let path = [leg(0, 10, 0)];
+        assert!(shooter(Shot::S2).size(&path) < shooter(Shot::S1).size(&path));
+        assert!(shooter(Shot::Ss).size(&path) > shooter(Shot::S1).size(&path));
     }
 
     #[test]
