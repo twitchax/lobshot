@@ -17,6 +17,7 @@ use lobshot_sim::{
     game::{Game, MobileKind, Seat, Setup, Shot, Team},
     items::Loadout,
     map::{MapRef, NoAssets},
+    mode::Mode,
     tuning::{WIND_X_PER_UNIT, WIND_Y_PER_UNIT, spoutpot},
     units::{Facing, SCREEN, TICK, Vec2, Wind, ticks, to_radians},
 };
@@ -212,6 +213,7 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
             order: vec![0, 1],
             wind: Wind::default(),
             sudden_death: None,
+            mode: Mode::Solo,
         },
         &NoAssets,
     )

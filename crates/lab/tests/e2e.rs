@@ -211,3 +211,24 @@ fn e2e_agent_plays_a_full_game_over_the_cli() {
     let refused = run_in(dir.path(), &["play", "act", "Pass"]);
     assert!(!refused.status.success() && String::from_utf8_lossy(&refused.stderr).contains("over"));
 }
+
+/// PRD-0007 T-001: `play new --mode score` seats a Score game, and the view counts each team's lives.
+#[test]
+fn e2e_play_starts_a_score_game_that_counts_lives() {
+    let dir = TempDir::new().unwrap();
+    let args = ["play", "new", "--map", "flat", "--team-size", "2", "--mode", "score", "--level", "easy", "--seed", "4"];
+    let view: serde_json::Value = serde_json::from_str(&stdout(&run_in(dir.path(), &args))).unwrap();
+    assert_eq!(view["mode"], "Score");
+    // A life a player and one more, less any the bots' opening turns cost.
+    let points = view["points"].as_array().unwrap();
+    assert_eq!(points.iter().map(|p| p["team"].as_str().unwrap()).collect::<Vec<_>>(), ["A", "B"]);
+    assert!(points.iter().all(|p| (1..=3).contains(&p["points"].as_i64().unwrap())), "{points:?}");
+    assert_eq!(view["can_respawn"], false);
+    let refused = run_in(dir.path(), &["play", "new", "--map", "flat", "--mode", "jewel"]);
+    assert!(!refused.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("Jewel mode isn't built yet"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+}

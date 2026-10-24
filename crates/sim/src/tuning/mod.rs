@@ -16,6 +16,7 @@ pub mod kitewyrm;
 pub mod lanternwing;
 pub mod lensowl;
 pub mod marblemole;
+pub mod modes;
 pub mod needlemouse;
 pub mod score;
 pub mod sparkhorn;

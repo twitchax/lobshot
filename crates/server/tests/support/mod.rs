@@ -109,7 +109,8 @@ impl Client {
 }
 
 /// Plays as `me` until the game ends, from the next message on: replays everything the server
-/// sends (the replica checks the hash after every event) and plays `me`'s turns with SearchBot.
+/// sends (the replica checks the hash after every event) and plays `me`'s turns with SearchBot,
+/// and its drop points once dead in Score.
 /// `last_view` is the room as the client last saw it, if a game was already on; a member without a
 /// seat just follows. Returns the replica and the room as it returned to the lobby.
 pub async fn play_out(client: &mut Client, me: MemberId, last_view: Option<&RoomView>, mut seed: u64) -> (Replica, RoomView) {
@@ -133,6 +134,10 @@ pub async fn play_out(client: &mut Client, me: MemberId, last_view: Option<&Room
             for action in actions {
                 client.send(&ClientMsg::Act(action)).await;
             }
+        }
+        // Dead in Score, it drops back in where SearchBot would.
+        if let Some(pick) = seat.and_then(|seat| replica.respawn(seat)) {
+            client.send(&ClientMsg::Act(pick)).await;
         }
     }
 }

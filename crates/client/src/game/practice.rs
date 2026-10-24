@@ -1,6 +1,7 @@
 //! Practice against SearchBot, with no server: the client referees itself, answering the sim's
-//! rolls, stamping turn times, timing turns out, and playing the bots' turns (and their spins). You
-//! play with your picks; 1v1 against a bot, or 2v2 with a bot beside you.
+//! rolls, stamping turn times, timing turns out, and playing the bots' turns (and, dead, their spins
+//! or drop points). You play with your picks; 1v1 against a bot, or 2v2 with a bot beside you, in
+//! the mode the title set.
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, Member, MemberId, RoomCode, RoomOptions, RoomView, Stage};
@@ -82,6 +83,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
     let options = RoomOptions {
         map: "hills".to_owned(),
         team_size: size,
+        mode: session.practice_mode,
         ..RoomOptions::default()
     };
     session.me = Some(ME);
@@ -109,6 +111,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
         order: referee::turn_order(&teams, &mut dice),
         wind: referee::wind(options.max_wind, &mut dice),
         sudden_death: options.sudden_death,
+        mode: options.mode,
     };
     let Ok(game) = Game::new(&setup, &NoAssets) else {
         error!("the practice setup is invalid");
@@ -153,8 +156,9 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
     let centis = Centis((elapsed.max(0.0) * 100.0) as u32);
 
     for &Act(action) in acts.read() {
-        // The slot machine works on anyone's turn; everything else only on yours.
-        if action != Action::Spin && mine != seat {
+        // The dead spin, or pick where to drop back in, on anyone's turn; everything else waits for
+        // yours.
+        if !matches!(action, Action::Spin | Action::Respawn { .. }) && mine != seat {
             continue;
         }
         decide(&mut game, action.event(mine, centis), &mut played);
@@ -162,10 +166,10 @@ fn referee(session: Res<Session>, referee: Option<ResMut<Referee>>, game: Option
     if timeline.busy() {
         return;
     }
-    // Dead bots spin whenever the sim lets them, as the server's do.
+    // Dead bots act whenever the sim lets them, as the server's do.
     for bot in (0..u8::try_from(game.confirmed.players().len()).unwrap_or(0)).filter(|&bot| bot != mine) {
-        if game.confirmed.can_spin(bot) {
-            decide(&mut game, Event::Spin { seat: bot }, &mut played);
+        if let Some(event) = bot::while_dead(&game.confirmed, bot) {
+            decide(&mut game, event, &mut played);
         }
     }
 

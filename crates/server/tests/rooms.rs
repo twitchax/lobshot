@@ -24,6 +24,7 @@ use lobshot_sim::{
     items::{Item, Loadout},
     log::Log,
     map::NoAssets,
+    mode::Mode,
     units::Power,
 };
 
@@ -52,6 +53,7 @@ fn flat() -> ClientMsg {
         turn_seconds: 20,
         random_teams: false,
         sudden_death: None,
+        mode: Mode::Solo,
     })
 }
 

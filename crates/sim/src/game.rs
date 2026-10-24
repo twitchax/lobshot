@@ -22,6 +22,7 @@ use crate::{
     items::{self, Item, Loadout, MAX_ITEMS},
     map::{MapAssets, MapRef},
     mines::{self, Mine, MineId, Minefield},
+    mode::{self, Mode, ModeState, Respawn},
     movement::{self, Footing, Landing, Step},
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
@@ -278,6 +279,9 @@ pub struct Setup {
     pub wind: Wind,
     /// `None` plays without sudden death.
     pub sudden_death: Option<SuddenDeath>,
+    /// What the game is played for. Logs from before modes had none: they are Solo.
+    #[serde(default)]
+    pub mode: Mode,
 }
 
 /// Something that happened, accepted by the server. A game is its setup plus these, in order.
@@ -305,6 +309,9 @@ pub enum Event {
     Spin { seat: u8 },
     /// The server rolled what the slot machine dropped (`Roll::Drop`).
     Drop(Drop),
+    /// A dead player picks where to drop back in, in a mode where the dead come back (Score): it
+    /// drops down column `x` some turns later (`mode::RespawnRule`). It works on anyone's turn.
+    Respawn { seat: u8, x: i32 },
 }
 
 /// Something random the server owes the game before anyone may act.
@@ -635,6 +642,26 @@ pub enum Effect {
         mine: MineId,
         tick: Option<u32>,
     },
+    /// A death cost `team` points (Score's lives, just after its `Died`): it has `points` left.
+    Points {
+        team: Team,
+        points: i32,
+    },
+    /// Dead `seat` picked where to drop back in: down column `x`, at the end of the turn that
+    /// brings the turn count to `lands` (`Game::respawns` lists those still to come).
+    RespawnPicked {
+        seat: u8,
+        x: i32,
+        lands: i64,
+    },
+    /// `seat` drops back in, starting a stage: `legs` is its fall from the sky, the wind nudging
+    /// it. `to` is where it landed, alive and whole; `None` if it fell through the map, which costs
+    /// nothing, but its player picks again.
+    Respawned {
+        seat: u8,
+        legs: Vec<Leg>,
+        to: Option<Footing>,
+    },
 }
 
 /// What a projectile touched.
@@ -781,6 +808,8 @@ pub struct Game {
     spin_owed: Option<u8>,
     /// Mines on the map (Tinbadger's S2), which outlive the turn that laid them.
     pub(crate) mines: Minefield,
+    /// What the mode keeps: team points, and the dead on their way back.
+    pub(crate) mode_state: ModeState,
 }
 
 impl Game {
@@ -789,9 +818,11 @@ impl Game {
     /// # Errors
     ///
     /// Fails on a bad setup: fewer than two teams, more than 8 seats, an order that is not a
-    /// permutation of the seats, a map that can't be loaded, or a spawn with no ground under it.
+    /// permutation of the seats, a mode this build doesn't play, a map that can't be loaded, or a
+    /// spawn with no ground under it.
     pub fn new(setup: &Setup, assets: &dyn MapAssets) -> Res<Self> {
         let seats = setup.seats.len();
+        ensure!(setup.mode.built(), "{} mode isn't built yet", setup.mode.name());
         ensure!((2..=MAX_SEATS).contains(&seats), "a game needs 2 to {MAX_SEATS} seats, not {seats}");
         ensure!(setup.seats.iter().any(|s| s.team == Team::A) && setup.seats.iter().any(|s| s.team == Team::B), "both teams need a seat");
         let mut sorted = setup.order.clone();
@@ -848,6 +879,7 @@ impl Game {
             drops: Vec::new(),
             spin_owed: None,
             mines: Minefield::default(),
+            mode_state: ModeState::new(setup.mode, &setup.seats),
         };
         game.start_next_turn(&mut Vec::new());
         Ok(game)
@@ -907,6 +939,38 @@ impl Game {
     #[must_use]
     pub fn mines(&self) -> &[Mine] {
         self.mines.mines()
+    }
+
+    /// What the game is played for.
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.mode_state.mode()
+    }
+
+    /// `team`'s points, in a mode that counts them: Score's lives left.
+    #[must_use]
+    pub fn points(&self, team: Team) -> Option<i32> {
+        self.mode_state.points(team)
+    }
+
+    /// The dead who may come back, in the order they died, each with where and when it drops in
+    /// once its player has picked.
+    #[must_use]
+    pub fn respawns(&self) -> &[Respawn] {
+        self.mode_state.respawns()
+    }
+
+    /// Whether `seat` may pick where to drop back in now (`Event::Respawn`), so a host knows when a
+    /// dead bot can: it is dead, may come back, hasn't picked yet, and no roll is owed.
+    #[must_use]
+    pub fn can_respawn(&self, seat: u8) -> bool {
+        mode::check_pick(self, seat).is_ok()
+    }
+
+    /// Whether `seat` may forfeit (`Event::Forfeit`): it is alive, or dead and may still come back.
+    #[must_use]
+    pub fn can_forfeit(&self, seat: u8) -> bool {
+        !matches!(self.phase, Phase::Over { .. }) && self.players.get(usize::from(seat)).is_some_and(|player| player.alive || self.respawns().iter().any(|r| r.seat == seat))
     }
 
     /// What the server must roll before anyone may act, if anything: wind first, then forecasts,
@@ -1011,12 +1075,16 @@ impl Game {
             }
             Event::Forfeit { seat } => {
                 ensure!(!matches!(self.phase, Phase::Over { .. }), "the game is over");
-                ensure!(self.player(seat)?.alive, "seat {seat} is already out");
-                self.kill(seat, Death::Forfeited, &mut effects);
-                if self.phase == (Phase::Turn { seat }) {
-                    self.end_turn(seat, Ending::Pass, Centis(0), &mut effects);
+                if self.player(seat)?.alive {
+                    self.kill(seat, Death::Forfeited, &mut effects);
+                    if self.phase == (Phase::Turn { seat }) {
+                        self.end_turn(seat, Ending::Pass, Centis(0), &mut effects);
+                    } else {
+                        self.check_over(&mut effects);
+                    }
                 } else {
-                    self.check_over(&mut effects);
+                    // A dead player who leaves doesn't come back.
+                    ensure!(mode::forget(self, seat), "seat {seat} is already out");
                 }
             }
             Event::Walk { seat, facing, steps } => {
@@ -1050,6 +1118,11 @@ impl Game {
                 self.players[usize::from(seat)].last_spin = Some(self.turns);
                 self.spin_owed = Some(seat);
                 effects.push(Effect::Spun { seat });
+            }
+            Event::Respawn { seat, x } => {
+                mode::check_pick(self, seat)?;
+                ensure!(self.on_map(x), "drop point x {x} is off the map");
+                mode::pick(self, seat, x, &mut effects);
             }
         }
         Ok(effects)
@@ -1105,6 +1178,7 @@ impl Game {
         }
         let player = self.player(seat)?;
         ensure!(!player.alive, "seat {seat} is alive: only the dead spin");
+        ensure!(self.mode().slot_machine(), "there's no slot machine in {}: the dead drop back in", self.mode().name());
         let recharge = i64::from(self.round) * RECHARGE_ROUNDS.value;
         if let Some(last) = player.last_spin {
             ensure!(self.turns - last >= recharge, "seat {seat}'s slot machine recharges for {} more turns", recharge - (self.turns - last));
@@ -1471,6 +1545,7 @@ impl Game {
         player.hp = player.hp.max(0);
         effects.push(Effect::Died { seat, death });
         mines::orphan(self, seat, effects);
+        mode::died(self, seat, death, effects);
     }
 
     /// Drops every living mobile whose ground is gone, and re-reads every tilt.
@@ -1522,6 +1597,7 @@ impl Game {
         let dropped = effects.len();
         drops::land_due(self, effects);
         self.reveal_passed(effects, dropped);
+        mode::land_due(self, effects);
         // A game that just ended doesn't announce sudden death on its way out.
         if let Some(sudden_death) = self.sudden_death
             && self.turns == i64::from(sudden_death.turn)
@@ -1558,18 +1634,23 @@ impl Game {
         effects.extend(revealed);
     }
 
-    /// Whether fewer than two teams have anyone standing.
+    /// Whether fewer than two teams are still in the game (`mode::out`).
     pub(crate) fn decided(&self) -> bool {
-        [Team::A, Team::B].into_iter().filter(|&team| self.players.iter().any(|p| p.alive && p.team == team)).count() < 2
+        self.teams_in().len() < 2
     }
 
-    /// Ends the game if fewer than two teams have anyone standing. Returns whether it did.
+    /// The teams still in the game, by the mode's rule (`mode::out`).
+    fn teams_in(&self) -> Vec<Team> {
+        [Team::A, Team::B].into_iter().filter(|&team| !mode::out(self, team)).collect()
+    }
+
+    /// Ends the game if fewer than two teams are still in it. Returns whether it did.
     fn check_over(&mut self, effects: &mut Vec<Effect>) -> bool {
-        let alive: Vec<Team> = [Team::A, Team::B].into_iter().filter(|&team| self.players.iter().any(|p| p.alive && p.team == team)).collect();
-        if alive.len() >= 2 {
+        let standing = self.teams_in();
+        if standing.len() >= 2 {
             return false;
         }
-        let winner = alive.first().copied();
+        let winner = standing.first().copied();
         self.phase = Phase::Over { winner };
         effects.push(Effect::GameOver { winner });
         true
@@ -1676,6 +1757,7 @@ pub(crate) mod testing {
             order: vec![0, 1],
             wind: Wind::default(),
             sudden_death: None,
+            mode: Mode::Solo,
         }
     }
 
@@ -1776,13 +1858,25 @@ pub(crate) mod testing {
 
     /// A game on `terrain` with these seats, acting in seat order.
     pub fn game_on(terrain: Terrain, seats: Vec<Seat>) -> Game {
+        game_in(Mode::Solo, terrain, seats)
+    }
+
+    /// A `mode` game on `terrain` with these seats, acting in seat order.
+    pub fn game_in(mode: Mode, terrain: Terrain, seats: Vec<Seat>) -> Game {
         let order = (0..seats.len()).map(|s| u8::try_from(s).unwrap()).collect();
         let map = MapRef::Asset {
             name: "drawn".to_owned(),
             variant: "A".to_owned(),
             mask_hash: terrain.mask_hash(),
         };
-        let mut game = Game::new(&Setup { map, seats, order, ..duel_setup(800) }, &Drawn(terrain)).expect("a valid setup");
+        let setup = Setup {
+            map,
+            seats,
+            order,
+            mode,
+            ..duel_setup(800)
+        };
+        let mut game = Game::new(&setup, &Drawn(terrain)).expect("a valid setup");
         answer_rolls(&mut game);
         game
     }

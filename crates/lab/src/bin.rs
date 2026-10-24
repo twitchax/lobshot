@@ -91,6 +91,9 @@ enum PlayStep {
         /// Players a team, 1 to 4.
         #[arg(long)]
         team_size: Option<u8>,
+        /// What the game is played for: solo or score.
+        #[arg(long)]
+        mode: Option<String>,
         /// How well the bots play: easy, normal or hard.
         #[arg(long)]
         level: Option<String>,
@@ -117,7 +120,8 @@ enum PlayStep {
         item: Option<u8>,
     },
     /// Your move, as the wire's JSON: '{"Shoot":{"shot":"S1","aim":45,"power":48}}',
-    /// '{"Walk":{"facing":"Left","steps":40}}', '{"Item":{"slot":0}}' or Pass.
+    /// '{"Walk":{"facing":"Left","steps":40}}', '{"Item":{"slot":0}}', Pass, or, dead in Score,
+    /// '{"Respawn":{"x":600}}'.
     Act { action: String },
 }
 
@@ -275,6 +279,7 @@ fn play(args: &PlayArgs) -> Void {
             against,
             map,
             team_size,
+            mode,
             level,
             seed,
         } => {
@@ -283,6 +288,7 @@ fn play(args: &PlayArgs) -> Void {
                 against: against.clone(),
                 map: map.clone(),
                 team_size: *team_size,
+                mode: mode.clone(),
                 level: level.clone(),
                 seed: *seed,
             };

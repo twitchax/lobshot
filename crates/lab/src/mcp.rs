@@ -159,6 +159,7 @@ fn tools() -> Value {
                     "against": { "type": "array", "items": { "type": "string" }, "description": "The other team's mobiles, one a seat; random when left out." },
                     "map": { "type": "string", "description": maps },
                     "team_size": { "type": "integer", "minimum": 1, "maximum": 4, "description": "Players a team; 1 when left out." },
+                    "mode": { "type": "string", "enum": ["solo", "score"], "description": "What the game is played for: solo (last team standing) or score (team lives, and the dead drop back in); solo when left out." },
                     "level": { "type": "string", "enum": ["easy", "normal", "hard"], "description": "How well the bots play; normal when left out." },
                     "seed": { "type": "integer", "minimum": 0, "description": "Replays a game: the same seed and setup play the same game." },
                 },
@@ -185,17 +186,18 @@ fn tools() -> Value {
         },
         {
             "name": "act",
-            "description": "Your move: walk, use an item, shoot or pass. The bots then play until your next turn, and you see the result.",
+            "description": "Your move: walk, use an item, shoot or pass; or, dead in Score, pick where to drop back in. The bots then play until your next turn (or your next pick), and you see the result.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "action": {
-                        "description": "One of {\"Walk\": {\"facing\": \"Left\", \"steps\": 40}}, {\"Item\": {\"slot\": 0}}, {\"Shoot\": {\"shot\": \"S1\", \"aim\": 45, \"power\": 48}}, or \"Pass\".",
+                        "description": "One of {\"Walk\": {\"facing\": \"Left\", \"steps\": 40}}, {\"Item\": {\"slot\": 0}}, {\"Shoot\": {\"shot\": \"S1\", \"aim\": 45, \"power\": 48}}, \"Pass\", or, dead in Score, {\"Respawn\": {\"x\": 600}}.",
                         "oneOf": [
                             { "type": "object", "properties": { "Walk": { "type": "object", "properties": { "facing": facing, "steps": { "type": "integer", "minimum": 0 } }, "required": ["facing", "steps"] } }, "required": ["Walk"] },
                             { "type": "object", "properties": { "Item": { "type": "object", "properties": { "slot": { "type": "integer", "minimum": 0 } }, "required": ["slot"] } }, "required": ["Item"] },
                             { "type": "object", "properties": { "Shoot": { "type": "object", "properties": { "shot": shot, "aim": { "type": "integer" }, "power": { "type": "integer", "minimum": 0, "maximum": 80 } }, "required": ["shot", "aim", "power"] } }, "required": ["Shoot"] },
                             { "const": "Pass" },
+                            { "type": "object", "properties": { "Respawn": { "type": "object", "properties": { "x": { "type": "integer", "minimum": 0 } }, "required": ["x"] } }, "required": ["Respawn"] },
                         ],
                     },
                 },
