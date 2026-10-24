@@ -264,8 +264,7 @@ pub struct Rect {
     pub h: f64,
 }
 
-/// An aim range in whole degrees above the body's forward direction. A range past 90 aims over the
-/// body's back (`rear`): 150 is 30 degrees above the way it faces away from.
+/// An aim range in whole degrees above the body's forward direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AimRange {
     pub min: i16,
@@ -286,11 +285,18 @@ impl AimRange {
         (self.true_min..=self.true_max).contains(&aim)
     }
 
-    /// Whether the range aims over the body's back, past straight up (Augerdillo's): its shots
-    /// leave the other way from the one it faces.
+    /// Whether the range points over the mobile's back (Nak and Aduka fire from the rear, DBR): its
+    /// aims run past 90.
     #[must_use]
-    pub fn rear(self) -> bool {
+    pub fn backward(self) -> bool {
         self.min > 90
+    }
+
+    /// `aim` as a player reads it: degrees above level, whichever way the shot leaves (180 - aim
+    /// over the back).
+    #[must_use]
+    pub fn elevation(self, aim: i16) -> i16 {
+        if self.backward() { 180 - aim } else { aim }
     }
 }
 
@@ -369,13 +375,6 @@ pub struct Barrel {
 }
 
 impl MobileTuning {
-    /// Whether every shot leaves over the back (`AimRange::rear`): it turns its back on a target to
-    /// fire at it.
-    #[must_use]
-    pub fn fires_rear(&self) -> bool {
-        [self.s1, self.s2, self.ss].iter().all(|shot| shot.aim.value.rear())
-    }
-
     /// The barrel `shot` leaves: the second barrel if it names the shot, else the cannon.
     #[must_use]
     pub fn barrel(&self, shot: Shot) -> Barrel {
@@ -407,5 +406,23 @@ mod unit {
         }
         assert_eq!(WeaponType::Electric.against(ArmorClass::Mechanical), 1.04);
         assert_eq!(WeaponType::Explosion.against(ArmorClass::Shield), 1.0);
+    }
+
+    #[test]
+    fn a_range_past_90_points_backward_and_reads_as_its_elevation() {
+        let ahead = AimRange {
+            min: 10,
+            max: 55,
+            true_min: 25,
+            true_max: 40,
+        };
+        let behind = AimRange {
+            min: 130,
+            max: 170,
+            true_min: 130,
+            true_max: 170,
+        };
+        assert!(!ahead.backward() && behind.backward());
+        assert_eq!((ahead.elevation(30), behind.elevation(150)), (30, 30));
     }
 }

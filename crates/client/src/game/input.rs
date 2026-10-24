@@ -9,7 +9,6 @@ use lobshot_protocol::{Action, ClientMsg};
 use lobshot_sim::{
     game::{Event, Player, Shot, SsState},
     items::MAX_ITEMS,
-    tuning::AimRange,
     units::{Facing, Power},
 };
 
@@ -181,11 +180,12 @@ fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, ss_ready:
     }
 }
 
-/// A degree per press, repeating while held, kept inside the shot's range.
+/// A degree per press, repeating while held, kept inside the shot's range. Up raises the shot,
+/// over the back too (where that lowers the aim).
 fn aim(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, me: &Player, dt: f32) {
-    let range = controls.shot.tuning(me.tuning()).aim.value;
     let up = keyboard.any_pressed([KeyCode::ArrowUp, KeyCode::KeyW]);
     let down = keyboard.any_pressed([KeyCode::ArrowDown, KeyCode::KeyS]);
+    let range = controls.shot.tuning(me.tuning()).aim.value;
     if up == down {
         controls.aim_held = 0.0;
     } else {
@@ -193,16 +193,10 @@ fn aim(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, me: &Player, dt
         controls.aim_held += dt;
         if pressed || controls.aim_held >= AIM_REPEAT {
             controls.aim_held = 0.0;
-            controls.aim += if up { raise(range) } else { -raise(range) };
+            controls.aim += if up == range.backward() { -1 } else { 1 };
         }
     }
     controls.aim = controls.aim.clamp(range.min, range.max);
-}
-
-/// The step that raises a shot in `range` a degree: toward straight up, which over the back
-/// (Augerdillo's) is down the numbers.
-fn raise(range: AimRange) -> i16 {
-    if range.rear() { -1 } else { 1 }
 }
 
 /// This turn's moving parts: the controls, the game to predict on, and where actions go.
@@ -376,16 +370,6 @@ mod unit {
             let (key, label) = ITEM_KEYS[usize::from(position)];
             assert_eq!((item_for_key(key), item_key_label(position)), (Some(position), Some(label)));
         }
-    }
-
-    #[test]
-    fn up_raises_the_shot_over_the_back_too() {
-        use lobshot_sim::game::MobileKind;
-        assert_eq!(raise(MobileKind::Coilback.tuning().s1.aim.value), 1);
-        // Augerdillo's 130 to 170 lie over its back: straight up is down the numbers.
-        let rear = MobileKind::Augerdillo.tuning().s1.aim.value;
-        assert_eq!(raise(rear), -1);
-        assert!(lobshot_sim::body::elevation(rear.min + raise(rear)) > lobshot_sim::body::elevation(rear.min));
     }
 
     #[test]

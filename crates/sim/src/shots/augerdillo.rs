@@ -1,13 +1,11 @@
-//! Augerdillo (Nak): a regular round; a drill that strikes the ground, bores a mirror of its arc
-//! through it and goes off where it comes up; and an SS armadillo that rolls through rock and goes
-//! off only on a mobile.
+//! Augerdillo (Nak): a regular round; a drill that passes through mobiles, digs into the ground,
+//! bores a mirror of its arc through it and goes off where it comes up; and an SS armadillo that
+//! rolls through rock and goes off only in a mobile.
 
 use super::Gun;
 use crate::{
     ballistics::Flight,
-    body::HitFrame,
-    damage,
-    game::{Contact, Effect, Game, Impact, Leg, MobileKind, Senses, Shot, Track},
+    game::{Contact, Effect, Game, Impact, Leg, Senses, Shot, Track},
     tuning::{
         MAX_FLIGHT_SECONDS,
         augerdillo::{S1_BLAST, S1_DAMAGE, S2_BLAST, S2_BURROW_LIFT, S2_BURROW_SPEED, S2_DAMAGE, SS_BLAST, SS_DAMAGE},
@@ -16,8 +14,8 @@ use crate::{
     weather::Marks,
 };
 
-/// What the drill's flight stops at besides the map's edges: the ground. It looks for mobiles
-/// itself (`first_strike`), so it can pass over those it can't strike.
+/// What the drill's flight stops at besides the map's edges: the ground. It passes through mobiles
+/// until it has dug in (EXP, SAGE, DBR).
 const GROUND: Senses = Senses { mobiles: false, terrain: true };
 
 /// What the SS armadillo stops at besides the map's edges: a mobile, never the ground (SW-mob).
@@ -36,26 +34,17 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             gun.land(game, &blast, S2_BLAST.value, &drilled.impact, drilled.marks, effects);
         }
         Shot::Ss => {
+            // It goes off where it first touches a mobile, a direct hit worth most at the hitbox's
+            // center: its weak spot, which only a shot from overlapping the target reaches.
             let track = game.track_sensing(flight, 0, 0, THROUGH_GROUND);
             effects.push(Effect::Fired { seat: gun.seat, legs: track.legs.clone() });
-            go_off(game, gun, &track, effects);
+            gun.land(game, &gun.blast_on(&track, SS_BLAST.value, SS_DAMAGE.value), SS_BLAST.value, &track.impact, track.marks, effects);
         }
     }
 }
 
-/// The SS armadillo goes off in the mobile it rolled into: its blast burns low (`damage::low`),
-/// worth most at the target's feet, its weak spot. One that left the map does nothing.
-fn go_off(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) {
-    if !matches!(track.impact.contact, Contact::Mobile(_)) {
-        return;
-    }
-    let blast = gun.blast_on(track, SS_BLAST.value, SS_DAMAGE.value);
-    game.explode_by(&blast, SS_BLAST.value * gun.salvo.crater, track.impact.tick, effects, |_, target| damage::low(&blast, target));
-    gun.follow_up(game, blast.center, track.impact.tick, track.marks, effects);
-}
-
 /// Where a shot `seat` fires along `flight` does its work, for SearchBot's aim pass: where the S2
-/// drill comes up (or what it strikes), and the mobile the SS rolls into through the ground.
+/// drill comes up, and the mobile the SS rolls into through the ground.
 pub(super) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight) -> Option<Impact> {
     let gravity = game.players().get(usize::from(seat))?.tuning().gravity.value;
     match shot {
@@ -65,56 +54,21 @@ pub(super) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight) -> Op
     }
 }
 
-/// Whether the S2 drill can strike `mobile` directly, in flight or coming up under it: every
-/// mobile but a floating one, which it passes (SW-mob: Dragon "cannot be directly hit by
-/// Nakmachine's Shot 2"). Its blast still reaches one.
-fn drill_strikes(mobile: MobileKind) -> bool {
-    match mobile {
-        MobileKind::Coilback
-        | MobileKind::Lanternwing
-        | MobileKind::Hookclaw
-        | MobileKind::Sparkhorn
-        | MobileKind::Marblemole
-        | MobileKind::Spoutpot
-        | MobileKind::Tuskrack
-        | MobileKind::Sudsotter
-        | MobileKind::Frostfin
-        | MobileKind::Herdhound
-        | MobileKind::Thistleback
-        | MobileKind::Augerdillo => true,
-        MobileKind::Kitewyrm => false,
-    }
-}
-
 /// The S2's whole way.
 struct Drilled {
-    /// The drill's flight, then the digger's bore if it dug in.
+    /// The drill's flight, then its bore if it dug in.
     legs: Vec<Leg>,
-    /// Where it goes off: in a mobile it struck, or where it came up (in a mobile standing there,
-    /// or on open ground); `Gone` if it was lost off the map.
+    /// Where it goes off: where it came up (in a mobile standing there, or on open ground); `Gone`
+    /// if it was lost off the map.
     impact: Impact,
     /// What the columns the drill flew through did to it.
     marks: Marks,
 }
 
-/// The S2 drill along `flight`, on the game as it stands: it flies until it strikes a mobile (one
-/// `drill_strikes`) or the ground, and from the ground bores on (`bore`). `gravity` is its
-/// shooter's.
+/// The S2 drill along `flight`, on the game as it stands: it flies through mobiles until it strikes
+/// the ground, and from there bores on (`bore`). `gravity` is its shooter's.
 fn drill(game: &Game, flight: Flight, gravity: f64) -> Drilled {
     let path = game.track_sensing(flight, 0, 0, GROUND);
-    if let Some((seat, tick)) = first_strike(game, &path) {
-        // Flown again only so far, so the columns past the strike don't mark it.
-        let track = game.track_until(flight, 0, 0, GROUND, tick).track;
-        let impact = Impact {
-            contact: Contact::Mobile(seat),
-            ..track.impact
-        };
-        return Drilled {
-            legs: track.legs,
-            impact,
-            marks: track.marks,
-        };
-    }
     let mut legs = path.legs.clone();
     let impact = if path.impact.contact == Contact::Terrain {
         let (leg, came_up) = bore(game, &path, gravity);
@@ -126,39 +80,12 @@ fn drill(game: &Game, flight: Flight, gravity: f64) -> Drilled {
     Drilled { legs, impact, marks: path.marks }
 }
 
-/// The first mobile the drill strikes along `path`, and the stage tick: one it can strike
-/// (`drill_strikes`), at the first tick inside its hitbox, as `Game::fly` finds a mobile.
-fn first_strike(game: &Game, path: &Track) -> Option<(u8, u32)> {
-    let frames = strikeable(game);
-    let last = path.legs.len().saturating_sub(1);
-    for (index, leg) in path.legs.iter().enumerate() {
-        for tick in leg.from..=leg.to {
-            // Off the map's edge, it is gone before it can strike anything.
-            if index == last && tick == leg.to && path.impact.contact == Contact::Gone {
-                return None;
-            }
-            let at = leg.flight.at(tick);
-            if let Some(&(seat, _)) = frames.iter().find(|(_, frame)| frame.contains(at)) {
-                return Some((seat, leg.offset + tick));
-            }
-        }
-    }
-    None
-}
-
-/// The living mobiles the drill can strike, by seat.
-fn strikeable(game: &Game) -> Vec<(u8, HitFrame)> {
-    game.hit_frames()
-        .into_iter()
-        .filter(|&(seat, _)| game.players().get(usize::from(seat)).is_some_and(|player| drill_strikes(player.mobile)))
-        .collect()
-}
-
 /// The bore on from where the drill struck the ground (`path`'s end): down into it at the angle and
 /// speed it struck, the way it was heading, under `gravity` turned upward, until the first open
 /// pixel it reaches. On level ground that is a mirror of its arc. Its leg, and where it came up: in
-/// a mobile standing there (`drill_strikes`), or on open ground; `Gone` if it left the map's sides or
-/// bottom first.
+/// a mobile standing there, or on open ground; `Gone` if it left the map's sides or bottom first. A
+/// floating mobile (`MobileKind::floats`) isn't there to come up in (`Game::grounded_frames`): its
+/// blast only reaches one across the gap under it.
 fn bore(game: &Game, path: &Track, gravity: f64) -> (Leg, Impact) {
     let struck = path.last.flight.velocity_at(path.last_tick);
     // Struck going up (the underside of a ledge), it still bores on down, as DBR's digger does.
@@ -169,7 +96,7 @@ fn bore(game: &Game, path: &Track, gravity: f64) -> (Leg, Impact) {
     };
     let terrain = game.terrain();
     let (width, height) = (f64::from(terrain.width()), f64::from(terrain.height()));
-    let frames = strikeable(game);
+    let frames = game.grounded_frames();
     let guard = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
     let mut came_up = Impact {
         tick: guard,
@@ -214,16 +141,15 @@ mod unit {
     use super::*;
     use crate::{
         game::{
-            Event, Team,
+            Event, MobileKind, Team,
             testing::{damage_to, duel_of, explosions, game_on, seat, shoot},
         },
         terrain::Terrain,
         tuning::augerdillo::MOBILE,
         units::{Facing, Power},
-        weather::{Column, WeatherKind},
     };
 
-    /// Augerdillo at x = 300 with its back to a Coilback `distance` px to its right, on flat ground.
+    /// Augerdillo at x = 300, its back to a Coilback `distance` px to its right, on flat ground.
     fn duel(distance: i32) -> Game {
         let mut game = duel_of(MobileKind::Augerdillo, MobileKind::Coilback, distance);
         game.apply(Event::Walk { seat: 0, facing: Facing::Left, steps: 0 }).unwrap();
@@ -263,7 +189,7 @@ mod unit {
         let mut game = duel(800);
         let flight = game.launch(0, Shot::S1, 150, 2.0).unwrap();
         assert!(flight.velocity.x > 0.0 && flight.velocity.y < 0.0, "facing left, it lobs to the right: {flight:?}");
-        assert!(MOBILE.fires_rear());
+        assert!(MOBILE.s1.aim.value.backward() && MOBILE.ss.aim.value.backward());
         let power = striking_power(&game, Shot::S1, 150);
         let dealt = damage_to(&shoot(&mut game, 0, Shot::S1, 150, power), 1);
         // 100-150 x 0.96 (Physical against Mechanical).
@@ -340,33 +266,57 @@ mod unit {
     }
 
     #[test]
-    fn s2_strikes_a_mobile_in_flight_as_a_round_does() {
-        let game = duel(800);
-        // The S1's power: S1 and S2 leave the barrel on the same flight.
+    fn s2_passes_through_a_mobile_in_flight_and_digs_in_beyond_it() {
+        // At a power that would strike the target with any shell, the drill flies through it and
+        // into the ground beyond.
+        let game = deep(800);
         let power = striking_power(&game, Shot::S1, 150);
         let flight = game.launch(0, Shot::S2, 150, power.bars()).unwrap();
+        assert_eq!(game.track(flight, 0, 0).impact.contact, Contact::Mobile(1));
         let drilled = drill(&game, flight, MOBILE.gravity.value);
-        assert_eq!(drilled.legs.len(), 1, "no bore");
-        assert_eq!(drilled.impact, game.track(flight, 0, 0).impact, "where any shell strikes it");
-        let mut game = game;
-        let dealt = damage_to(&shoot(&mut game, 0, Shot::S2, 150, power), 1);
-        assert!(dealt >= 182, "{dealt}");
+        assert_eq!(drilled.legs.len(), 2, "it dug in: {:?}", drilled.legs);
+        let frame = &game.hit_frames()[1].1;
+        assert!((0..=drilled.legs[0].to).any(|tick| frame.contains(drilled.legs[0].flight.at(tick))), "through the target");
+        assert!(drilled.legs[1].flight.origin.x > game.players()[1].center().x, "into the ground beyond it");
     }
 
     #[test]
-    fn s2_strikes_as_tracking_through_the_weather_does() {
-        // A column it passes after striking doesn't mark it; one it passes before does.
-        let calm = duel(800);
-        let power = striking_power(&calm, Shot::S1, 150);
-        let flight = calm.launch(0, Shot::S2, 150, power.bars()).unwrap();
-        for (x, forced) in [(700, true), (1150, false)] {
-            let mut game = calm.clone();
-            game.set_columns(vec![Column::new(WeatherKind::Force, x)]);
-            let drilled = drill(&game, flight, MOBILE.gravity.value);
-            assert_eq!(drilled.impact.contact, Contact::Mobile(1));
-            assert_eq!(drilled.marks.forced, forced, "a column at {x}");
-            assert_eq!(drilled.impact, game.track(flight, 0, 0).impact);
-        }
+    fn s2_dropped_on_a_target_close_by_comes_up_under_it() {
+        // Players drop it on a target near them (WP06-list): through it, into the ground at its feet
+        // and straight back up under it.
+        let game = deep(150);
+        let hits = (135..=165)
+            .flat_map(|aim| (1..=Power::MAX.twentieths()).map(move |twentieths| (aim, Power::from_twentieths(twentieths).unwrap())))
+            .filter(|&(aim, power)| aim_point(&game, 0, Shot::S2, game.launch(0, Shot::S2, aim, power.bars()).unwrap()).is_some_and(|impact| impact.contact == Contact::Mobile(1)))
+            .count();
+        assert!(hits > 0);
+    }
+
+    #[test]
+    fn s2_only_grazes_a_floating_mobile_it_comes_up_under() {
+        // Kitewyrm floats over the ground: the drill can't come up in it (SW-mob: Dragon "cannot be
+        // directly hit by Nakmachine's Shot 2"), and its blast reaches it only across the gap under
+        // it, "(almost) immune" (TIR). A Coilback standing there takes it full.
+        let come_up_under = |mobile: MobileKind| {
+            let terrain = Terrain::from_fn(2400, 1000, |_, y| y >= 500).unwrap();
+            let game = game_on(terrain, vec![seat(Team::A, MobileKind::Augerdillo, 300, Facing::Left), seat(Team::B, mobile, 1100, Facing::Left)]);
+            let foot = game.players()[1].footing.world();
+            let (aim, power) = (135..=165)
+                .flat_map(|aim| (1..=Power::MAX.twentieths()).map(move |twentieths| (aim, Power::from_twentieths(twentieths).unwrap())))
+                .min_by(|a, b| {
+                    let off = |(aim, power): (i16, Power)| drill(&game, game.launch(0, Shot::S2, aim, power.bars()).unwrap(), MOBILE.gravity.value).impact.at.distance(foot);
+                    off(*a).total_cmp(&off(*b))
+                })
+                .unwrap();
+            let impact = drill(&game, game.launch(0, Shot::S2, aim, power.bars()).unwrap(), MOBILE.gravity.value).impact;
+            assert!(impact.at.distance(foot) < 3.0, "{mobile:?}: {impact:?}");
+            (impact.contact, damage_to(&shoot(&mut game.clone(), 0, Shot::S2, aim, power), 1))
+        };
+        let (contact, standing) = come_up_under(MobileKind::Coilback);
+        assert_eq!(contact, Contact::Mobile(1));
+        let (contact, floating) = come_up_under(MobileKind::Kitewyrm);
+        assert_eq!(contact, Contact::Terrain, "never in it");
+        assert!(floating > 0 && floating * 3 < standing, "it grazes it: {floating} against {standing}");
     }
 
     #[test]
@@ -449,26 +399,31 @@ mod unit {
     }
 
     #[test]
-    fn ss_hurts_most_at_the_weak_spot_low_on_a_target() {
-        // Fired flat through the ground beside the target, it strikes low on its side; lobbed, it
-        // strikes the top of its body.
-        let low_and_high = |aim: i16| {
-            let game = deep(600);
-            let hitbox = game.players()[1].tuning().hitbox.value;
-            (1..=Power::MAX.twentieths())
-                .filter_map(|twentieths| {
-                    let power = Power::from_twentieths(twentieths).unwrap();
-                    let impact = aim_point(&game, 0, Shot::Ss, game.launch(0, Shot::Ss, aim, power.bars()).unwrap())?;
-                    (impact.contact == Contact::Mobile(1)).then(|| (game.players()[1].pose().to_body(impact.at).y - hitbox.y, power))
-                })
-                .collect::<Vec<_>>()
-        };
-        let dealt = |aim: i16, power: Power| damage_to(&shoot(&mut deep(600), 0, Shot::Ss, aim, power), 1);
-        let flat = low_and_high(170).into_iter().max_by(|a, b| a.0.total_cmp(&b.0)).expect("a flat shot strikes it");
-        let lob = low_and_high(135).into_iter().min_by(|a, b| a.0.total_cmp(&b.0)).expect("a lob strikes it");
-        assert!(flat.0 > lob.0, "the flat shot strikes lower: {flat:?} {lob:?}");
-        let (low, high) = (dealt(170, flat.1), dealt(135, lob.1));
-        assert!(low > high && high >= 336, "{low} {high}");
+    fn ss_is_a_direct_hit_worth_most_overlapping_its_target() {
+        // It goes off where it first touches a mobile: lobbed in from afar, the edge of its body;
+        // fired from overlapping it, point blank, near its center, its weak spot (GF-max).
+        let afar = deep(600);
+        let power = striking_power(&afar, Shot::Ss, 150);
+        let impact = aim_point(&afar, 0, Shot::Ss, afar.launch(0, Shot::Ss, 150, power.bars()).unwrap()).unwrap();
+        let target = afar.players()[1];
+        let hitbox = target.tuning().hitbox.value;
+        assert!(
+            target.pose().gap(hitbox, impact.at) < 1e-9 && afar.players()[1].center().distance(impact.at) > 15.0,
+            "at its edge: {impact:?}"
+        );
+        let from_afar = damage_to(&shoot(&mut afar.clone(), 0, Shot::Ss, 150, power), 1);
+        // A step behind it, 25 px down: the mortar's mouth at 170 is inside the target, at the height
+        // of its center.
+        let terrain = Terrain::from_fn(2400, 1000, |x, y| y >= if x < 322 { 525 } else { 500 }).unwrap();
+        let mut close = game_on(
+            terrain,
+            vec![seat(Team::A, MobileKind::Augerdillo, 300, Facing::Left), seat(Team::B, MobileKind::Coilback, 343, Facing::Left)],
+        );
+        let muzzle = close.launch(0, Shot::Ss, 170, 1.0).unwrap().origin;
+        assert!(close.players()[1].center().distance(muzzle) < 5.0, "{muzzle:?}");
+        let overlapping = damage_to(&shoot(&mut close, 0, Shot::Ss, 170, Power::nearest(1.0)), 1);
+        // 350-500 x 0.96 (Physical against Mechanical).
+        assert!(overlapping >= 460 && from_afar < overlapping - 50 && from_afar >= 336, "{overlapping} against {from_afar}");
     }
 
     #[test]

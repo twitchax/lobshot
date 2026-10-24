@@ -99,8 +99,8 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
-        62,
-        0xc590_c0e9_e2d2_e4b3,
+        99,
+        0x8ac2_aea3_4f00_38d3,
     ),
 ];
 
@@ -525,8 +525,7 @@ fn roster_augerdillo() -> Setup {
 
 /// Plays a game with a simple scripted player and returns its log. The dead spin their slot
 /// machines whenever they may. Every third turn the wind changes (if `winds` has any); every
-/// fourth, the player walks toward the nearest enemy (then turns its back on it if it fires over
-/// its back); every seventh, it times out. Every turn it
+/// fourth, the player walks toward the nearest enemy; every seventh, it times out. Every turn it
 /// first uses the first item it can. Otherwise it cycles S1, S2, SS (S1 when SS is locked or off) at the
 /// middle of the shot's true range, with the power step that lands closest to the enemy.
 fn play(setup: Setup, winds: &[Wind]) -> Log {
@@ -580,7 +579,8 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
             continue;
         }
-        if me.tuning().fires_rear() {
+        // A mobile that fires over its back turns it to the enemy.
+        if me.tuning().s1.aim.value.backward() {
             apply(&mut game, Event::Walk { seat, facing: toward.flip(), steps: 0 });
         }
         if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {

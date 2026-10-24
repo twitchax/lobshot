@@ -48,8 +48,10 @@ pub const MOBILE: MobileTuning = MobileTuning {
     ),
     move_budget: picked(
         60,
-        "Very low mobility (SW-mob, DB-mob), with no number anywhere: two thirds of everyone's 90 (OB), below Spoutpot's poor 70.",
+        "Very low mobility (SW-mob, DB-mob, WP06-list, GF-exp), with no number anywhere: two thirds of everyone's 90 (OB), below Spoutpot's poor 70.",
     ),
+    // GF-exp says "poor movement and climbing" and GF-lee rates its climbing 2 of 5 (CONTRADICTION);
+    // StrategyWiki comes first.
     climb_px: picked(
         10,
         "High climbing ability (SW-mob, DB-mob): a 1 px step may rise 10 px, slopes up to about 84 degrees, where everyone else's 6 takes about 80.",
@@ -99,15 +101,19 @@ pub const S1_BLAST: Tuned<f64> = picked(
 );
 
 /// S2: a drill that "digs into the ground upon contact, and returns to the surface where it
-/// detonates" (SW-mob). It strikes a mobile it meets in flight as a round does: players drop it on
-/// top of a target close by (WP06-list). From the ground it "resurfaces further in a reverse
-/// parabolic arc of its original path through the air", pulled up by a "reverse gravity", and "the
-/// faster the shot is going when it hits the ground, the further underground it will travel"
-/// (WP06-list): it bores on down at the angle and speed it struck, the way it was heading, under
-/// its gravity turned upward, and goes off at the first open pixel it reaches. DBR's clone does the
-/// same with the drill's launch speed (CONTRADICTION; GunBound first). No wind reaches it in the
-/// ground (DBR), and no weather column does either (our pick: it is in the rock). One that leaves
-/// the map first is lost.
+/// detonates" (SW-mob). Until it has dug in it "will pass right through tanks" (GF-exp, CR-sage;
+/// DBR alike), so players drop it on a target close by (WP06-list) to come up under it. From the
+/// ground it "resurfaces further in a reverse parabolic arc of its original path through the air",
+/// pulled up by a "reverse gravity", and "the faster the shot is going when it hits the ground, the
+/// further underground it will travel" (WP06-list; GF-exp, CR-ga2): it bores on down at the angle
+/// and speed it struck, the way it was heading (a shot the wind turned back bores back, DAT-nak),
+/// under its gravity turned upward, and goes off at the first open pixel it reaches (GF-exp,
+/// GF-ant), under a thin ledge too (DAT-nak). DBR's clone does the same with the drill's launch
+/// speed (CONTRADICTION; GunBound first). No wind reaches it in the ground (GF-max, DBR; CR-ga1
+/// says some does, CONTRADICTION), nor a tornado (CR-ga1) or any other column. It digs no tunnel,
+/// only a crater where it comes up (GF-exp, GF-ant, DBR). One that leaves the map first is lost
+/// (our pick: no source says). A floating mobile can't be struck by it (SW-mob), only grazed
+/// (GF-tiro: "(almost) immune").
 pub const S2_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 190, max: 300 }, &["SW-mob", "DB-mob"]);
 pub const S2_BLAST: Tuned<f64> = picked(20.0, "DBR digs S2's crater as S1's (38 by 41), about Armor's S2 warhead's (34 by 24): Coilback's S2 warhead's 20.");
 /// The bore's speed as a share of the speed the drill struck the ground at.
@@ -117,12 +123,14 @@ pub const S2_BURROW_SPEED: Tuned<f64> = cited(1.0, &["WP06-list"]);
 pub const S2_BURROW_LIFT: Tuned<f64> = cited(1.0, &["WP06-list", "DBR"]);
 
 /// SS: a mini armadillo that "ignores the land, going right through it" and "explodes only when it
-/// hits a player (whether ally or enemy)" (SW-mob); it flies until it hits one or leaves the map
-/// (WP06-list), as heavy as S1 (WP06-list; CDW-pt says heavier, CONTRADICTION). SW-mob counts
-/// corpses and CDW-pt doesn't (CONTRADICTION); lobshot clears the dead from the map. WP06-list puts
-/// its most at about 300 (CONTRADICTION). It "won't do much damage unless you are lucky and
-/// you hit the mobile's 'weak spot'" (SW-mob, DB-mob), which no source places; a low shot hits it
-/// "doing the most dmg" (CR-kex). Our pick reads it as low on the body: its blast burns low
-/// (`damage::low`), most at a target's feet and least at the top of its body, where a lob strikes.
+/// hits a player (whether ally or enemy)" (SW-mob, GF-ant, GF-cyb); one that hits no one drops out
+/// of the map (GF-ant, GF-tiro). It is as heavy as S1 (WP06-list, CR-ga1; CDW-pt says heavier,
+/// CONTRADICTION). SW-mob, GF-ant and GF-cyb count corpses, CDW-pt doesn't (CONTRADICTION); lobshot
+/// clears the dead from the map. It "won't do much damage unless you are lucky and you hit the
+/// mobile's 'weak spot'" (SW-mob, DB-mob), which no source places; it "can do 400+ damage, if you
+/// are overlapping an enemy mobile" and usually much less (GF-max). Our pick: it goes off where it
+/// first touches a mobile, a direct hit worth most at the hitbox's center (`damage::damage`), which
+/// a shot from afar, striking the body's edge, never reaches. The 2003-05 guides put its most at
+/// 250-300 (WP06-list, GF-exp, GF-tiro, DAT-nak; CONTRADICTION).
 pub const SS_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 350, max: 500 }, &["SW-mob", "DB-mob"]);
 pub const SS_BLAST: Tuned<f64> = picked(25.0, "\"A bit larger explosion radius\" than S1's (WP06-list); DBR's crater is larger still (60 by 63).");

@@ -5,10 +5,10 @@
 
 use bevy::{ecs::system::SystemParam, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
-    body::elevation,
     drops::DropKind,
     game::{Effect, Game, Shot, SsState},
     items::Item,
+    tuning::AimRange,
     units::Vec2 as SimVec2,
     weather::{Weather, WeatherKind},
 };
@@ -371,23 +371,22 @@ fn delay_label(delay: i64, base: Option<i64>, yours: bool) -> String {
     }
 }
 
-/// The angle readout: how high the aim is above the horizon it fires toward (`body::elevation`),
-/// so a shot over the back (Augerdillo's) reads as GunBound showed it, and last turn's.
-fn angle_label(aim: i16, last: Option<i16>) -> String {
-    let aim = elevation(aim);
-    // The default font is ASCII only, so no degree sign until lobshot ships a font.
-    match last.map(elevation) {
-        Some(last) => format!("Angle {aim} (last {last})"),
-        None => format!("Angle {aim}"),
-    }
-}
-
 /// The SS button's label: its lock in own turns left, or that sudden death took it.
 fn ss_label(ss: SsState) -> String {
     match ss {
         SsState::Ready => shot_label(Shot::Ss).to_owned(),
         SsState::Locked(turns) => format!("SS in {turns}"),
         SsState::Off(_) | SsState::Armed(_) => "SS off".to_owned(),
+    }
+}
+
+/// The aim as a player reads it: degrees above level, over the back too (`AimRange::elevation`).
+fn angle_label(aim: i16, last: Option<i16>, range: Option<AimRange>) -> String {
+    let shown = |aim: i16| range.map_or(aim, |range| range.elevation(aim));
+    // The default font is ASCII only, so no degree sign until lobshot ships a font.
+    match last {
+        Some(last) => format!("Angle {} (last {})", shown(aim), shown(last)),
+        None => format!("Angle {}", shown(aim)),
     }
 }
 
@@ -460,7 +459,13 @@ fn update(game: Option<Res<Match>>, session: Res<Session>, controls: Res<Control
                 }
             }
             Readout::Turn => whose.clone(),
-            Readout::Angle => angle_label(controls.aim, controls.last_aim),
+            Readout::Angle => {
+                let range = session
+                    .my_seat()
+                    .and_then(|seat| game.predicted.players().get(usize::from(seat)))
+                    .map(|me| controls.shot.tuning(me.tuning()).aim.value);
+                angle_label(controls.aim, controls.last_aim, range)
+            }
             Readout::Sudden if clock.seat.is_some() => sudden_label(game.sudden_death()),
             Readout::Sudden => String::new(),
             Readout::Weather => weather_label(game.predicted.weather()),
@@ -970,11 +975,12 @@ mod unit {
     }
 
     #[test]
-    fn the_angle_reads_above_the_horizon_it_fires_toward() {
-        assert_eq!(angle_label(35, None), "Angle 35");
-        assert_eq!(angle_label(35, Some(40)), "Angle 35 (last 40)");
-        // Over the back: 150 is 30 above the horizon behind.
-        assert_eq!(angle_label(150, Some(165)), "Angle 30 (last 15)");
+    fn the_angle_reads_as_degrees_above_level_over_the_back_too() {
+        use lobshot_sim::game::MobileKind;
+        let behind = MobileKind::Augerdillo.tuning().s1.aim.value;
+        assert_eq!(angle_label(150, Some(165), Some(behind)), "Angle 30 (last 15)");
+        assert_eq!(angle_label(35, Some(40), Some(MobileKind::Coilback.tuning().s1.aim.value)), "Angle 35 (last 40)");
+        assert_eq!(angle_label(30, None, None), "Angle 30");
     }
 
     #[test]

@@ -175,7 +175,7 @@ const PORTRAIT_AIM: f32 = 35.0;
 /// A portrait's cannon aim for `mobile`: `PORTRAIT_AIM` above level ahead, or over the back for a
 /// mobile that fires that way (Augerdillo).
 fn portrait_aim(mobile: MobileKind) -> f32 {
-    if mobile.tuning().fires_rear() { 180.0 - PORTRAIT_AIM } else { PORTRAIT_AIM }
+    if mobile.tuning().s1.aim.value.backward() { 180.0 - PORTRAIT_AIM } else { PORTRAIT_AIM }
 }
 
 fn portrait_frame() -> impl Bundle {

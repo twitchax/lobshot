@@ -4,9 +4,11 @@
 //! `tool_fit` below).
 //!
 //! The setup is a duel on flat ground: the shooter (Coilback, Armor's behavior and GunBound's
-//! reference shot, unless a test says otherwise) at x = 300 facing right, and a Coilback target
-//! `distance` px away. "Ideal power" is the continuous power whose flight passes through the
-//! target's hitbox center. Aim limits don't apply here: the formulas are about the ballistics.
+//! reference shot, unless a test says otherwise) at x = 300 shooting right, and a Coilback target
+//! `distance` px away. A mobile that fires over its back faces away, and every angle here is above
+//! level toward the target, as players read it (`AimRange::elevation`). "Ideal power" is the
+//! continuous power whose flight passes through the target's hitbox center. Aim limits don't apply
+//! here: the formulas are about the ballistics.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -123,8 +125,6 @@ fn duel(distance: i32) -> Game {
     duel_of(MobileKind::Coilback, distance)
 }
 
-/// A duel with `shooter` at x = 300 and the target `distance` px to its right. The shooter faces
-/// the target, or turns its back on it if it fires over its back (Augerdillo).
 fn duel_of(shooter: MobileKind, distance: i32) -> Game {
     Game::new(
         &Setup {
@@ -134,7 +134,8 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
                     team: Team::A,
                     mobile: shooter,
                     spawn_x: 300,
-                    facing: if shooter.tuning().fires_rear() { Facing::Left } else { Facing::Right },
+                    // A mobile that fires over its back turns it to the target.
+                    facing: if shooter.tuning().s1.aim.value.backward() { Facing::Left } else { Facing::Right },
                     items: Loadout::default(),
                 },
                 Seat {
@@ -184,11 +185,11 @@ fn flight(game: &Game, aim: i16, bars: f64, accel: Vec2) -> Flight {
     flight_of(game, Shot::S1, aim, bars, accel)
 }
 
-/// `flight`, leaving `shot`'s barrel. `aim` is the formulas' angle, above level toward the target:
-/// over the back for a mobile that fires that way.
+/// `flight`, leaving `shot`'s barrel, `aim` degrees above level toward the target: over the back
+/// for a mobile that fires that way.
 fn flight_of(game: &Game, shot: Shot, aim: i16, bars: f64, accel: Vec2) -> Flight {
-    let aim = if game.players()[0].tuning().fires_rear() { 180 - aim } else { aim };
-    let mut flight = game.launch(0, shot, aim, bars).unwrap();
+    let backward = shot.tuning(game.players()[0].tuning()).aim.value.backward();
+    let mut flight = game.launch(0, shot, if backward { 180 - aim } else { aim }, bars).unwrap();
     flight.accel = accel;
     flight
 }
@@ -344,6 +345,23 @@ fn formula_nak_shot_formula_at_its_own_angles() {
         let game = duel_of(MobileKind::Augerdillo, (screens * SCREEN) as i32);
         assert_bars(&format!("Nak formula, {aim} degrees, {screens} screens"), ideal_power(&game, aim, calm), cr_nak(screens, aim));
     }
+}
+
+#[test]
+fn formula_nak_guides_high_shots() {
+    // CR-ga1, unfitted: 70 degrees lands half a screen at about 2.1 bars. CR-ga1, CR-sage and CR-fun
+    // put a full-power shot one screen away at 76 to 79 degrees.
+    let calm = tuned_for(MobileKind::Augerdillo, Wind::default());
+    assert_bars("Nak 70 degrees, half a screen", ideal_power(&duel_of(MobileKind::Augerdillo, 400), 70, calm), 2.1);
+    let game = duel_of(MobileKind::Augerdillo, 800);
+    let target = target_center(&game);
+    let full = (60..=89)
+        .min_by(|&a, &b| {
+            let miss = |aim| miss_below(&flight(&game, aim, 4.0, calm), target).map_or(f64::MAX, f64::abs);
+            miss(a).total_cmp(&miss(b))
+        })
+        .unwrap();
+    assert!((76..=79).contains(&full), "a full-power shot lands one screen away at {full} degrees");
 }
 
 #[test]
@@ -675,7 +693,7 @@ fn tool_fit() {
     println!("Augerdillo wind sensitivity: {sensitivity:.2}");
     // The Nak formula's other entries, against Augerdillo's fit (docs/research/augerdillo.md).
     let nak_calm = Vec2::new(0.0, gravity);
-    for aim in [15, 30, 45, 50, 60] {
+    for aim in [15, 30, 45, 50, 60, 70] {
         for eighths in [2, 4, 6, 8, 10, 12] {
             let screens = f64::from(eighths) / 8.0;
             let model = ideal_power(&duel_of(MobileKind::Augerdillo, 100 * eighths), aim, nak_calm);

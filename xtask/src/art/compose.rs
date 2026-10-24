@@ -122,8 +122,8 @@ mod unit {
 
     /// The spike's cannon covered the snail's antennae at aim 0. Past its ball joint, a barrel (the
     /// cannon, or a second barrel) may not cross anything else on the mobile, the other barrel
-    /// included, from level (0) up to the highest aim any shot allows; for a mobile that fires over
-    /// its back, from the lowest aim any shot allows down to level behind it (180).
+    /// included, from level (0) up to the highest aim any shot allows; over the back, from the
+    /// lowest aim down to level behind (180).
     #[test]
     fn the_barrels_clear_the_body_at_every_aim() {
         // The ball joint and the turret cup it sits in overlap the barrel by design.
@@ -133,7 +133,7 @@ mod unit {
             let mobile = Mobile::render(&sources(), kind, &rig, "pip", 2.0).unwrap();
             let tuning = kind.tuning();
             let ranges = [tuning.s1.aim, tuning.s2.aim, tuning.ss.aim].map(|aim| aim.value);
-            let (low, high) = if tuning.fires_rear() {
+            let (bottom, top) = if ranges.iter().all(|range| range.backward()) {
                 (ranges.iter().map(|range| range.min).min().unwrap(), 180)
             } else {
                 (0, ranges.iter().map(|range| range.max).max().unwrap())
@@ -148,7 +148,7 @@ mod unit {
                 // `load_rig` checked each barrel's part pivots where sim::tuning aims it from.
                 let (px, py) = rig.parts.iter().find(|part| part.id == barrel.part).unwrap().at;
                 let pivot = pose.to_world(Vec2::new(px, py));
-                for aim in (low..=high).step_by(5) {
+                for aim in (bottom..=top).step_by(5) {
                     let aim = f64::from(aim);
                     let mut drawn = Pixmap::new(400, 300).unwrap();
                     mobile.draw_only(&mut drawn, view, &pose, aim, |id| id == barrel.part);

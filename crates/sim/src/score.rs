@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base::Res,
-    body::elevation,
     game::{Death, Effect, Event, Game, Leg},
     log::Log,
     map::MapAssets,
@@ -229,8 +228,8 @@ fn tricks(before: &Game, event: &Event) -> Vec<Bonus> {
         bonuses.push(Bonus::BankShot);
     }
     let flown = seconds(track.impact.tick);
-    // How high it was aimed above the horizon it left by: over the back, too (Augerdillo's).
-    let high = elevation(aim) >= HIGH_ANGLE_AIM.value;
+    // Degrees above level, whichever way it left: over the back too.
+    let high = shot.tuning(before.players()[usize::from(seat)].tuning()).aim.value.elevation(aim) >= HIGH_ANGLE_AIM.value;
     if high && flown >= ULTRA_HIGH_ANGLE_SECONDS.value {
         bonuses.push(Bonus::Moonshot);
     } else if high && flown >= HIGH_ANGLE_SECONDS.value {
@@ -423,7 +422,6 @@ mod unit {
         let flown = seconds(game.track(game.launch(0, Shot::S1, 150, power.bars()).unwrap(), 0, 0).impact.tick);
         assert!(flown >= 2.5, "{flown:.2} s");
         assert_eq!(tricks_of(&game, 150, power), [], "30 degrees, not 150");
-        assert_eq!(elevation(110), 70, "70 degrees over the back would be high");
     }
 
     #[test]
