@@ -205,6 +205,8 @@ pub struct Me<'a> {
     pub can_spin: bool,
     /// Dead in Score, it may pick where to drop back in.
     pub can_respawn: bool,
+    /// The column it drops back in down, once picked.
+    pub drops_at: Option<i32>,
 }
 
 /// Publishes what the client is doing as `window.lobshot`, for the browser smoke test to watch and
@@ -213,7 +215,8 @@ pub struct Me<'a> {
 /// ```text
 /// { screen, turns, started, seat,
 ///   picks: { mobile: "Coilback" | "Random", loadout: ["Dual", ..] },
-///   me: { mobile, alive, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin, can_respawn } | null,
+///   me: { mobile, alive, x, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin, can_respawn,
+///         drops_at } | null,
 ///   sudden_death: { kind, in, on } | null,
 ///   sounds: { loaded, played: { blast: 2, .. } },
 ///   buttons: [{ action, x, y, enabled }],
@@ -248,6 +251,7 @@ pub fn publish(now: &Published) {
         let object = js_sys::Object::new();
         set(&object, "mobile", &name(&player.mobile));
         set(&object, "alive", &player.alive.into());
+        set(&object, "x", &player.footing.x.into());
         set(&object, "hp", &player.hp.into());
         set(&object, "shield", &player.shield.into());
         let items: js_sys::Array = player.items.iter().map(|item| item.map_or(JsValue::NULL, |item| name(&item))).collect();
@@ -262,6 +266,7 @@ pub fn publish(now: &Published) {
         set(&object, "ss", &ss.into());
         set(&object, "can_spin", &me.can_spin.into());
         set(&object, "can_respawn", &me.can_respawn.into());
+        set(&object, "drops_at", &me.drops_at.map_or(JsValue::NULL, JsValue::from));
         object.into()
     });
     set(&state, "me", &me);

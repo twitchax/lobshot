@@ -371,6 +371,13 @@ fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Se
             ss: game.predicted.ss_state(seat).ok()?,
             can_spin: game.confirmed.can_spin(seat),
             can_respawn: game.confirmed.can_respawn(seat),
+            drops_at: game
+                .confirmed
+                .respawns()
+                .iter()
+                .find(|respawn| respawn.seat == seat)
+                .and_then(|respawn| respawn.pick)
+                .map(|pick| pick.x),
         })
     });
     web::publish(&web::Published {

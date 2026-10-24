@@ -12,7 +12,7 @@ use lobshot_assets::Sound;
 use lobshot_protocol::pacing::{self, FALL_SECONDS};
 use lobshot_sim::{
     ballistics::{self, Spin},
-    game::{Death, Effect, Event, Leg, MobileKind, Shot, SuddenDeathKind, Team},
+    game::{Death, Effect, Event, Leg, MobileKind, Phase, Shot, SuddenDeathKind, Team},
     items::Item,
     mines::{Mine, MineId},
     movement::Footing,
@@ -1057,7 +1057,12 @@ fn adopt_turn(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time>
     if timeline.busy() {
         return;
     }
-    let current = super::world::current_seat(&game);
+    // The confirmed game's turn, not the prediction's: a predicted walk off the map ends the turn
+    // ahead of the server, whose echo then starts the next one, which would count it twice.
+    let current = match game.confirmed.phase() {
+        Phase::Turn { seat } => Some(seat),
+        Phase::Over { .. } => None,
+    };
     if clock.seat != current {
         match current {
             Some(seat) => clock.start(seat, time.elapsed_secs_f64()),
