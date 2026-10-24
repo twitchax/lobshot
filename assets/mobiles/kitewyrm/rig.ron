@@ -1,0 +1,32 @@
+// Kitewyrm: a festival paper-dragon kite, floating over the little reel cart it is flown from,
+// its gecko pilot steering by the horns. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the ground contact between the cart's wheels,
+// +x = facing, +y = down; facing left mirrors x. Every part SVG puts its pivot at its own origin,
+// so `at` is where that pivot lands in the body frame, and `cargo xtask art` renders each part with
+// its pivot at the image's center (lobshot_assets::ART_SCALE pixels per world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, cannon pivot and barrel length) lives in
+// sim::tuning::kitewyrm; `cargo xtask art` refuses a rig whose cannon disagrees with it. The kite
+// floats over the cart (sim::tuning::kitewyrm::HOVER): the cart and the string aren't hittable.
+MobileRig(
+    name: "Kitewyrm",
+    parts: [
+        // Drawn in z order, lowest first. spin: rolls as it moves; aim: turns with the cannon.
+        // The wheels sit under the cart's plank.
+        (id: "wheel_rear",  file: "wheel.svg",  at: (-12.0, -4.0), z: 1, spin: true),
+        (id: "wheel_front", file: "wheel.svg",  at: (12.0, -4.0),  z: 1, spin: true),
+        (id: "body",        file: "body.svg",   at: (0.0, 0.0),    z: 2),
+        // The head lifts on its neck joint, at the front of the kite.
+        (id: "cannon",      file: "cannon.svg", at: (20.0, -40.0), z: 3, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where shots leave, in the cannon's frame at aim 0 (pointing +x): the fireball in the
+        // mouth, one barrel length (sim::tuning) from the pivot.
+        muzzle: (30.0, 0.0),
+    ),
+    // Riders are cosmetic and swappable; a rider's origin is its seat. The rider rides on the
+    // saddle cloth on the kite's back.
+    rider_socket: (at: (-12.0, -54.0), z: 4),
+)

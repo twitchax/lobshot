@@ -1002,6 +1002,10 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Kitewyrm => format!(
+            "A kite dragon that floats {:.0} px over the ground: what rolls or walks along the ground (marbles, sponges, suds) passes under it, and a blast on the ground beneath only grazes it. Light shots. S1 is one fireball; S2 four, leaving one after another in two streams that spread apart with range, so all four land only up close; SS a red orb that calls five mini-dragons from a fan above where it lands, each flying straight into that spot, gravity and wind aside, and going off on the first thing in its way: land over a target shields it. It moves far and climbs almost anything.",
+            tuning::kitewyrm::HOVER.value
+        ),
     }
 }
 

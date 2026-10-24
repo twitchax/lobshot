@@ -1,8 +1,8 @@
 //! Each mobile's shots, one module per mobile, over the machinery they share: what rides on a
 //! turn's shots (`Salvo`: items, sudden death, splash already dealt), one volley's blasts and
-//! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`), bolts (`bolt`),
-//! helix strands (`helix`), orbiters (`orbit`), bouncing balls (`bounce`), blobs that walk the
-//! ground (`crawl`) and homing missiles (`homing`).
+//! landings (`Gun`), projectiles that land in turn (`barrage`, `land_in_order`) or ripple out one
+//! after another (`ripple`), bolts (`bolt`), helix strands (`helix`), orbiters (`orbit`), bouncing
+//! balls (`bounce`), blobs that walk the ground (`crawl`) and homing missiles (`homing`).
 
 pub(crate) mod bolt;
 mod bounce;
@@ -13,6 +13,7 @@ mod helix;
 mod herdhound;
 mod homing;
 mod hookclaw;
+mod kitewyrm;
 mod lanternwing;
 mod marblemole;
 mod orbit;
@@ -193,6 +194,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Frostfin => frostfin::fire(game, &gun, shot, effects),
         MobileKind::Herdhound => herdhound::fire(game, &gun, shot, effects),
         MobileKind::Thistleback => thistleback::fire(game, &gun, shot, effects),
+        MobileKind::Kitewyrm => kitewyrm::fire(game, &gun, shot, effects),
     }
 }
 
@@ -218,7 +220,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
         | MobileKind::Herdhound
-        | MobileKind::Thistleback => None,
+        | MobileKind::Thistleback
+        | MobileKind::Kitewyrm => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
     }
 }
@@ -243,6 +246,42 @@ fn teleport(game: &mut Game, gun: &Gun, effects: &mut Vec<Effect>) {
             tick: track.impact.tick,
         });
     }
+}
+
+/// Projectiles rippling out of one barrel, one after another: Tuskrack's rockets, Kitewyrm's
+/// fireballs.
+struct Rack {
+    /// Each one's aim (degrees) and power (bars) off the shot's, in the order they leave.
+    spread: &'static [(i16, f64)],
+    /// Ticks between one leaving and the next.
+    every: u32,
+    blast: f64,
+    damage: DamageRange,
+    /// Whether one that strikes a mobile carves the ground there.
+    direct_crater: bool,
+}
+
+/// Fires `rack`'s projectiles one after another from where the shooter stands, each its own launch.
+fn ripple(game: &mut Game, gun: &Gun, rack: &Rack, effects: &mut Vec<Effect>) {
+    let launches: Vec<(Flight, u32)> = (0_u32..)
+        .zip(rack.spread)
+        .filter_map(|(order, &(aim, bars))| Some((gun.launch(game, aim, bars)?, order * rack.every)))
+        .collect();
+    let (paths, mut landings) = land_in_order(
+        game,
+        launches.len(),
+        |game, index| game.track_launched(launches[index].0, launches[index].1),
+        |game, _, track, out| {
+            let crater = if rack.direct_crater || !matches!(track.impact.contact, Contact::Mobile(_)) {
+                rack.blast
+            } else {
+                0.0
+            };
+            gun.land(game, &gun.blast_on(track, rack.blast, rack.damage), crater, &track.impact, track.marks, out);
+        },
+    );
+    effects.extend(paths.into_iter().map(|legs| Effect::Fired { seat: gun.seat, legs }));
+    effects.append(&mut landings);
 }
 
 /// Flies several projectiles at once. Each lands (`land`, with its index) in the order it hits,
