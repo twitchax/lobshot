@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="86" height="78" viewBox="-38 -74 86 78">
+  <!-- Flarecrow body: a crow signalman in a peaked cap riding at the front of a wooden flare cart,
+       a signal lantern hung off the cart's nose. The cart (its tail post, far rim, near wall,
+       undercarriage), the crow (tail, body, folded wing, head, beak, cap) and the flare's pull
+       lever for the rider, who rides in the cart behind the crow. The wheels spin; the flare
+       mortar on the tail post is the cannon, and fires over the back.
+       Origin = ground contact center (= rig.ron body frame). Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.82" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- the crow, piece by piece: body, head and the fan of its tail -->
+    <ellipse id="crowBody" cx="14" cy="-40" rx="14" ry="12.6"/>
+    <circle id="crowHead" cx="24" cy="-55.4" r="8.8"/>
+    <path id="crowTail" d="M 4,-44 L -3.6,-53.6 Q -4.6,-56.4 -1.6,-56.4 L 2.4,-55.8 Q 5.2,-55.6 6.4,-53.6 L 10,-47 Z"/>
+    <g id="crow"><use href="#crowTail"/><use href="#crowBody"/><use href="#crowHead"/></g>
+    <clipPath id="crowClip"><use href="#crowTail"/><use href="#crowBody"/><use href="#crowHead"/></clipPath>
+    <radialGradient id="crowLight" cx="8" cy="-60" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c8ccff" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#c8ccff" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#140c1e" stop-opacity="0"/>
+      <stop offset="1" stop-color="#140c1e" stop-opacity="0.3"/>
+    </radialGradient>
+    <path id="wall" d="M -32,-31.4 H 32 L 29.2,-14.6 Q 28.8,-12.6 26.8,-12.6 H -26.8 Q -28.8,-12.6 -29.2,-14.6 Z"/>
+    <clipPath id="wallClip"><use href="#wall"/></clipPath>
+    <radialGradient id="wallLight" cx="-14" cy="-32" r="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe2b0" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#ffe2b0" stop-opacity="0"/>
+      <stop offset="0.8" stop-color="#2a1208" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2a1208" stop-opacity="0.3"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the mortar's tail post, rising off the cart's back corner (the swivel on it is the cannon's) -->
+    <path d="M -29.6,-30 L -27,-36" stroke="#2a1a2e" stroke-width="4.4" fill="none"/>
+    <path d="M -29.6,-30 L -27,-36" stroke="#5a5870" stroke-width="2.6" fill="none"/>
+    <path d="M -30.2,-31.4 L -28.4,-35" stroke="#8a88a6" stroke-width="0.8" fill="none"/>
+
+    <!-- the cart's far rim, seen over the near wall -->
+    <path d="M -30,-33.6 H 30" stroke="#2a1a2e" stroke-width="3" fill="none"/>
+    <path d="M -30,-33.6 H 30" stroke="#8a5530" stroke-width="1.6" fill="none"/>
+
+    <!-- the crow, a size up from its drawing, sitting on the cart's floor ahead of the rider -->
+    <g transform="translate(18,-31) scale(1.1) translate(-15,31)">
+    <!-- the crow: an outline pass, then the fills over it, so only its outer edge is inked -->
+    <use href="#crow" stroke="#2a1a2e" stroke-width="2"/>
+    <use href="#crow" fill="#3d4166"/>
+    <g clip-path="url(#crowClip)">
+      <!-- shade down the back and under the belly, a blue sheen on the breast and crown -->
+      <path d="M -10,-40 C 4,-36 18,-34 30,-38 V -20 H -10 Z" fill="#2f3253"/>
+      <path d="M 20,-48 C 26,-46 29,-41 28.6,-33" stroke="#5b6194" stroke-width="2.4" fill="none"/>
+      <path d="M 18,-61 C 21,-63.6 25.4,-64 28.4,-62" stroke="#7d84b8" stroke-width="1.3" fill="none"/>
+      <path d="M -1.4,-54.4 L 4,-48.4 M 2.6,-55.4 L 6.4,-49.6" stroke="#5b6194" stroke-width="0.8" fill="none"/>
+      <rect x="-12" y="-70" width="48" height="50" fill="url(#crowLight)"/>
+    </g>
+    <!-- the folded wing, feather tips to the back -->
+    <path d="M 22,-46 C 16,-48.6 7,-47.4 2.4,-42.4 L -1.6,-36.8 Q -0.8,-35.4 1,-36.4 L 0.2,-33.6 Q 1.2,-32.2 3,-33.4 L 3.4,-31 Q 4.8,-30 6.4,-31.6 C 14,-31 21,-35 22,-46 Z" fill="#2f3253" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 19,-45 C 13.4,-46.4 7.6,-45 4.4,-41.6" stroke="#5b6194" stroke-width="1" fill="none"/>
+    <path d="M 8.4,-40.6 L 4.6,-36 M 12.6,-39.6 L 8.6,-34.2" stroke="#232540" stroke-width="0.8" fill="none"/>
+
+    <!-- the beak: big and gold, a dark line where it opens -->
+    <path d="M 29.6,-59 C 34,-59 38.6,-57.4 41.6,-54.2 C 38.4,-52.4 33.6,-51.6 29.6,-51.8 Z" fill="#f2a03d" stroke="#2a1a2e" stroke-width="0.8"/>
+    <path d="M 29.8,-54.6 C 33.6,-54.4 37.6,-54.2 41.2,-54.2 C 38.2,-52.6 33.6,-51.8 29.8,-52 Z" fill="#c76f22"/>
+    <path d="M 30.6,-57.6 C 33.6,-57.4 36.4,-56.6 38.4,-55.4" stroke="#ffd58a" stroke-width="0.8" fill="none"/>
+    <path d="M 29.8,-54.6 C 33.6,-54.4 37.6,-54.2 41.2,-54.2" stroke="#2a1a2e" stroke-width="0.6" fill="none"/>
+    <!-- a bright eye under the cap's peak -->
+    <circle cx="26.8" cy="-56.4" r="2.5" fill="#ffffff" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="27.4" cy="-56.2" r="1.4" fill="#2a1a2e"/>
+    <circle cx="27" cy="-56.8" r="0.5" fill="#ffffff"/>
+    <path d="M 23.8,-59.6 Q 26.8,-59.8 29.6,-58.4" stroke="#2a1a2e" stroke-width="1" fill="none"/>
+
+    <!-- the signalman's peaked cap: red crown, gold band and badge, a black peak over the beak -->
+    <path d="M 15.6,-59.6 C 15.4,-65.4 19.6,-68.6 24.6,-68.4 C 29.6,-68.2 33,-65 32.4,-60 Z" fill="#c8394a" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M 17.6,-63.6 C 19,-66.2 21.8,-67.4 24.8,-67.2" stroke="#ff7a86" stroke-width="1.1" fill="none"/>
+    <path d="M 15.2,-61.8 C 21,-60.6 27,-60.6 32.6,-62 L 32.4,-59.4 C 27,-58.2 21,-58.2 15.4,-59.4 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 29.4,-59.6 C 32.6,-60.4 35.6,-60 37.8,-58.4 C 35.6,-57.6 32.4,-57.6 29.6,-58.2 Z" fill="#2e2c40" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 31.4,-59.4 C 33.4,-59.6 35.2,-59.4 36.6,-58.6" stroke="#5a5870" stroke-width="0.6" fill="none"/>
+    <path d="M 24,-66.2 L 24.8,-64.4 L 26.6,-64.2 L 25.2,-63 L 25.6,-61.2 L 24,-62.2 L 22.4,-61.2 L 22.8,-63 L 21.4,-64.2 L 23.2,-64.4 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.5"/>
+
+    </g>
+
+    <!-- the near wall: painted planks, a red signal stripe, iron corners -->
+    <use href="#wall" fill="#c98a4f" stroke="#2a1a2e" stroke-width="1"/>
+    <g clip-path="url(#wallClip)">
+      <path d="M -34,-22.4 C -10,-20.6 12,-20.6 34,-23 V -10 H -34 Z" fill="#9a6236"/>
+      <path d="M -34,-26.6 H 34 V -23.4 H -34 Z" fill="#e8434f"/>
+      <path d="M -34,-23.4 H 34 V -22.6 H -34 Z" fill="#b93a2c"/>
+      <path d="M -34,-26.6 H 34" stroke="#ff9a7e" stroke-width="0.6"/>
+      <path d="M -12,-30.6 V -27.4 M 12,-30.6 V -27.4 M -18,-22 V -13 M 6,-22 V -13" stroke="#8a5530" stroke-width="0.7" fill="none"/>
+      <path d="M -28,-29.6 H 26" stroke="#e8b07a" stroke-width="0.9" fill="none"/>
+      <rect x="-36" y="-34" width="72" height="24" fill="url(#wallLight)"/>
+    </g>
+    <path d="M -29.6,-31 L -30.8,-24 M 29.6,-31 L 30.8,-24" stroke="#5a5870" stroke-width="2.2" fill="none"/>
+    <rect x="-32.6" y="-33.4" width="65.2" height="3.4" rx="1.6" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.9"/>
+    <path d="M -30.8,-32.4 H 30.8" stroke="#8a88a6" stroke-width="0.8"/>
+    <g fill="#5a3a22"><circle cx="-24" cy="-28.6" r="0.6"/><circle cx="24" cy="-28.6" r="0.6"/><circle cx="-24" cy="-16.4" r="0.6"/><circle cx="24" cy="-16.4" r="0.6"/></g>
+    <!-- team roundel -->
+    <circle cx="-17" cy="-18" r="3" fill="#5a5870" stroke="#2a1a2e" stroke-width="0.8"/>
+    <circle cx="-17" cy="-18" r="2" fill="#e8434f"/>
+    <path transform="translate(-17,-18) scale(0.42)" d="M 0.9,0 A 0.9 0.9 0 0 0 -0.9,0 A 1.8 1.8 0 0 0 2.7,0 A 2.7 2.7 0 0 0 -2.7,0 A 3.6 3.6 0 0 0 4.5,0" stroke="#fff1d0" stroke-width="1.6" fill="none"/>
+
+    <!-- undercarriage and axle bosses -->
+    <path d="M -24,-12 H 24" stroke="#2a1a2e" stroke-width="3.2" fill="none"/>
+    <path d="M -24,-12 H 24" stroke="#5a5870" stroke-width="1.6" fill="none"/>
+
+    <!-- the signal lantern, hung off the cart's nose, its flame lit -->
+    <path d="M 31,-30.6 L 36.4,-30.6 L 36.4,-29" stroke="#2a1a2e" stroke-width="2.2" fill="none"/>
+    <path d="M 31,-30.6 L 36.4,-30.6 L 36.4,-29" stroke="#5a5870" stroke-width="1" fill="none"/>
+    <path d="M 33.2,-26.8 Q 33.2,-29.2 36.4,-29.2 Q 39.6,-29.2 39.6,-26.8 Z" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.7"/>
+    <rect x="33.4" y="-27" width="6" height="6.6" rx="2" fill="#ff8a3a" stroke="#2a1a2e" stroke-width="0.7"/>
+    <ellipse cx="36.4" cy="-23.6" rx="1.6" ry="2.2" fill="#fff1a8"/>
+    <path d="M 34.4,-25.8 V -22" stroke="#ffd08a" stroke-width="0.8" fill="none"/>
+    <rect x="33" y="-20.8" width="6.8" height="1.8" rx="0.8" fill="#e9b949" stroke="#2a1a2e" stroke-width="0.6"/>
+
+    <!-- the flare's pull lever, for the rider's hands -->
+    <path d="M -5.2,-31 L -3.2,-35.8" stroke="#2a1a2e" stroke-width="2.6" fill="none"/>
+    <path d="M -5.2,-31 L -3.2,-35.8" stroke="#8a88a6" stroke-width="1.2" fill="none"/>
+    <circle cx="-3" cy="-36.4" r="1.8" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.8"/>
+  </g>
+</svg>

@@ -7,6 +7,7 @@ pub mod augerdillo;
 pub mod bot;
 pub mod coilback;
 pub mod drops;
+pub mod flarecrow;
 pub mod frostfin;
 pub mod herdhound;
 pub mod hookclaw;

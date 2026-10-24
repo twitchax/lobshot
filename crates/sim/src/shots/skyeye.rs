@@ -13,6 +13,11 @@ use crate::{
 
 /// Fires a beam at `target` at `tick`.
 pub(crate) fn beam(game: &mut Game, target: Vec2, tick: u32, effects: &mut Vec<Effect>) {
+    beam_by(game, target, tick, 1.0, effects);
+}
+
+/// `beam`, its damage at its level times `boost` (Flarecrow's SS calls a heavier one).
+pub(crate) fn beam_by(game: &mut Game, target: Vec2, tick: u32, boost: f64, effects: &mut Vec<Effect>) {
     let from = Skyeye::at(game.terrain().width());
     let path = target - from;
     let length = libm::sqrt(path.x * path.x + path.y * path.y);
@@ -33,7 +38,7 @@ pub(crate) fn beam(game: &mut Game, target: Vec2, tick: u32, effects: &mut Vec<E
         damage: SKYEYE_DAMAGE.value[usize::from(level - 1).min(SKYEYE_DAMAGE.value.len() - 1)],
         weapon: SKYEYE_WEAPON.value,
         false_angle: false,
-        boost: 1.0,
+        boost,
     };
     let before = effects.len();
     game.explode(&blast, SKYEYE_BLAST.value, direct, tick, effects);

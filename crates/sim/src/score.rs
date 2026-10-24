@@ -228,7 +228,7 @@ fn tricks(before: &Game, event: &Event) -> Vec<Bonus> {
         bonuses.push(Bonus::BankShot);
     }
     let flown = seconds(track.impact.tick);
-    // Degrees above level, whichever way it left: over the back too.
+    // Degrees above level, whichever way it left: over the back too (Flarecrow's).
     let high = shot.tuning(before.players()[usize::from(seat)].tuning()).aim.value.elevation(aim) >= HIGH_ANGLE_AIM.value;
     if high && flown >= ULTRA_HIGH_ANGLE_SECONDS.value {
         bonuses.push(Bonus::Moonshot);
@@ -407,6 +407,20 @@ mod unit {
         assert!(found.contains(&Bonus::SkyLob) && found.contains(&Bonus::Moonshot), "{found:?}");
         let low = direct_hit_power(&game, 60);
         assert_eq!(tricks_of(&game, 60, low), [], "below 70 degrees");
+    }
+
+    #[test]
+    fn a_shot_over_the_back_counts_its_angle_above_level() {
+        // Flarecrow's 130 is 50 degrees above level, behind it: a long hit there is no sky lob.
+        let game = game_of(vec![seat(Team::A, MobileKind::Flarecrow, 300, Facing::Left), seat(Team::B, MobileKind::Coilback, 2100, Facing::Left)]);
+        let long = (0..=Power::MAX.twentieths())
+            .filter_map(|twentieths| Power::from_twentieths(twentieths).ok())
+            .find(|power| {
+                let track = game.track(game.launch(0, Shot::S1, 130, power.bars()).unwrap(), 0, 0);
+                track.impact.contact == Contact::Mobile(1) && seconds(track.impact.tick) >= HIGH_ANGLE_SECONDS.value
+            })
+            .expect("a long hit over the back");
+        assert_eq!(tricks_of(&game, 130, long), []);
     }
 
     #[test]

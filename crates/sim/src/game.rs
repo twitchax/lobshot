@@ -26,7 +26,7 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -62,12 +62,13 @@ pub enum MobileKind {
     Herdhound,
     Thistleback,
     Kitewyrm,
+    Flarecrow,
     Augerdillo,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -80,6 +81,7 @@ impl MobileKind {
         Self::Herdhound,
         Self::Thistleback,
         Self::Kitewyrm,
+        Self::Flarecrow,
         Self::Augerdillo,
     ];
 
@@ -112,6 +114,7 @@ impl MobileKind {
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
             Self::Kitewyrm => &kitewyrm::MOBILE,
+            Self::Flarecrow => &flarecrow::MOBILE,
             Self::Augerdillo => &augerdillo::MOBILE,
         }
     }
@@ -436,7 +439,8 @@ pub enum Effect {
     /// A bolt of lightning from `from` (in the sky, or off a side of the map) to `to`, where it
     /// struck a mobile or the ground, at `tick`. Its crater (`Exploded`, if it struck the ground)
     /// and the damage it deals follow. Sparkhorn's shots, the Thunder item and the slot machine's
-    /// bolt.
+    /// bolt; also Flarecrow's S1 aftershock arcing from where it landed, or from a mobile it hit,
+    /// to a mobile's center, its damage next.
     Bolt {
         from: Vec2,
         to: Vec2,
@@ -1695,7 +1699,7 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use super::{
-        testing::{answer_rolls, damage_to, direct_hit_power, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
+        testing::{answer_rolls, damage_to, direct_hit_power, direct_hit_power_of, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
         *,
     };
     use crate::{drops::DropKind, map::NoAssets};
@@ -1996,6 +2000,18 @@ mod unit {
         let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
         assert!(blasts >= 9, "the pumpkin's ring went off: {effects:?}");
         assert_eq!(beams(&effects).len(), 1, "one pumpkin, one beam");
+    }
+
+    #[test]
+    fn flarecrows_flares_call_skyeye_with_or_without_its_weather_and_no_more_under_it() {
+        // Its back to the target, so its shots fly at it.
+        let mut setup = duel_setup(800);
+        setup.seats[0].mobile = MobileKind::Flarecrow;
+        setup.seats[0].facing = Facing::Left;
+        let calm = start(&setup);
+        let power = direct_hit_power_of(&calm, Shot::S2, 130);
+        assert_eq!(beams(&shoot(&mut calm.clone(), 0, Shot::S2, 130, power)).len(), 3);
+        assert_eq!(beams(&shoot(&mut under(calm, WeatherKind::Skyeye), 0, Shot::S2, 130, power)).len(), 3, "GF-lee");
     }
 
     #[test]

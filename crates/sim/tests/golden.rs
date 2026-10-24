@@ -96,11 +96,18 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         0x7e8c_672f_9187_edd9,
     ),
     (
+        "roster_flarecrow",
+        include_str!("golden/roster_flarecrow.json"),
+        include_bytes!("golden/roster_flarecrow.bin"),
+        74,
+        0x7a11_9392_d851_ec67,
+    ),
+    (
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
         99,
-        0x8ac2_aea3_4f00_38d3,
+        0xc1c7_a661_a1b1_0db2,
     ),
 ];
 
@@ -176,6 +183,26 @@ fn roster_frostfin_frosts_its_target() {
     assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
     assert!(frosts.len() >= 2 && frosts.iter().all(|&(seat, _)| seat == 1), "{frosts:?}");
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
+}
+
+#[test]
+fn roster_flarecrow_calls_skyeye_down() {
+    // Flarecrow fires all three shots, and its flares or its SS call Skyeye's beam.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_flarecrow").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut beams) = (Vec::new(), 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::Beam { .. } => beams += 1,
+                _ => {}
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(beams >= 3, "{beams} beams");
 }
 
 #[test]
@@ -261,6 +288,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
         ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
+        ("roster_flarecrow", play(roster_flarecrow(), &winds)),
         ("roster_augerdillo", play(roster_augerdillo(), &winds)),
     ]
 }
@@ -501,6 +529,24 @@ fn roster_kitewyrm() -> Setup {
         seats: vec![armed(Team::A, MobileKind::Kitewyrm, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
         order: vec![0, 1],
         wind: Wind::new(9, 150).unwrap(),
+        sudden_death: None,
+    }
+}
+
+/// Flarecrow (Aduka's behavior) against Coilback on hills in wind, its back to the target: its S1,
+/// S2 and SS each fire, and its flares call Skyeye.
+fn roster_flarecrow() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Flarecrow, 400, Facing::Left, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
     }
 }

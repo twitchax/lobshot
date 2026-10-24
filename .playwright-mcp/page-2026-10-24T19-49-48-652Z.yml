@@ -1,0 +1,14 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "Neoseeker" [ref=e5]
+      - generic [ref=e6]: Gaming Guides and Walkthroughs
+    - generic [ref=e7]:
+      - heading "Security check" [level=1] [ref=e12]
+      - paragraph [ref=e13]: We're checking your connection before continuing to Neoseeker. If prompted, please complete the verification below.
+      - generic [ref=e14]:
+        - main:
+          - generic:
+            - heading [level=2]
+            - paragraph
+      - generic [ref=e15]: "Ray ID: a4fb81bff81c38c6"

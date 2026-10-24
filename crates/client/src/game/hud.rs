@@ -977,9 +977,11 @@ mod unit {
     #[test]
     fn the_angle_reads_as_degrees_above_level_over_the_back_too() {
         use lobshot_sim::game::MobileKind;
-        let behind = MobileKind::Augerdillo.tuning().s1.aim.value;
-        assert_eq!(angle_label(150, Some(165), Some(behind)), "Angle 30 (last 15)");
-        assert_eq!(angle_label(35, Some(40), Some(MobileKind::Coilback.tuning().s1.aim.value)), "Angle 35 (last 40)");
+        let behind = MobileKind::Flarecrow.tuning().s1.aim.value;
+        assert_eq!(angle_label(150, Some(140), Some(behind)), "Angle 30 (last 40)");
+        assert_eq!(angle_label(30, None, Some(MobileKind::Coilback.tuning().s1.aim.value)), "Angle 30");
+        let rear = MobileKind::Augerdillo.tuning().s1.aim.value;
+        assert_eq!(angle_label(150, Some(165), Some(rear)), "Angle 30 (last 15)");
         assert_eq!(angle_label(30, None, None), "Angle 30");
     }
 
