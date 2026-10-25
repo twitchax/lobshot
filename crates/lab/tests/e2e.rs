@@ -232,3 +232,21 @@ fn e2e_play_starts_a_score_game_that_counts_lives() {
         String::from_utf8_lossy(&refused.stderr)
     );
 }
+
+/// PRD-0007 T-002: `play new --mode tag --second hookclaw` seats a Tag game, the view shows the
+/// mobile sitting out, and `play act Switch` brings it in.
+#[test]
+fn e2e_play_starts_a_tag_game_and_switches_the_mobile_sitting_out_in() {
+    let dir = TempDir::new().unwrap();
+    let args = [
+        "play", "new", "--map", "flat", "--mode", "tag", "--mobile", "coilback", "--second", "hookclaw", "--level", "easy", "--seed", "4",
+    ];
+    let view: serde_json::Value = serde_json::from_str(&stdout(&run_in(dir.path(), &args))).unwrap();
+    assert_eq!(view["mode"], "Tag");
+    assert_eq!(view["players"][0]["sitting_out"]["mobile"], "Hookclaw");
+    // The bots play up to the agent's first turn.
+    assert_eq!((&view["your_turn"], &view["options"]["can_switch"]), (&serde_json::json!(true), &serde_json::json!(true)));
+    let switched: serde_json::Value = serde_json::from_str(&stdout(&run_in(dir.path(), &["play", "act", "Switch"]))).unwrap();
+    assert_eq!(switched["players"][0]["mobile"], "Hookclaw", "{switched}");
+    assert_eq!(switched["players"][0]["sitting_out"]["mobile"], "Coilback");
+}

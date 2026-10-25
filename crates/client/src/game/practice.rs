@@ -7,10 +7,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use lobshot_protocol::{Action, Member, MemberId, RoomCode, RoomOptions, RoomView, Stage};
 use lobshot_sim::{
     bot::{self, Level},
-    game::{Event, Game, MobileKind, Seat, Setup, Team},
+    game::{Event, Game, Seat, Setup, Team},
     log::Log,
     map::{MapRef, NoAssets},
-    referee::{self, Dice, XorShift},
+    referee::{self, XorShift},
     tuning,
     units::{Centis, Facing},
 };
@@ -48,6 +48,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
     let seed = (js_sys::Math::random() * 9.0e15) as u64 | 1;
     let mut dice = XorShift::new(seed);
     let size = session.practice_team_size.clamp(1, 2);
+    let mode = session.practice_mode;
     let name = crate::web::load("name").unwrap_or_else(|| "You".to_owned());
 
     let mut seats = Vec::new();
@@ -56,12 +57,18 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
         for &spawn_x in &spawns[..usize::from(size)] {
             let id = MemberId(u32::try_from(members.len()).unwrap_or(0) + 1);
             let mine = id == ME;
-            let mobile = match picks.mobile {
-                Some(mobile) if mine => mobile,
-                _ => MobileKind::ALL[dice.below(u32::try_from(MobileKind::ALL.len()).unwrap_or(1)) as usize],
-            };
+            // Bots pick Random, as they do online unless the room master picks for them.
+            let mobile = referee::mobile(picks.mobile.filter(|_| mine), &mut dice);
+            let second = referee::second(mode, picks.second.filter(|_| mine), &mut dice);
             let items = if mine { picks.loadout } else { bot::LOADOUT };
-            seats.push(Seat { team, mobile, spawn_x, facing, items });
+            seats.push(Seat {
+                team,
+                mobile,
+                spawn_x,
+                facing,
+                items,
+                second,
+            });
             members.push(Member {
                 id,
                 name: match (mine, size) {
@@ -76,6 +83,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
                 ready: true,
                 bot: !mine,
                 connected: true,
+                second,
             });
         }
     }
@@ -83,7 +91,7 @@ fn start(mut session: ResMut<Session>, picks: Res<Picks>, mut commands: Commands
     let options = RoomOptions {
         map: "hills".to_owned(),
         team_size: size,
-        mode: session.practice_mode,
+        mode,
         ..RoomOptions::default()
     };
     session.me = Some(ME);
