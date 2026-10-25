@@ -144,8 +144,8 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         "mode_jewel",
         include_str!("golden/mode_jewel.json"),
         include_bytes!("golden/mode_jewel.bin"),
-        323,
-        0x301a_a1fc_2755_49da,
+        287,
+        0xc015_bd10_ad12_029b,
     ),
 ];
 

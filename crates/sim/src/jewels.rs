@@ -9,7 +9,9 @@
 //! no armor (`blast`, `zap`), and the shots that meet one on their way say so (`crossed`): its
 //! damage this turn adds up, and once it reaches what the jewel needs, the turn's team takes it and
 //! its points (`hit`). Its count starts again each turn. A jewel whose ground is blown away falls,
-//! as a mobile does, and one that leaves the map is gone. J.D.'s pull drags them (`drag`).
+//! as a mobile does, and one that falls out of the map is the turn's team's too ("destroy the ground
+//! underneath the raon to make it fall off the map to get the points", SW-gp). J.D.'s pull drags
+//! them (`drag`).
 //!
 //! Everything a jewel does reaches the client as effects naming it by `JewelId`: dropped, hit,
 //! fallen, taken, gone and turned. The rules' numbers are in `tuning::jewels`, and their sources in
@@ -328,7 +330,7 @@ pub fn at(game: &Game, point: Vec2) -> bool {
 
 /// Drags every jewel within `reach` of `at` to the ground under `at`, as its mobiles fall: J.D.'s
 /// S2 "sucks in surrounding mobiles, jewels and also mini-Raons" (WP06). One with no ground under
-/// `at` is gone.
+/// `at` falls out of the map (`fell_out`).
 #[cfg_attr(not(test), expect(dead_code, reason = "Lodestoad's S2 pull calls it beside mines::drag once it merges"))]
 pub(crate) fn drag(game: &mut Game, at: Vec2, reach: f64, effects: &mut Vec<Effect>) {
     // The pull's center is on the map, in i32 range.
@@ -345,15 +347,12 @@ pub(crate) fn drag(game: &mut Game, at: Vec2, reach: f64, effects: &mut Vec<Effe
                 game.mode_state.jewelry.put(Jewel { at: to, ..jewel });
                 effects.push(Effect::JewelFell { id: jewel.id, to });
             }
-            Landing::OffMap => {
-                game.mode_state.jewelry.take(jewel.id);
-                effects.push(Effect::JewelGone { id: jewel.id });
-            }
+            Landing::OffMap => fell_out(game, jewel.id, effects),
         }
     }
 }
 
-/// Drops every jewel whose ground is gone: onto the ground below, or off the map.
+/// Drops every jewel whose ground is gone: onto the ground below, or off the map (`fell_out`).
 pub(crate) fn settle(game: &mut Game, effects: &mut Vec<Effect>) {
     for jewel in game.mode_state.jewelry.jewels.clone() {
         match movement::settle(game.terrain(), jewel.at) {
@@ -362,11 +361,19 @@ pub(crate) fn settle(game: &mut Game, effects: &mut Vec<Effect>) {
                 game.mode_state.jewelry.put(Jewel { at: to, ..jewel });
                 effects.push(Effect::JewelFell { id: jewel.id, to });
             }
-            Landing::OffMap => {
-                game.mode_state.jewelry.take(jewel.id);
-                effects.push(Effect::JewelGone { id: jewel.id });
-            }
+            Landing::OffMap => fell_out(game, jewel.id, effects),
         }
+    }
+}
+
+/// Jewel `id` fell out of the map: it is off it, and the team whose turn it is takes its points, as
+/// if it had been destroyed (SW-gp).
+fn fell_out(game: &mut Game, id: JewelId, effects: &mut Vec<Effect>) {
+    let team = scoring(game);
+    let Some(jewel) = game.mode_state.jewelry.take(id) else { return };
+    effects.push(Effect::JewelGone { id, team });
+    if let Some(team) = team {
+        mode::score(game, team, jewel.kind.points(), effects);
     }
 }
 
@@ -757,7 +764,7 @@ mod unit {
     }
 
     #[test]
-    fn a_jewel_whose_ground_is_blown_away_falls_and_one_with_none_left_is_gone() {
+    fn a_jewel_whose_ground_is_blown_away_falls_and_one_that_falls_out_of_the_map_scores() {
         let mut game = duel();
         drop_at(&mut game, JewelKind::Sapphire, 700);
         drop_at(&mut game, JewelKind::Sapphire, 750);
@@ -771,7 +778,8 @@ mod unit {
         let mut effects = Vec::new();
         game.settle_all(&mut effects);
         assert!(effects.iter().any(|e| matches!(e, Effect::JewelFell { id, to } if *id == first.id && to.y > 525)), "{effects:?}");
-        assert!(effects.contains(&Effect::JewelGone { id: second.id }), "{effects:?}");
+        let gone = effects.iter().position(|e| *e == Effect::JewelGone { id: second.id, team: Some(Team::A) }).unwrap();
+        assert_eq!(effects[gone + 1], Effect::Points { team: Team::A, points: 5 }, "off the map, it's the turn's team's: {effects:?}");
     }
 
     #[test]

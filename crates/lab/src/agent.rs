@@ -1015,6 +1015,7 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::JewelDropped { drop, to: None, .. } => format!(" A {} fell through the map at x={}.", drop.kind.name(), drop.x),
         Effect::JewelHit { amount, .. } => format!(" A jewel took {amount} damage."),
         Effect::JewelTaken { team, .. } => format!(" Team {team:?} took a jewel."),
+        Effect::JewelGone { team: Some(team), .. } => format!(" A jewel fell out of the map: team {team:?} took it."),
         Effect::JewelTurned { kind, .. } => format!(" An Onyx turned into a {}.", kind.name()),
         Effect::RespawnPicked { seat, x, lands } => format!(" {} will drop back in at x={x} as turn {lands} ends.", names.who(*seat)),
         Effect::Respawned { seat, to: Some(to), .. } => format!(" {} dropped back in at x={}.", names.who(*seat), to.x),

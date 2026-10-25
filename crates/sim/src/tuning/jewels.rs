@@ -5,7 +5,7 @@ use super::{Tuned, cited, picked};
 
 /// What each jewel is worth to the team that takes it, by `JewelKind` (`sim::jewels`): blue 5,
 /// yellow 10, red 25, and black -5.
-pub const POINTS: Tuned<[i32; 4]> = cited([5, 10, 25, -5], &["SW-modes", "GF-cyber", "NAMU", "GF-vgg"]);
+pub const POINTS: Tuned<[i32; 4]> = cited([5, 10, 25, -5], &["SW-modes", "SW-gp", "GF-cyber", "NAMU", "GF-vgg"]);
 
 /// The damage each must take in one turn to be taken, by `JewelKind`: "100 damage for 5 or -5
 /// points, 200 damage for 10 points, and 300 damage for 25 points" (SW-modes). GF-cyber gives
@@ -14,11 +14,11 @@ pub const NEEDS: Tuned<[i32; 4]> = cited([100, 200, 300, 100], &["SW-modes"]);
 
 /// The points a team plays to, whatever its size: "The first team to reach 100 points or exceed
 /// 100 points wins" (SW-modes).
-pub const TARGET_POINTS: Tuned<i32> = cited(100, &["SW-modes", "WP06", "GF-kurai", "GF-cyber", "GF-vgg", "GF-super", "NAMU"]);
+pub const TARGET_POINTS: Tuned<i32> = cited(100, &["SW-modes", "SNX-play05", "WP06", "GF-kurai", "GF-cyber", "GF-vgg", "GF-super", "NAMU"]);
 
 /// Turns from a bunged player's pick to its drop, counted as Score's are: "They will take two
 /// turns to respawn" (SW-modes, GF-vgg).
-pub const RESPAWN_TURNS: Tuned<i64> = cited(2, &["SW-modes", "GF-vgg"]);
+pub const RESPAWN_TURNS: Tuned<i64> = cited(2, &["SW-modes", "SW-gp", "GF-vgg"]);
 
 /// Rounds (a turn a seat) an Onyx sits before it turns blue: "a certain number of turns"
 /// (SW-modes), "a set amount of time" (GF-cyber).
