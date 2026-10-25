@@ -1941,6 +1941,12 @@
       }
     },
     {
+      "Jewel": {
+        "kind": "Sapphire",
+        "x": 1872
+      }
+    },
+    {
       "Walk": {
         "seat": 2,
         "facing": "Right",
@@ -2001,9 +2007,9 @@
     },
     {
       "Weather": {
-        "kind": "Random",
-        "x": 1872,
-        "hides": "Drain"
+        "kind": "Skyeye",
+        "x": 2261,
+        "hides": null
       }
     },
     {
@@ -2071,7 +2077,7 @@
     {
       "Walk": {
         "seat": 1,
-        "facing": "Right",
+        "facing": "Left",
         "steps": 0
       }
     },
@@ -2080,14 +2086,14 @@
         "seat": 1,
         "shot": "S1",
         "aim": 30,
-        "power": 0,
+        "power": 18,
         "time": 1719
       }
     },
     {
       "Weather": {
-        "kind": "Skyeye",
-        "x": 2261,
+        "kind": "Wind",
+        "x": 250,
         "hides": null
       }
     },
@@ -2117,17 +2123,14 @@
     {
       "Walk": {
         "seat": 1,
-        "facing": "Right",
+        "facing": "Left",
         "steps": 25
       }
     },
     {
-      "Shoot": {
+      "Respawn": {
         "seat": 1,
-        "shot": "S1",
-        "aim": 30,
-        "power": 0,
-        "time": 493
+        "x": 2050
       }
     },
     {
@@ -2168,8 +2171,8 @@
     },
     {
       "Weather": {
-        "kind": "Wind",
-        "x": 250,
+        "kind": "Force",
+        "x": 639,
         "hides": null
       }
     },

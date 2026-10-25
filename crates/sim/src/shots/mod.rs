@@ -230,13 +230,29 @@ fn weatherproof(game: &Game, seat: u8) -> bool {
         .is_some_and(|player| player.mobile == MobileKind::Sudsotter && crate::tuning::sudsotter::WEATHER_PROOF.value)
 }
 
+/// Where a shot does its work, for SearchBot's aim pass (`aim_point`), and how long it keeps at the
+/// mobile there, in ticks: none for a shot that does its work at once, the touch for one that
+/// hurts while it stays (Sudsotter's suds).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Aim {
+    pub impact: Impact,
+    pub dwell: u32,
+}
+
+impl Aim {
+    /// A shot that does its work at once, at `impact`.
+    pub(crate) fn at(impact: Impact) -> Self {
+        Self { impact, dwell: 0 }
+    }
+}
+
 /// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
 /// for SearchBot's aim pass (Sudsotter's shots walk on from there, Augerdillo's bore on or pass
 /// through the ground, Lodestoad's magnet passes through mobiles, Spoutpot's SS opens into balls,
 /// and an SS that transforms in flight does its work only once it has). `target` is where the bot
 /// wants it.
-pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
-    match game.players().get(usize::from(seat))?.mobile {
+pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Aim> {
+    let impact = match game.players().get(usize::from(seat))?.mobile {
         MobileKind::Lanternwing
         | MobileKind::Sparkhorn
         | MobileKind::Marblemole
@@ -250,12 +266,13 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         MobileKind::Hookclaw => hookclaw::aim_point(game, shot, flight),
         MobileKind::Spoutpot => spoutpot::aim_point(game, shot, flight),
         MobileKind::Lodestoad => lodestoad::aim_point(game, shot, flight),
-        MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
+        MobileKind::Sudsotter => return Some(sudsotter::aim_point(game, seat, shot, flight, target)),
         MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
         MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
         MobileKind::Needlemouse => Some(needlemouse::aim_point(game, seat, shot, flight)),
         MobileKind::Tinbadger => tinbadger::aim_point(game, seat, shot, flight),
-    }
+    };
+    impact.map(Aim::at)
 }
 
 /// How far below its landing the aim pass sees an SS that came down before it transformed (or

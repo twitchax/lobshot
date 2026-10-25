@@ -78,8 +78,10 @@ pub const S2_WARHEAD_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 115,
 pub const S2_WARHEAD_BLAST: Tuned<f64> = picked(20.0, "Tighter than S1: the pair carves two craters.");
 
 /// SS: a shell that expands in flight and then hits much harder. GunBound sources disagree on
-/// when (3 s WP06, 1.8 s GF-tiro), so DragonBound's 2.5 s.
-pub const SS_TRANSFORM_SECONDS: Tuned<f64> = cited(2.5, &["DB-mob"]);
+/// when (3 s WP06, 1.8 s GF-tiro; DragonBound 2.5 s, CONTRADICTION). Balance (PRD-0006 T-010)
+/// takes GF-tiro's: at 2.5 s a flat-ground SS ripens only from about two screens off (its aim tops
+/// out at 50 degrees), so in a duel it was mostly an S1 for 800 delay.
+pub const SS_TRANSFORM_SECONDS: Tuned<f64> = cited(1.8, &["GF-tiro"]);
 pub const SS_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 350, max: 500 }, &["DB-mob"]);
 pub const SS_BLAST: Tuned<f64> = picked(40.0, "The expanded shell's blast; bigger than S1's.");
 /// Before it expands, the SS shell hits like S1.

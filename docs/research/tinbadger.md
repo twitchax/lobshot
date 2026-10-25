@@ -32,8 +32,9 @@ own: it is where most of lobshot's distances come from, as no GunBound source gi
   weakness, and GF-vgg's "4% Less Damage to Shields"), 10-50 all true, and every mobile's climb and
   move budget.
 - One weight for all three shots: lobshot's gravity is per mobile, so the SS isn't lighter.
-- S1's damage is SW-mob's 100-160 split among the three discs, though the guides find it hits
-  harder.
+- S1's damage was SW-mob's 100-160 split among the three discs (34-54 each), though the guides
+  find it hits harder; balance (PRD-0006 T-010) takes the guides' 45-60 a disc (`[GF-max]`'s
+  50-60, `[GF-cyber]`'s 60, `[GF-tiro]`'s 140-180 for the three).
 
 ## Shot 1: the discs
 
@@ -122,15 +123,18 @@ own: it is where most of lobshot's distances come from, as no GunBound source gi
   corpse" `[SW-mob]`; "A target is not just a player, it can be another Raon mine or just a dead
   mobile" `[CR-icy]`. A floating mobile it passes under, as mines pass under it.
 - **Damage.** It falls the longer it walks (`[GF-vgg]`, `[GF-max]`), or "could miss by a mile, and
-  still do max damage" `[CR-tooya]` (**CONTRADICTION**: lobshot keeps it flat).
+  still do max damage" `[CR-tooya]` (**CONTRADICTION**: lobshot keeps it flat). No source gives a
+  range; lobshot picks 300-400, the top of the guides' averages short of OB's 500 (250-350, their
+  middle, until balance, PRD-0006 T-010).
 
 ## Fitting its weight
 
 Tinbadger's gravity is fitted like the Classic mobiles' (`physics-fit.md`, `tool_fit`), to
 `[CR-fixed]`'s 2.50 bars: 659.0 px/s², between Coilback's 622 (2.45) and Thistleback's 748 (2.65).
-It first shipped as 654.6, stale on arrival: the commit that added it already refits to 659.0, so no
-later change moved it (most likely the fit was taken before its drawn geometry settled). Both land
-2.50 within the chart test's 0.05 bars, so only a refit catches it
+It first shipped as 654.6, stale on arrival: `tool_fit` ran against provisional geometry, which then
+moved to match the rig without a refit (cannon pivot (22, -40) to (30, -38), barrel 26 to 24 px,
+hitbox 68 to 70 px wide, probes [-20, 20] to [-18, 28]; the muzzle's moves are what shift the fit).
+Both land 2.50 within the chart test's 0.05 bars, so only a refit catches it
 (`fitted_gravities_are_what_tool_fit_writes`, now).
 DBR gives Raon Armor's `ax`, 73.5, which would make it 2.45 (**CONTRADICTION**; the chart comes
 first). The full-power angles agree that it is heavy: 79 degrees for one screen and 84 for half

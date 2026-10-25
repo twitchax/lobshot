@@ -32,7 +32,7 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         44,
         0xeb9d_3672_872e_2e5c,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x9310_ee2e_20e4_226c),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 71, 0xf803_88fb_d2ac_e8fc),
     ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 184, 0x47ae_ad01_1728_1548),
     (
         "duel_big_bomb",
@@ -81,7 +81,7 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         42,
-        0x3033_b1fb_6df6_3603,
+        0xe767_5f2e_6257_8032,
     ),
     (
         "roster_thistleback",
@@ -130,7 +130,7 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         include_str!("golden/roster_tinbadger.json"),
         include_bytes!("golden/roster_tinbadger.bin"),
         52,
-        0xbe44_7204_2f8b_d17c,
+        0x7cae_9cc2_6330_42d2,
     ),
     (
         "mode_score",
@@ -139,13 +139,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         153,
         0xd5c1_5a65_981b_e721,
     ),
-    ("mode_tag", include_str!("golden/mode_tag.json"), include_bytes!("golden/mode_tag.bin"), 80, 0x6f94_a9be_916e_131c),
+    ("mode_tag", include_str!("golden/mode_tag.json"), include_bytes!("golden/mode_tag.bin"), 80, 0x1ff4_fe04_9ed1_3d4f),
     (
         "mode_jewel",
         include_str!("golden/mode_jewel.json"),
         include_bytes!("golden/mode_jewel.bin"),
-        287,
-        0x18a5_82a9_0572_bef8,
+        288,
+        0x6230_2395_a78c_9758,
     ),
     (
         "roster_lodestoad",
