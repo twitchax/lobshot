@@ -131,7 +131,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   one place every damage path passes), so only a bunge kills, and the bunged drop back in 2 turns
   after picking. Jewels fall onto the map down rolled columns, worth 5, 10, 25 or -5 points and
   needing 100, 200 or 300 damage in one turn (SW-modes); the first team to 100 points wins, and a
-  team with no one standing loses. Jewels are state that outlives a turn, like Tinbadger's mines,
+  team with no one standing loses. A jewel knocked off the map scores for the team whose turn it
+  is (SW-gp). Jewels are state that outlives a turn, like Tinbadger's mines,
   and the shots the sources name (Augerdillo's and Flarecrow's SS, Tinbadger's beetle, Lodestoad's
   pull) meet them through one place each.
 
