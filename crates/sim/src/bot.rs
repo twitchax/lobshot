@@ -743,8 +743,8 @@ impl Candidate {
 }
 
 /// What a shot's effects are worth to `seat`: damage to enemies, a bonus per kill, twice the cost
-/// of any harm to its own side, itself included, and what each mine it lays that will crawl at an
-/// enemy may do later (`MINE_WORTH`).
+/// of any harm to its own side, itself included, and what each mine it lays may do later
+/// (`mine_worth`).
 fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
     let team = |s: u8| game.players().get(usize::from(s)).map(|p| p.team);
     let mine = team(seat);
@@ -752,9 +752,7 @@ fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
     effects
         .iter()
         .map(|effect| match *effect {
-            // A mine crawls at the nearest mobile in sense, whoever's: it is worth something only
-            // when that is an enemy.
-            Effect::MineLaid { mine: laid, .. } if lasts(laid.id) && mines::quarry(game, &laid).is_some_and(|quarry| team(quarry) != mine) => tuning::bot::MINE_WORTH.value,
+            Effect::MineLaid { mine: laid, .. } if lasts(laid.id) => mine_worth(game, &laid, |quarry| team(quarry) == mine),
             Effect::Damaged { seat: hit, amount } | Effect::Shielded { seat: hit, amount } => {
                 let amount = f64::from(amount);
                 if team(hit) == mine { -2.0 * amount } else { amount }
@@ -773,6 +771,17 @@ fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
         })
         .sum::<f64>()
         + if game.mode().jewels() { jewel_value(game, seat, effects) } else { 0.0 }
+}
+
+/// What a mine just laid may do later, as `value` counts it: a mine crawls at the nearest mobile in
+/// sense, whoever's, as its layer's turn comes up, so it is worth `MINE_WORTH` laid against an
+/// enemy, less the farther into its sense the enemy stands (the more it must crawl, the likelier
+/// the enemy walks off or a blast smashes it first), nothing with no one in sense, and twice that
+/// against it when it would crawl at its own side (`ours`).
+fn mine_worth(game: &Game, laid: &mines::Mine, ours: impl Fn(u8) -> bool) -> f64 {
+    let Some((quarry, near)) = mines::stalked(game, laid) else { return 0.0 };
+    let worth = tuning::bot::MINE_WORTH.value * (1.0 - near);
+    if ours(quarry) { -2.0 * worth } else { worth }
 }
 
 /// What a shot's effects are worth to `seat` in Jewel, beyond `value`: each jewel's points to the
@@ -1017,6 +1026,24 @@ mod unit {
         assert_ne!(shot_of(&events), Shot::Ss);
         let mut game = game;
         play(&mut game, events);
+    }
+
+    #[test]
+    fn a_mine_is_worth_less_the_farther_it_must_crawl_and_against_the_bot_near_its_own_side() {
+        // Tinbadger at 300, a Coilback (Mechanical) at 1000; the ground is at y = 500.
+        let game = duel_of(MobileKind::Tinbadger, MobileKind::Coilback, 700);
+        let laid = |x: i32| mines::Mine {
+            id: mines::MineId(0),
+            seat: 0,
+            at: Footing { x, y: 500 },
+            facing: Facing::Right,
+        };
+        let ours = |quarry: u8| quarry == 0;
+        let (touching, nearer, farther) = (mine_worth(&game, &laid(960), ours), mine_worth(&game, &laid(920), ours), mine_worth(&game, &laid(880), ours));
+        assert!(touching > nearer && nearer > farther && farther > 0.0, "{touching} {nearer} {farther}");
+        assert!(touching <= tuning::bot::MINE_WORTH.value);
+        assert_eq!(mine_worth(&game, &laid(700), ours).to_bits(), 0.0_f64.to_bits(), "no one in sense");
+        assert!(mine_worth(&game, &laid(330), ours) < 0.0, "it would crawl at its layer");
     }
 
     #[test]
