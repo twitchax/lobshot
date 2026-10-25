@@ -1,14 +1,15 @@
 //! Game modes (PRD-0007): rules over the same turn order, so replays, bots and the lab play every
 //! mode alike. Solo is GunBound's default: one life each, and the last team standing wins. In Score
 //! each team has lives (its points), every death costs one, and the dead drop back in where they
-//! pick, a few turns later (`docs/research/modes-score.md`). In Jewel, jewels fall onto the map
-//! (`sim::jewels`) and a team scores those it deals enough damage to in a turn; shots hurt no one,
-//! so only a bunge kills, and the bunged drop back in as in Score (`docs/research/modes-jewel.md`).
-//! Tag is named but not built yet: a game refuses it (`Mode::built`), and so does a room.
+//! pick, a few turns later (`docs/research/modes-score.md`). In Tag each player brings two mobiles
+//! and switches between them once a turn, and is out when the one in play falls, whatever the other
+//! has left (`docs/research/modes-tag.md`). In Jewel, jewels fall onto the map (`sim::jewels`) and a
+//! team scores those it deals enough damage to in a turn; shots hurt no one, so only a bunge kills,
+//! and the bunged drop back in as in Score (`docs/research/modes-jewel.md`).
 //!
 //! Each of a mode's rules is decided here, once: whether a team is out of the game (`out`), what a
-//! death costs and whether the dead may come back (`died`), and how they come back (`RespawnRule`,
-//! `pick`, `land_due`). `Game` holds the state and asks.
+//! death costs and whether the dead may come back (`died`), how they come back (`RespawnRule`,
+//! `pick`, `land_due`); how a Tag player switches is `tag`'s. `Game` holds the state and asks.
 
 use anyhow::{bail, ensure};
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,7 @@ use crate::{
     mines,
     movement::{self, Footing, Landing},
     referee,
+    tag::Bench,
     tuning::{
         MAX_FLIGHT_SECONDS, SKY,
         drops::GRAVITY,
@@ -40,7 +42,7 @@ pub enum Mode {
     Solo,
     /// Team lives: every death costs one, and the dead drop back in where they pick.
     Score,
-    /// Two mobiles each, switching between them. Not built yet.
+    /// Two mobiles each, switching between them once a turn; out when the one in play falls.
     Tag,
     /// Shooting falling jewels for points: bullets hurt no one, and only a bunge kills.
     Jewel,
@@ -64,7 +66,7 @@ impl Mode {
     /// Whether this build plays it: a game refuses one that isn't, and so does a room.
     #[must_use]
     pub const fn built(self) -> bool {
-        matches!(self, Self::Solo | Self::Score | Self::Jewel)
+        matches!(self, Self::Solo | Self::Score | Self::Tag | Self::Jewel)
     }
 
     /// Whether the dead spin the slot machine: in Solo and Tag (WP06). In Score and Jewel they drop
@@ -138,7 +140,8 @@ pub struct RespawnRule {
     pub deaths: &'static [Death],
 }
 
-/// A mode's state beyond Solo's: each team's points, and the dead who may come back.
+/// A mode's state beyond Solo's: each team's points, the dead who may come back, and each Tag
+/// player's mobile sitting out.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModeState {
     mode: Mode,
@@ -146,6 +149,8 @@ pub struct ModeState {
     points: [i32; 2],
     /// The dead who may come back, in the order they died, with where each drops in once picked.
     respawns: Vec<Respawn>,
+    /// Tag: each seat's mobile sitting out, by seat. Empty in every other mode.
+    bench: Vec<Bench>,
     /// The jewels on the map, in Jewel.
     pub(crate) jewelry: Jewelry,
 }
@@ -174,6 +179,7 @@ impl ModeState {
             mode,
             points: [starting(Team::A), starting(Team::B)],
             respawns: Vec::new(),
+            bench: seats.iter().filter_map(|seat| seat.second).map(Bench::fresh).collect(),
             jewelry: if mode.jewels() { Jewelry::opening() } else { Jewelry::default() },
         }
     }
@@ -197,6 +203,16 @@ impl ModeState {
 
     fn respawn_mut(&mut self, seat: u8) -> Option<&mut Respawn> {
         self.respawns.iter_mut().find(|respawn| respawn.seat == seat)
+    }
+
+    /// `seat`'s mobile sitting out, in Tag.
+    #[must_use]
+    pub fn bench(&self, seat: u8) -> Option<&Bench> {
+        self.bench.get(usize::from(seat))
+    }
+
+    pub(crate) fn bench_mut(&mut self, seat: u8) -> Option<&mut Bench> {
+        self.bench.get_mut(usize::from(seat))
     }
 }
 
@@ -400,10 +416,9 @@ mod unit {
     use crate::{
         base::Res,
         game::{
-            Event, MobileKind, Setup,
-            testing::{answer_rolls, duel_setup, game_in, pass, seat},
+            Event, MobileKind,
+            testing::{answer_rolls, game_in, pass, seat},
         },
-        map::NoAssets,
         terrain::Terrain,
         tuning::frostfin,
         units::{Facing, Wind},
@@ -466,15 +481,12 @@ mod unit {
     }
 
     #[test]
-    fn modes_have_their_own_names_and_solo_score_and_jewel_are_built() {
+    fn modes_have_their_own_names_and_all_are_built() {
         let mut names: Vec<&str> = Mode::ALL.iter().map(|mode| mode.name()).collect();
         names.dedup();
         assert_eq!(names, ["Solo", "Score", "Tag", "Jewel"]);
         assert_eq!(Mode::default(), Mode::Solo);
-        assert_eq!(Mode::ALL.map(Mode::built), [true, true, false, true]);
-        let setup = Setup { mode: Mode::Tag, ..duel_setup(800) };
-        let error = Game::new(&setup, &NoAssets).unwrap_err().to_string();
-        assert_eq!(error, "Tag mode isn't built yet");
+        assert_eq!(Mode::ALL.map(Mode::built), [true; 4]);
     }
 
     #[test]

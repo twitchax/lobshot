@@ -1,5 +1,5 @@
 //! The modes' numbers (PRD-0007; mechanics.md section 7). Score's sources, and every pick behind
-//! these, are in `docs/research/modes-score.md`.
+//! these, are in `docs/research/modes-score.md`; Tag's in `docs/research/modes-tag.md`.
 
 use super::{Tuned, cited, picked};
 
@@ -26,3 +26,9 @@ pub const RESPAWN_HP_PERCENT: Tuned<u32> = picked(100, "The sources are silent; 
 /// Turns others take, once a mobile has dropped back in, before its own: "it will be your turn
 /// exactly 2 turns after you drop in" (GF-super), so one.
 pub const RESPAWN_TURNS_BEFORE: Tuned<usize> = cited(1, &["GF-super"]);
+
+/// The share of its max HP a Tag player's second mobile starts with, in percent: "The first one has
+/// full HP, and the second one has half HP" (SW-modes). Its shield starts full: the sources speak of
+/// HP alone, and a shield regenerates in play anyway. Its max HP is whole: heals mend the half it
+/// lacks (WP20).
+pub const TAG_SECOND_HP_PERCENT: Tuned<u32> = cited(50, &["SW-modes", "GF-vgg", "GF-kurai", "GF-super", "NAMU", "WP20"]);

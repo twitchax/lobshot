@@ -24,127 +24,128 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xf31a_dedd_dd43_ba0f),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x51bc_acfe_f530_0bfb),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0xe2ca_2f0a_4496_b1f8,
+        0xeb9d_3672_872e_2e5c,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x7827_acc3_7d70_4244),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x74d9_0438_f5a4_28a0),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x9310_ee2e_20e4_226c),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x3997_afc9_6adb_ed1a),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0x238a_abf2_f8ae_b306,
+        0x1bfb_48dc_95bf_4eb4,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0xde1b_6f42_5f32_40d9,
+        0xa381_96c7_c746_6ac7,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0xe409_29de_2bba_7802,
+        0x2d67_7684_48f7_b15a,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0xa751_accb_1d30_38fe,
+        0x88a7_b022_9dd5_f31c,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0x06ac_1590_82e7_3476,
+        0x34fa_6a8e_69fb_ea76,
     ),
     (
         "roster_frostfin",
         include_str!("golden/roster_frostfin.json"),
         include_bytes!("golden/roster_frostfin.bin"),
         54,
-        0x8527_7bc1_1776_cebf,
+        0xb03f_f31a_d9fc_330b,
     ),
     (
         "roster_herdhound",
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         54,
-        0xfb5c_30db_b076_51b8,
+        0x8b56_0d4c_d42a_a19c,
     ),
     (
         "roster_thistleback",
         include_str!("golden/roster_thistleback.json"),
         include_bytes!("golden/roster_thistleback.bin"),
         63,
-        0x5892_2256_0872_c7a0,
+        0xea75_4830_5626_fad4,
     ),
     (
         "roster_kitewyrm",
         include_str!("golden/roster_kitewyrm.json"),
         include_bytes!("golden/roster_kitewyrm.bin"),
         32,
-        0xc0ce_55be_4ac0_472a,
+        0x6788_f159_099e_07e0,
     ),
     (
         "roster_flarecrow",
         include_str!("golden/roster_flarecrow.json"),
         include_bytes!("golden/roster_flarecrow.bin"),
         74,
-        0xab22_e5c6_7a5a_d4f7,
+        0x2fc4_1741_ed3a_19c1,
     ),
     (
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
         99,
-        0xadb0_c821_c95a_5dcf,
+        0x751b_cb69_1fa8_4b3b,
     ),
     (
         "roster_lensowl",
         include_str!("golden/roster_lensowl.json"),
         include_bytes!("golden/roster_lensowl.bin"),
         65,
-        0xff7f_0ed2_3de7_f7e3,
+        0x1580_c23f_360c_70c5,
     ),
     (
         "roster_needlemouse",
         include_str!("golden/roster_needlemouse.json"),
         include_bytes!("golden/roster_needlemouse.bin"),
         32,
-        0xe73e_d251_08fd_a160,
+        0xf606_d4b2_4bde_51a2,
     ),
     (
         "roster_tinbadger",
         include_str!("golden/roster_tinbadger.json"),
         include_bytes!("golden/roster_tinbadger.bin"),
         52,
-        0x4d46_2d50_5d1b_8a0a,
+        0x6126_598e_30e9_54f2,
     ),
     (
         "mode_score",
         include_str!("golden/mode_score.json"),
         include_bytes!("golden/mode_score.bin"),
         153,
-        0xf327_465e_fba1_6217,
+        0xd5c1_5a65_981b_e721,
     ),
+    ("mode_tag", include_str!("golden/mode_tag.json"), include_bytes!("golden/mode_tag.bin"), 80, 0x3b98_477a_b37b_2108),
     (
         "mode_jewel",
         include_str!("golden/mode_jewel.json"),
         include_bytes!("golden/mode_jewel.bin"),
         323,
-        0x303d_055f_4a66_e2ca,
+        0x301a_a1fc_2755_49da,
     ),
 ];
 
@@ -321,6 +322,7 @@ fn armed(team: Team, mobile: MobileKind, spawn_x: i32, facing: Facing, items: &[
         spawn_x,
         facing,
         items: Loadout::new(items).unwrap(),
+        second: None,
     }
 }
 
@@ -355,6 +357,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_needlemouse", play(roster_needlemouse(), &winds)),
         ("roster_tinbadger", play(roster_tinbadger(), &winds)),
         ("mode_score", play(mode_score(), &winds)),
+        ("mode_tag", play(mode_tag(), &winds)),
         ("mode_jewel", play(mode_jewel(), &winds)),
     ]
 }
@@ -617,6 +620,35 @@ fn mode_score() -> Setup {
     }
 }
 
+/// A Tag 2v2 on hills in wind, each seat a pair: Tinbadger with Lensowl, Kitewyrm with Coilback,
+/// Hookclaw with Frostfin, Lanternwing with Needlemouse. They switch every few turns, and a
+/// player is out when the mobile in play falls.
+fn mode_tag() -> Setup {
+    let pair = |team, first, second, x, facing| Seat {
+        second: Some(second),
+        ..armed(team, first, x, facing, &[])
+    };
+    Setup {
+        map: MapRef::Hills {
+            width: 2400,
+            height: 900,
+            ground: 780,
+            amplitude: 90,
+            period: 700,
+        },
+        seats: vec![
+            pair(Team::A, MobileKind::Tinbadger, MobileKind::Lensowl, 350, Facing::Right),
+            pair(Team::B, MobileKind::Kitewyrm, MobileKind::Coilback, 2050, Facing::Left),
+            pair(Team::A, MobileKind::Hookclaw, MobileKind::Frostfin, 900, Facing::Right),
+            pair(Team::B, MobileKind::Lanternwing, MobileKind::Needlemouse, 1500, Facing::Left),
+        ],
+        order: vec![0, 1, 2, 3],
+        wind: Wind::new(5, 60).unwrap(),
+        sudden_death: None,
+        mode: Mode::Tag,
+    }
+}
+
 /// A Jewel 2v2 on hills in wind: jewels fall and are taken, no one is hurt, and a team reaches 100.
 fn mode_jewel() -> Setup {
     Setup {
@@ -802,6 +834,10 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             apply(&mut game, event);
         }
         let Phase::Turn { seat } = game.phase() else { break };
+        // Tag: every third turn, the mobile sitting out comes in.
+        if turn % 3 == 1 && game.can_switch(seat) {
+            apply(&mut game, Event::Switch { seat });
+        }
         let me = game.players()[usize::from(seat)];
         let enemy = game
             .players()
@@ -858,6 +894,27 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         apply(&mut game, Event::Shoot { seat, shot, aim, power, time });
     }
     Log { setup, events }
+}
+
+#[test]
+fn mode_tag_switches_and_a_player_is_out_when_its_mobile_in_play_falls() {
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "mode_tag").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut switched, mut out_with_a_mobile_left) = (Vec::new(), 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Switched { mobile, .. } => switched.push(mobile),
+                Effect::Died { seat, .. } if game.bench(seat).is_some_and(|bench| bench.hp > 0) => out_with_a_mobile_left += 1,
+                _ => {}
+            }
+        }
+    }
+    let seconds: Vec<MobileKind> = log.setup.seats.iter().filter_map(|seat| seat.second).collect();
+    assert!(seconds.iter().filter(|mobile| switched.contains(mobile)).count() >= 3, "switched in: {switched:?}");
+    assert!(out_with_a_mobile_left >= 2, "{out_with_a_mobile_left} out with a mobile left");
+    assert!(matches!(game.phase(), Phase::Over { winner: Some(_) }), "{:?}", game.phase());
 }
 
 #[test]

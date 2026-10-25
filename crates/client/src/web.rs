@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use lobshot_protocol::RoomCode;
-use lobshot_sim::game::{Player, SsState};
+use lobshot_sim::game::{MobileKind, Player, SsState};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
 use crate::{model::Sudden, picks::Picks, sound::SoundLog, ui::ButtonSpots};
@@ -211,6 +211,9 @@ pub struct Me<'a> {
     pub can_respawn: bool,
     /// The column it drops back in down, once picked.
     pub drops_at: Option<i32>,
+    /// Tag: its mobile sitting out, and whether it may switch that in now.
+    pub sitting_out: Option<MobileKind>,
+    pub can_switch: bool,
 }
 
 /// Publishes what the client is doing as `window.lobshot`, for the browser smoke test to watch and
@@ -218,9 +221,9 @@ pub struct Me<'a> {
 ///
 /// ```text
 /// { screen, turns, started, seat,
-///   picks: { mobile: "Coilback" | "Random", loadout: ["Dual", ..] },
+///   picks: { mobile: "Coilback" | "Random", second: "Lanternwing" | "Random", loadout: ["Dual", ..] },
 ///   me: { mobile, alive, x, hp, shield, items: ["Dual", null, ..], armed, ss_lock, ss, can_spin, can_respawn,
-///         drops_at } | null,
+///         drops_at, sitting_out: "Lanternwing" | null, can_switch } | null,
 ///   sudden_death: { kind, in, on } | null,
 ///   sounds: { loaded, played: { blast: 2, .. } },
 ///   buttons: [{ action, x, y, enabled }],
@@ -248,6 +251,7 @@ pub fn publish(now: &Published) {
 
     let picks = js_sys::Object::new();
     set(&picks, "mobile", &now.picks.mobile.map_or_else(|| "Random".into(), |mobile| name(&mobile)));
+    set(&picks, "second", &now.picks.second.map_or_else(|| "Random".into(), |mobile| name(&mobile)));
     let loadout: js_sys::Array = now.picks.loadout.items().map(|item| name(&item)).collect();
     set(&picks, "loadout", &loadout);
     set(&state, "picks", &picks);
@@ -273,6 +277,8 @@ pub fn publish(now: &Published) {
         set(&object, "can_spin", &me.can_spin.into());
         set(&object, "can_respawn", &me.can_respawn.into());
         set(&object, "drops_at", &me.drops_at.map_or(JsValue::NULL, JsValue::from));
+        set(&object, "sitting_out", &me.sitting_out.map_or(JsValue::NULL, |mobile| name(&mobile)));
+        set(&object, "can_switch", &me.can_switch.into());
         object.into()
     });
     set(&state, "me", &me);

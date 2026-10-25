@@ -154,6 +154,7 @@ impl Room {
                 team,
                 mobile: self.members[i].member.mobile,
                 items: self.members[i].member.items,
+                second: self.members[i].member.second,
             })
             .collect();
         let mut dice = Rolls(&mut self.rng);
@@ -1035,6 +1036,32 @@ mod unit {
         let played: Vec<MobileKind> = game(&h).players().iter().map(|player| player.mobile).collect();
         assert_eq!(played, mobiles, "the log holds what each seat plays");
         assert!(people[1..].iter().all(|&id| h.member(id).mobile.is_none()), "Random stays their pick for the next game");
+    }
+
+    #[test]
+    fn in_tag_each_seat_plays_its_two_picks_and_switches_over_the_wire() {
+        let mut h = Harness::new();
+        let people = humans(&mut h, 2, RoomOptions { mode: Mode::Tag, ..options(1) });
+        h.send(1, ClientMsg::Second(Some(MobileKind::Hookclaw)));
+        h.send(2, ClientMsg::Mobile(Some(MobileKind::Sparkhorn)));
+        h.send(1, ClientMsg::Start);
+        let setup = log(&h).setup;
+        assert_eq!(setup.mode, Mode::Tag);
+        let pairs: Vec<(MobileKind, Option<MobileKind>)> = setup.seats.iter().map(|seat| (seat.mobile, seat.second)).collect();
+        assert_eq!(pairs[0], (MobileKind::Coilback, Some(MobileKind::Hookclaw)), "a pick is kept");
+        assert_eq!(pairs[1].0, MobileKind::Sparkhorn);
+        assert!(pairs[1].1.is_some(), "a Random second is rolled: {pairs:?}");
+
+        let (seat, conn) = turn_of(&h, &people);
+        let (conn, other) = (conn.unwrap(), 3 - conn.unwrap());
+        let before = game(&h).players()[usize::from(seat)].mobile;
+        h.take(other);
+        h.send(conn, ClientMsg::Act(Action::Switch));
+        assert_eq!(h.rejections(conn), Vec::<String>::new());
+        assert_eq!(game(&h).bench(seat).map(|bench| bench.mobile), Some(before), "the other sits out");
+        assert!(h.take(other).iter().any(|msg| matches!(msg, ServerMsg::Event { event: Event::Switch { .. }, .. })), "broadcast");
+        h.send(conn, ClientMsg::Act(Action::Switch));
+        assert_eq!(h.rejections(conn), [format!("seat {seat} has switched this turn: once a turn")]);
     }
 
     #[test]

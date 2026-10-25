@@ -104,6 +104,7 @@ mod unit {
                         spawn_x: 300,
                         facing: Facing::Right,
                         items: Loadout::default(),
+                        second: None,
                     },
                     Seat {
                         team: Team::B,
@@ -111,6 +112,7 @@ mod unit {
                         spawn_x: 1100,
                         facing: Facing::Left,
                         items: Loadout::default(),
+                        second: None,
                     },
                 ],
                 order: vec![1, 0],

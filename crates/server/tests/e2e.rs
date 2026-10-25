@@ -280,6 +280,64 @@ async fn e2e_modes_score_four_bots_play_a_2v2_to_the_end() {
     assert!(lives >= 2 && picks >= 1, "{lives} lives lost, {picks} picks");
 }
 
+/// PRD-0007 uat-002, Tag (T-002): a 2v2 Tag game on `flat`, every seat a bot with two mobiles,
+/// plays to the end against the real binary. A spectator replays the log and checks the server's
+/// hash after every event. The bots switch when it helps, and a player is out when the mobile in
+/// play falls, whatever the other has left.
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_modes_tag_four_bots_play_a_2v2_to_the_end() {
+    let cwd = TempDir::new().unwrap();
+    let dist = TempDir::new().unwrap();
+    write_bundle(dist.path()).unwrap();
+    let server = start_with(dist.path(), cwd.path(), &["--bot-delay-ms", "0", "--no-playback-wait"]);
+    let addr = server.addr;
+    let code = tokio::task::spawn_blocking(move || create_room(addr)).await.unwrap().unwrap();
+
+    let mut host = Client::connect(addr, &code, true).await;
+    let (host_id, _, _) = host.hello("Host", None).await;
+    host.send(&ClientMsg::Team(None)).await;
+    host.send(&ClientMsg::Configure(RoomOptions {
+        map: "flat".into(),
+        team_size: 2,
+        max_wind: 26,
+        turn_seconds: 5,
+        random_teams: false,
+        sudden_death: None,
+        mode: Mode::Tag,
+    }))
+    .await;
+    for team in [Team::A, Team::B].repeat(2) {
+        host.send(&ClientMsg::AddBot { team }).await;
+    }
+    host.recv_until(|msg| matches!(msg, ServerMsg::Room(view) if view.members.iter().filter(|m| m.bot).count() == 4 && view.options.mode == Mode::Tag))
+        .await;
+    host.send(&ClientMsg::Start).await;
+
+    let (replica, room) = play_out(&mut host, host_id, None, 0).await;
+    let (game, log) = (replica.game().unwrap(), replica.log().unwrap());
+    assert_eq!(room.stage, Stage::Lobby);
+    assert_eq!(log.setup.mode, Mode::Tag);
+    assert!(log.setup.seats.iter().all(|seat| seat.second.is_some()), "every seat brings two");
+    let Phase::Over { winner: Some(winner) } = game.phase() else { panic!("{:?}", game.phase()) };
+    let loser = if winner == Team::A { Team::B } else { Team::A };
+    assert!(game.players().iter().all(|p| !(p.alive && p.team == loser)), "team {loser:?} has no one standing");
+
+    // Replayed: the bots switched, and players went out with a mobile left sitting out.
+    let mut replay = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut switches, mut out_with_one_left) = (0, 0);
+    for &event in &log.events {
+        for effect in replay.apply(event).unwrap() {
+            match effect {
+                Effect::Switched { .. } => switches += 1,
+                Effect::Died { seat, .. } if replay.bench(seat).is_some_and(|bench| bench.hp > 0) => out_with_one_left += 1,
+                _ => {}
+            }
+        }
+    }
+    println!("the Tag 2v2 ran {} turns: {switches} switches, {out_with_one_left} out with a mobile left", game.turns());
+    assert!(switches >= 1 && out_with_one_left >= 2, "{switches} switches, {out_with_one_left} out with a mobile left");
+}
+
 /// PRD-0007 T-003: two bots play Jewel against the real binary, to its end: a side's 100 points,
 /// or a side bunged. They shoot the jewels the server rolls down and dig under each other, and no
 /// one is hurt. On a small shelf over the void, so the digging tells within a test's time: a

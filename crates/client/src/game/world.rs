@@ -116,6 +116,8 @@ pub struct MobileView {
 /// predicted game.
 #[derive(Component, Clone, Copy)]
 pub struct Shown {
+    /// The mobile in play: in Tag, a switch changes it.
+    pub mobile: MobileKind,
     pub foot: SimVec2,
     pub tilt: f64,
     pub facing: Facing,
@@ -181,8 +183,9 @@ pub fn brittle_label(brittle: u8) -> String {
 #[derive(Component)]
 struct Placeholder;
 
+/// A mobile view wearing this mobile's rig.
 #[derive(Component)]
-struct Dressed;
+struct Dressed(MobileKind);
 
 #[derive(Component)]
 pub struct CannonPart;
@@ -331,10 +334,14 @@ fn slice_drawn(art: Option<ResMut<MapArt>>, mut images: ResMut<Assets<Image>>, m
     art.source = None;
 }
 
+/// Loads every mobile's rig, in play or sitting out (Tag), so a switch shows at once.
 fn load_rigs(game: Option<Res<Match>>, mut rigs: ResMut<Rigs>, server: Res<AssetServer>) {
     let Some(game) = game else { return };
-    for player in game.predicted.players() {
-        rigs.request(&server, player.mobile);
+    for seat in &game.log.setup.seats {
+        rigs.request(&server, seat.mobile);
+        if let Some(second) = seat.second {
+            rigs.request(&server, second);
+        }
     }
 }
 
@@ -347,6 +354,7 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
     for (seat, player) in game.predicted.players().iter().enumerate() {
         let Ok(seat) = u8::try_from(seat) else { continue };
         let shown = Shown {
+            mobile: player.mobile,
             foot: player.footing.world(),
             tilt: player.tilt,
             facing: player.facing,
@@ -357,109 +365,149 @@ fn spawn_mobiles(game: Option<Res<Match>>, session: Res<Session>, views: Query<&
             brittle: player.brittle,
             glide: None,
         };
-        let hitbox = player.tuning().hitbox.value;
-        let color = team_color(player.team);
         commands
             .spawn((GameRoot, MobileView { seat }, shown, Transform::default(), Visibility::default()))
             .with_children(|root| {
-                root.spawn((
-                    Placeholder,
-                    Sprite {
-                        color,
-                        custom_size: Some(Vec2::new(as_f32(hitbox.w), as_f32(hitbox.h))),
-                        ..default()
-                    },
-                    Transform::from_xyz(as_f32(hitbox.x + hitbox.w / 2.0), as_f32(-(hitbox.y + hitbox.h / 2.0)), 0.0),
-                ));
+                root.spawn(placeholder(player.mobile, team_color(player.team)));
             });
-        let name = session.seat_name(seat);
-        let shielded = player.tuning().shield.value > 0;
-        commands.spawn((GameRoot, Overlay { seat }, Transform::default(), Visibility::default())).with_children(|overlay| {
-            overlay.spawn((
-                Text2d::new(name),
-                TextFont {
-                    font_size: bevy::text::FontSize::Px(13.0),
-                    ..default()
-                },
-                TextColor(theme::TEXT),
-                Transform::from_xyz(0.0, if shielded { 19.0 } else { 14.0 }, 0.0),
-            ));
-            // Mobiles with a shield show it as a thin bar over the HP bar, as GunBound does.
-            if shielded {
-                overlay.spawn((
-                    Sprite {
-                        color: Color::srgba(0.0, 0.0, 0.0, 0.6),
-                        custom_size: Some(Vec2::new(52.0, 5.0)),
-                        ..default()
-                    },
-                    Transform::from_xyz(0.0, 6.0, 0.0),
-                ));
-                overlay.spawn((
-                    ShieldFill,
-                    Sprite {
-                        color: theme::SHIELD,
-                        custom_size: Some(Vec2::new(50.0, 3.0)),
-                        ..default()
-                    },
-                    Anchor::CENTER_LEFT,
-                    Transform::from_xyz(-25.0, 6.0, 0.1),
-                ));
-            }
-            overlay.spawn((
-                Sprite {
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.6),
-                    custom_size: Some(Vec2::new(52.0, 7.0)),
-                    ..default()
-                },
-                Transform::from_xyz(0.0, 0.0, 0.0),
-            ));
-            overlay.spawn((
-                HpFill,
-                Sprite {
-                    color,
-                    custom_size: Some(Vec2::new(50.0, 5.0)),
-                    ..default()
-                },
-                Anchor::CENTER_LEFT,
-                Transform::from_xyz(-25.0, 0.0, 0.1),
-            ));
-            overlay.spawn((
-                BrittleTag,
-                Text2d::new(brittle_label(shown.brittle)),
-                TextFont {
-                    font_size: bevy::text::FontSize::Px(11.0),
-                    ..default()
-                },
-                TextColor(theme::FROST),
-                Anchor::CENTER_LEFT,
-                Transform::from_xyz(30.0, 0.0, 0.1),
-            ));
-        });
+        spawn_overlay(&mut commands, seat, session.seat_name(seat), &shown, team_color(player.team));
     }
 }
 
-/// Swaps a placeholder for the rig's parts once the rig and its images are loaded.
-fn dress_mobiles(
+/// A box the size of `mobile`'s hitbox, in its team's color, until its rig is drawn.
+fn placeholder(mobile: MobileKind, color: Color) -> impl Bundle {
+    let hitbox = mobile.tuning().hitbox.value;
+    (
+        Placeholder,
+        Sprite {
+            color,
+            custom_size: Some(Vec2::new(as_f32(hitbox.w), as_f32(hitbox.h))),
+            ..default()
+        },
+        Transform::from_xyz(as_f32(hitbox.x + hitbox.w / 2.0), as_f32(-(hitbox.y + hitbox.h / 2.0)), 0.0),
+    )
+}
+
+/// A seat's name, HP bar (and shield bar, for a mobile with a shield) and brittle tag, over the
+/// mobile `shown` shows.
+fn spawn_overlay(commands: &mut Commands, seat: u8, name: String, shown: &Shown, color: Color) {
+    let shielded = shown.mobile.tuning().shield.value > 0;
+    commands.spawn((GameRoot, Overlay { seat }, Transform::default(), Visibility::default())).with_children(|overlay| {
+        overlay.spawn((
+            Text2d::new(name),
+            TextFont {
+                font_size: bevy::text::FontSize::Px(13.0),
+                ..default()
+            },
+            TextColor(theme::TEXT),
+            Transform::from_xyz(0.0, if shielded { 19.0 } else { 14.0 }, 0.0),
+        ));
+        // Mobiles with a shield show it as a thin bar over the HP bar, as GunBound does.
+        if shielded {
+            overlay.spawn((
+                Sprite {
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.6),
+                    custom_size: Some(Vec2::new(52.0, 5.0)),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 6.0, 0.0),
+            ));
+            overlay.spawn((
+                ShieldFill,
+                Sprite {
+                    color: theme::SHIELD,
+                    custom_size: Some(Vec2::new(50.0, 3.0)),
+                    ..default()
+                },
+                Anchor::CENTER_LEFT,
+                Transform::from_xyz(-25.0, 6.0, 0.1),
+            ));
+        }
+        overlay.spawn((
+            Sprite {
+                color: Color::srgba(0.0, 0.0, 0.0, 0.6),
+                custom_size: Some(Vec2::new(52.0, 7.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ));
+        overlay.spawn((
+            HpFill,
+            Sprite {
+                color,
+                custom_size: Some(Vec2::new(50.0, 5.0)),
+                ..default()
+            },
+            Anchor::CENTER_LEFT,
+            Transform::from_xyz(-25.0, 0.0, 0.1),
+        ));
+        overlay.spawn((
+            BrittleTag,
+            Text2d::new(brittle_label(shown.brittle)),
+            TextFont {
+                font_size: bevy::text::FontSize::Px(11.0),
+                ..default()
+            },
+            TextColor(theme::FROST),
+            Anchor::CENTER_LEFT,
+            Transform::from_xyz(30.0, 0.0, 0.1),
+        ));
+    });
+}
+
+/// A Tag switch: a view whose rig isn't the mobile it shows now sheds the rig, its satellite and
+/// its overlay, for `dress_mobiles` and a new overlay to show the mobile switched in.
+fn redress_switched(
     game: Option<Res<Match>>,
-    rigs: Res<Rigs>,
-    server: Res<AssetServer>,
-    views: Query<(Entity, &MobileView, &Children), Without<Dressed>>,
-    placeholders: Query<Entity, With<Placeholder>>,
+    session: Res<Session>,
+    views: Query<(Entity, &MobileView, &Shown, &Dressed, &Children)>,
+    overlays: Query<(Entity, &Overlay)>,
+    satellites: Query<(Entity, &SatelliteView)>,
     mut commands: Commands,
 ) {
     let Some(game) = game else { return };
-    for (entity, view, children) in &views {
+    for (entity, view, shown, dressed, children) in &views {
+        if dressed.0 == shown.mobile {
+            continue;
+        }
         let Some(player) = game.predicted.players().get(usize::from(view.seat)) else { continue };
-        let Some(rig) = rigs.get(player.mobile) else { continue };
+        for child in children.iter() {
+            commands.entity(child).despawn();
+        }
+        commands.entity(entity).remove::<Dressed>().with_children(|root| {
+            root.spawn(placeholder(shown.mobile, team_color(player.team)));
+        });
+        for (satellite, _) in satellites.iter().filter(|(_, satellite)| satellite.seat == view.seat) {
+            commands.entity(satellite).despawn();
+        }
+        for (overlay, _) in overlays.iter().filter(|(_, overlay)| overlay.seat == view.seat) {
+            commands.entity(overlay).despawn();
+        }
+        spawn_overlay(&mut commands, view.seat, session.seat_name(view.seat), shown, team_color(player.team));
+    }
+}
+
+/// Swaps a placeholder for the rig's parts once the rig and its images are loaded: the rig of the
+/// mobile the view shows.
+fn dress_mobiles(
+    rigs: Res<Rigs>,
+    server: Res<AssetServer>,
+    views: Query<(Entity, &MobileView, &Shown, &Children), Without<Dressed>>,
+    placeholders: Query<Entity, With<Placeholder>>,
+    mut commands: Commands,
+) {
+    for (entity, view, shown, children) in &views {
+        let mobile = shown.mobile;
+        let Some(rig) = rigs.get(mobile) else { continue };
         for child in children.iter() {
             if placeholders.contains(child) {
                 commands.entity(child).despawn();
             }
         }
         let scale = 1.0 / art_scale_f32();
-        commands.entity(entity).insert(Dressed).with_children(|root| {
+        commands.entity(entity).insert(Dressed(mobile)).with_children(|root| {
             for part in &rig.parts {
-                let image = server.load(lobshot_assets::part_path(player.mobile, &part.file));
+                let image = server.load(lobshot_assets::part_path(mobile, &part.file));
                 let z = f32::from(i16::try_from(part.z).unwrap_or(0)) * 0.01;
                 let mut spawned = root.spawn((Sprite::from_image(image), Transform::from_xyz(as_f32(part.at.0), as_f32(-part.at.1), z).with_scale(Vec3::splat(scale))));
                 if part.aim {
@@ -477,12 +525,12 @@ fn dress_mobiles(
                 Transform::from_xyz(as_f32(socket.at.0), as_f32(-socket.at.1), z).with_scale(Vec3::splat(scale)),
             ));
         });
-        let home = player.mobile.satellite(player.footing.world(), Shot::S1);
+        let home = mobile.satellite(shown.foot, Shot::S1);
         if let (Some(file), Some(at)) = (&rig.satellite, home) {
             commands.spawn((
                 GameRoot,
                 SatelliteView { seat: view.seat, at, gliding: None },
-                Sprite::from_image(server.load(lobshot_assets::part_path(player.mobile, file))),
+                Sprite::from_image(server.load(lobshot_assets::part_path(mobile, file))),
                 Transform::from_translation(world(at).extend(depth::MOBILES + 1.0)).with_scale(Vec3::splat(scale)),
             ));
         }
@@ -510,7 +558,6 @@ fn hover_satellites(hovering: Hovering, views: Query<(&MobileView, &Shown)>, mut
     for (mut satellite, mut transform, mut visibility) in &mut satellites {
         let seat = satellite.seat;
         let Some((_, shown)) = views.iter().find(|(view, _)| view.seat == seat) else { continue };
-        let Some(player) = game.predicted.players().get(usize::from(seat)) else { continue };
         let shot = hovering.controls.as_deref().filter(|_| mine == Some(seat)).map_or(Shot::S1, |controls| controls.shot);
         satellite.at = if let Some(glide) = shown.glide {
             let from = match satellite.gliding {
@@ -521,7 +568,7 @@ fn hover_satellites(hovering: Hovering, views: Query<(&MobileView, &Shown)>, mut
             glide_at(from, glide, now)
         } else {
             satellite.gliding = None;
-            let home = player.mobile.satellite(shown.foot, shot).unwrap_or(shown.foot);
+            let home = shown.mobile.satellite(shown.foot, shot).unwrap_or(shown.foot);
             satellite.at + (home - satellite.at) * f64::from(settle)
         };
         let bob = as_f32((now * 2.4 + f64::from(seat)).sin()) * 2.0;
@@ -555,9 +602,7 @@ fn pose_mobiles(
     cannons: Query<(), With<CannonPart>>,
     mut overlays: Query<(&Overlay, &mut Transform, &mut Visibility, &Children), Without<MobileView>>,
     mut fills: Fills,
-    game: Option<Res<Match>>,
 ) {
-    let Some(game) = game else { return };
     let mut shown_by_seat = HashMap::new();
     for (view, shown, mut transform, mut visibility, children) in &mut views {
         shown_by_seat.insert(view.seat, *shown);
@@ -582,9 +627,7 @@ fn pose_mobiles(
         // Above the rider's hat: Coilback with Pip stands about 95 px tall.
         transform.translation = (world(shown.foot) + Vec2::new(0.0, 104.0)).extend(depth::OVERLAYS);
         *visibility = if shown.alive { Visibility::Inherited } else { Visibility::Hidden };
-        let Some(tuning) = game.predicted.players().get(usize::from(overlay.seat)).map(lobshot_sim::game::Player::tuning) else {
-            continue;
-        };
+        let tuning = shown.mobile.tuning();
         for child in children.iter() {
             if let Ok((mut fill, shield)) = fills.get_mut(child) {
                 let (now, max, height) = if shield { (shown.shield, tuning.shield.value, 3.0) } else { (shown.hp, tuning.hp.value, 5.0) };
@@ -614,6 +657,7 @@ fn follow_game(game: Option<Res<Match>>, timeline: Res<Timeline>, time: Res<Time
             shown.foot.x += step.copysign(dx);
             shown.foot.y = target.y;
         }
+        shown.mobile = player.mobile;
         shown.facing = player.facing;
         shown.hp = player.hp;
         shown.shield = player.shield;
@@ -672,9 +716,10 @@ pub fn shot_sprite(rigs: &Rigs, server: &AssetServer, mobile: MobileKind, id: &s
     Some(server.load(lobshot_assets::part_path(mobile, &sprite.file)))
 }
 
-/// A mine's sprite: its layer's `mine` picture, or a tin-grey dot until that has loaded.
-pub fn mine_sprite(rigs: &Rigs, server: &AssetServer, dot: &Dot, mobile: MobileKind) -> Sprite {
-    match shot_sprite(rigs, server, mobile, "mine") {
+/// A mine's sprite: Tinbadger's `mine` picture, or a tin-grey dot until that has loaded. Its layer
+/// may be playing another mobile by now (Tag), but only Tinbadger lays them.
+pub fn mine_sprite(rigs: &Rigs, server: &AssetServer, dot: &Dot) -> Sprite {
+    match shot_sprite(rigs, server, MobileKind::Tinbadger, "mine") {
         Some(image) => Sprite {
             image,
             custom_size: Some(MINE_SIZE),
@@ -718,10 +763,8 @@ fn follow_mines(
         *transform = mine_transform(mine.middle(), mine.facing);
         *visibility = Visibility::Inherited;
         // Drawn as a dot before its layer's rig arrived: dress it now.
-        if sprite.image == dot.0
-            && let Some(layer) = game.predicted.players().get(usize::from(mine.seat))
-        {
-            *sprite = mine_sprite(&rigs, &server, &dot, layer.mobile);
+        if sprite.image == dot.0 {
+            *sprite = mine_sprite(&rigs, &server, &dot);
         }
         sprite.color = mine_tint(lobshot_sim::mines::armed(&game.predicted, mine), sprite.image == dot.0);
     }
@@ -729,13 +772,7 @@ fn follow_mines(
         if views.iter().any(|(_, view, ..)| view.id == mine.id) {
             continue;
         }
-        let Some(layer) = game.predicted.players().get(usize::from(mine.seat)) else { continue };
-        commands.spawn((
-            GameRoot,
-            MineView { id: mine.id },
-            mine_sprite(&rigs, &server, &dot, layer.mobile),
-            mine_transform(mine.middle(), mine.facing),
-        ));
+        commands.spawn((GameRoot, MineView { id: mine.id }, mine_sprite(&rigs, &server, &dot), mine_transform(mine.middle(), mine.facing)));
     }
 }
 
@@ -759,6 +796,7 @@ impl Plugin for WorldPlugin {
                 slice_drawn,
                 load_rigs,
                 spawn_mobiles,
+                redress_switched,
                 dress_mobiles,
                 follow_game,
                 follow_mines,

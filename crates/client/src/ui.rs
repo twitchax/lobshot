@@ -89,6 +89,10 @@ pub enum UiAction {
     Leave,
     /// Reload the room page: the saved token takes the seat back.
     Rejoin,
+    /// Point the mobile picker at the second mobile, for Tag (`true`), or back at the first.
+    PickSecond(bool),
+    /// Switch in the mobile sitting out (Tag).
+    Switch,
 }
 
 /// A button was pressed.

@@ -1,9 +1,10 @@
 //! The HUD, in GunBound's functional layout: weather queue, wind dial and turn timer (with the
 //! sudden-death countdown and, in Score, each team's lives, or in Jewel, its points toward 100)
 //! across the top; turn list, shots, items, angle, power bar and move bar along the bottom; chat
-//! above the turn list; the aim arc, with its true-angle wedge, around your mobile. Once you're
-//! dead, the slot machine stands beside the controls, or in Score and Jewel, where you'll drop back
-//! in and when; drops and drop points coming down are marked on the map.
+//! above the turn list; the aim arc, with its true-angle wedge, around your mobile. In Tag, your
+//! mobile sitting out and its HP stand beside the controls, with the button (and the key, F7 or T)
+//! that switches it in. Once you're dead, the slot machine stands there, or in Score and Jewel,
+//! where you'll drop back in and when; drops and drop points coming down are marked on the map.
 
 use bevy::{ecs::system::SystemParam, picking::Pickable, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
@@ -11,6 +12,7 @@ use lobshot_sim::{
     game::{Effect, Shot, SsState, Team},
     items::Item,
     mode::{DropPoint, Mode, Respawn},
+    tag::Bench,
     tuning::AimRange,
     units::Vec2 as SimVec2,
     weather::{Weather, WeatherKind},
@@ -102,6 +104,16 @@ struct PointsTitle;
 struct RespawnPanel;
 #[derive(Component)]
 struct RespawnStatus;
+
+/// Tag: the mobile sitting out, and the switch.
+#[derive(Component)]
+struct TagPanel;
+
+#[derive(Component)]
+struct BenchStatus;
+
+#[derive(Component)]
+struct SwitchButton;
 
 fn build(mut commands: Commands, server: Res<AssetServer>, mut cache: ResMut<ImageCache>) {
     // The HUD's see-through layout nodes let the pointer through to the map, where a dead player
@@ -292,6 +304,27 @@ fn bottom_bar(bottom: &mut ChildSpawnerCommands, server: &AssetServer, cache: &m
                         TextLayout::justify(Justify::Center),
                         Node { max_width: Val::Px(130.0), ..default() },
                     ),
+                ],
+            ));
+            row.spawn((
+                TagPanel,
+                panel(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: Val::Px(4.0),
+                    width: Val::Px(150.0),
+                    display: Display::None,
+                    ..default()
+                }),
+                children![
+                    text("Sitting out", 15.0, theme::ACCENT),
+                    (
+                        BenchStatus,
+                        text("", 12.0, theme::TEXT),
+                        TextLayout::justify(Justify::Center),
+                        Node { max_width: Val::Px(130.0), ..default() },
+                    ),
+                    (SwitchButton, button("Switch (F7)", UiAction::Switch)),
                 ],
             ));
         });
@@ -1079,6 +1112,52 @@ fn respawn_panel(
     }
 }
 
+/// What the Tag panel says of the mobile sitting out: its name and HP, and its shield if it has one.
+fn bench_status(bench: &Bench) -> String {
+    let tuning = bench.mobile.tuning();
+    let shield = if tuning.shield.value > 0 { format!(", {} shield", bench.shield) } else { String::new() };
+    format!("{}\n{}/{} HP{shield}", tuning.name, bench.hp, tuning.hp.value)
+}
+
+/// The Tag panel's live parts.
+#[derive(SystemParam)]
+struct TagParts<'w, 's> {
+    clock: Res<'w, TurnClock>,
+    views: Query<'w, 's, (&'static MobileView, &'static Shown)>,
+    panels: Query<'w, 's, &'static mut Node, With<TagPanel>>,
+    statuses: Query<'w, 's, &'static mut Text, With<BenchStatus>>,
+    switches: Query<'w, 's, (Entity, Has<InteractionDisabled>), With<SwitchButton>>,
+}
+
+/// Shows this player's mobile sitting out while it plays Tag and is alive (as shown), and lets the
+/// switch be pressed on its turn when the sim allows one.
+fn tag_panel(game: Option<Res<Match>>, session: Res<Session>, mut parts: TagParts, mut commands: Commands) {
+    let (Some(game), Some(seat)) = (game, session.my_seat()) else { return };
+    let alive = parts.views.iter().any(|(view, shown)| view.seat == seat && shown.alive);
+    let bench = game.confirmed.bench(seat).filter(|_| alive && game.predicted.mode() == Mode::Tag && current_seat(&game).is_some());
+    let display = if bench.is_some() { Display::Flex } else { Display::None };
+    for mut node in &mut parts.panels {
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    let Some(bench) = bench else { return };
+    let status = bench_status(bench);
+    for mut text in &mut parts.statuses {
+        if **text != status {
+            (**text).clone_from(&status);
+        }
+    }
+    let can_switch = my_turn(&session, &parts.clock, &game).is_some() && game.predicted.can_switch(seat);
+    for (button, disabled) in &parts.switches {
+        if can_switch && disabled {
+            commands.entity(button).remove::<InteractionDisabled>();
+        } else if !can_switch && !disabled {
+            commands.entity(button).insert(InteractionDisabled);
+        }
+    }
+}
+
 /// Where a click would drop this player back in: a line down the column under the pointer.
 fn drop_point_preview(game: Option<Res<Match>>, session: Res<Session>, pointer: Res<MapPointer>, mut gizmos: Gizmos) {
     let (Some(game), Some(seat), Some(x)) = (game, session.my_seat(), pointer.0) else { return };
@@ -1117,6 +1196,7 @@ impl Plugin for HudPlugin {
                     points,
                     respawn_panel,
                     drop_point_preview,
+                    tag_panel,
                 )
                     .run_if(in_state(Screen::Game)),
             );
@@ -1217,6 +1297,20 @@ mod unit {
         assert_eq!(respawn_status(false, Some(DropPoint { x: 640, lands: 9 }), 5), "You drop in at x = 640 in 4 turns.");
         assert_eq!(respawn_status(false, Some(DropPoint { x: 640, lands: 9 }), 8), "You drop in at x = 640 as this turn ends.");
         assert_eq!(respawn_status(false, None, 5), "You won't drop back in.");
+    }
+
+    #[test]
+    fn the_tag_panel_names_the_mobile_sitting_out_and_its_hp() {
+        let bench = |mobile: lobshot_sim::game::MobileKind, hp, shield| Bench {
+            mobile,
+            hp,
+            shield,
+            ss_lock: 0,
+            brittle: 0,
+            switched: None,
+        };
+        assert_eq!(bench_status(&bench(lobshot_sim::game::MobileKind::Coilback, 640, 0)), "Coilback\n640/1000 HP");
+        assert_eq!(bench_status(&bench(lobshot_sim::game::MobileKind::Lanternwing, 730, 85)), "Lanternwing\n730/730 HP, 85 shield");
     }
 
     #[test]

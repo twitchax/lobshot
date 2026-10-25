@@ -12,6 +12,10 @@
 //!   the page shows the item used and SS locked.
 //! - Score, online: the browser plays a seat, walks into a pit and dies, clicks the map where it
 //!   will drop back in, and comes back down there, alive, to play its turn.
+//! - Tag, in practice: the title sets practice to Tag, and on its turn the browser presses T (F7's
+//!   twin, which a browser may keep for itself): the
+//!   mobile sitting out comes in, the other sits out, and the switch button goes grey till next
+//!   turn.
 //!
 //! In each, each turn's clock starts only once the shot before it has shown.
 //!
@@ -38,7 +42,7 @@ use headless_chrome::{
     browser::tab::{Tab, point::Point},
     protocol::cdp::Input::{DispatchKeyEvent, DispatchKeyEventTypeOption},
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use lobshot_assets::{Sound, maps::Maps};
@@ -319,6 +323,44 @@ async fn e2e_browser_practice_arms_an_item_and_locks_ss() {
     drop(server);
 }
 
+/// PRD-0007 T-002: Tag in practice. A fresh profile picks Coilback, with Lanternwing second.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs Chrome and a client bundle; run `cargo make browser`"]
+async fn e2e_browser_tag_practice_switches_in_the_mobile_sitting_out() {
+    let dist = bundle();
+    let cwd = TempDir::new().unwrap();
+    let server = start(&dist, cwd.path());
+    let browser = launch();
+    let tab = browser.new_tab().unwrap();
+    let origin = format!("http://{}", server.addr);
+
+    let state = tokio::task::spawn_blocking(move || {
+        tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
+        // The title steps practice through the modes: Solo, Score, Tag.
+        click_until(&tab, "PracticeMode(Score)", "practice in Score", |state| spot(state, "PracticeMode(Tag)").is_some());
+        click_until(&tab, "PracticeMode(Tag)", "practice in Tag", |state| spot(state, "PracticeMode(Jewel)").is_some());
+        let title = page_state(&tab).unwrap();
+        assert_eq!((&title["picks"]["mobile"], &title["picks"]["second"]), (&json!("Coilback"), &json!("Lanternwing")), "{title}");
+        click_until(&tab, "Practice", "a practice game", |state| state["screen"] == "Game");
+        let mine = wait_for(&tab, "the player's turn, with a switch", |state| enabled(state, "Switch") == Some(true));
+        assert_eq!((&mine["me"]["mobile"], &mine["me"]["sitting_out"]), (&json!("Coilback"), &json!("Lanternwing")), "{mine}");
+        assert_eq!(mine["me"]["can_switch"], true, "{mine}");
+
+        // T switches: Lanternwing comes in where the Coilback stood, and once a turn is all.
+        tab.press_key("t").unwrap();
+        wait_for(&tab, "the Lanternwing in play", |state| {
+            clock_on_time(state);
+            state["me"]["mobile"] == "Lanternwing" && state["me"]["sitting_out"] == "Coilback" && enabled(state, "Switch") == Some(false)
+        })
+    })
+    .await
+    .unwrap();
+    assert_eq!(state["me"]["alive"], true, "{state}");
+    assert_eq!(state["me"]["can_switch"], false, "{state}");
+    drop(browser);
+    drop(server);
+}
+
 /// PRD-0007 T-003: practice offers Jewel. Stepped to it on the title, a practice game has jewels on
 /// the map and each side's points, and as the turns go by (the bot shooting, the player passing)
 /// no one is hurt.
@@ -334,8 +376,9 @@ async fn e2e_browser_practice_plays_jewel_and_no_one_is_hurt() {
 
     let (first, later) = tokio::task::spawn_blocking(move || {
         tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
-        // Solo, then Score, then Jewel: the toggle names the mode it steps to.
-        click_until(&tab, "PracticeMode(Score)", "Score picked", |state| spot(state, "PracticeMode(Jewel)").is_some());
+        // Solo, Score, Tag, then Jewel: the toggle names the mode it steps to.
+        click_until(&tab, "PracticeMode(Score)", "Score picked", |state| spot(state, "PracticeMode(Tag)").is_some());
+        click_until(&tab, "PracticeMode(Tag)", "Tag picked", |state| spot(state, "PracticeMode(Jewel)").is_some());
         click_until(&tab, "PracticeMode(Jewel)", "Jewel picked", |state| spot(state, "PracticeMode(Solo)").is_some());
         click_until(&tab, "Practice", "a practice game", |state| state["screen"] == "Game");
         let first = wait_for(&tab, "jewels on the map", |state| state["jewels"].as_u64() > Some(0) && state["me"].is_object());

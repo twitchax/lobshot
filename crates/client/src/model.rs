@@ -378,6 +378,8 @@ fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Se
                 .find(|respawn| respawn.seat == seat)
                 .and_then(|respawn| respawn.pick)
                 .map(|pick| pick.x),
+            sitting_out: game.confirmed.bench(seat).map(|bench| bench.mobile),
+            can_switch: game.predicted.can_switch(seat),
         })
     });
     web::publish(&web::Published {
@@ -432,6 +434,7 @@ mod unit {
             spawn_x,
             facing,
             items: Loadout::new(items).unwrap(),
+            second: None,
         };
         Setup {
             map: MapRef::Flat { width: 1600, height: 900, ground: 700 },

@@ -18,7 +18,8 @@
         "items": [
           "Dual",
           "Sacrifice"
-        ]
+        ],
+        "second": null
       },
       {
         "team": "B",
@@ -27,21 +28,24 @@
         "facing": "Left",
         "items": [
           "Dual"
-        ]
+        ],
+        "second": null
       },
       {
         "team": "A",
         "mobile": "Augerdillo",
         "spawn_x": 900,
         "facing": "Right",
-        "items": []
+        "items": [],
+        "second": null
       },
       {
         "team": "B",
         "mobile": "Flarecrow",
         "spawn_x": 1500,
         "facing": "Left",
-        "items": []
+        "items": [],
+        "second": null
       }
     ],
     "order": [

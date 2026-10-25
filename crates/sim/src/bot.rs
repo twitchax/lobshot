@@ -23,6 +23,10 @@
 //! it runs the first two passes again from a few spots up to its move budget each way, and walks
 //! to the spot with the best shot.
 //!
+//! In Tag it switches first when the mobile in play is low and the one sitting out has more left,
+//! for the player is out when the one in play falls; and when its best shot is weak, it searches
+//! with the other mobile too and switches if that one's is clearly better (`switch`).
+//!
 //! Difficulty is error around the search (`tuning::bot`): the bot misreads the wind before it
 //! searches, then misses the aim and power it found. Both come from a seed the server rolls, so
 //! a bot's turn is still a pure function of its inputs.
@@ -62,6 +66,10 @@ const LOW_HP: f64 = 0.4;
 /// A shot worth at least this much (about GunBound's lowest damage tier) is strong: it earns Dual
 /// or Power Up, and the bot takes it from where it stands rather than look for a better spot.
 const STRONG_SHOT: f64 = 150.0;
+
+/// In Tag, a bot switches mobiles for a shot worth at least this much more than its own (a kill's
+/// worth, or most of a solid hit).
+const SWITCH_GAIN: f64 = 100.0;
 
 /// A bot looking for a better spot tries walks of each third of its move budget, each way.
 const WALK_PARTS: u16 = 3;
@@ -131,6 +139,11 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
 
     let mut events = Vec::new();
     let mut scratch = game.as_seen();
+    if wants_to_rest(&scratch, seat) {
+        let switch = Event::Switch { seat };
+        scratch.apply(switch).ok()?;
+        events.push(switch);
+    }
     if let Some(heal) = heal(&scratch, seat) {
         scratch.apply(heal).ok()?;
         events.push(heal);
@@ -140,7 +153,12 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     let mut rng = XorShift::new(seed);
     scratch.wind = misread(scratch.wind(), noise, &mut rng);
 
-    let (moves, best) = best_at(&scratch, seat, &targets)?;
+    let Choice { switched, moves, best } = best_at(&scratch, seat, &targets)?;
+    if let Some(switched) = switched {
+        scratch = switched;
+        events.push(Event::Switch { seat });
+    }
+    let me = *scratch.players().get(usize::from(seat))?;
     events.extend(moves);
     if let Some(slot) = best.item {
         events.push(Event::UseItem { seat, slot, time: Centis(0) });
@@ -239,31 +257,44 @@ fn marks(game: &Game, me: &Player) -> Vec<Mark> {
         .collect()
 }
 
-/// The best spot and shot at the first of `marks` worth one, boosted if an item makes it better:
-/// at each jewel from where the bot stands, the best that takes one; if none does, at the enemy (or
-/// its feet), walking if it must.
-fn best_at(game: &Game, seat: u8, marks: &[Mark]) -> Option<(Vec<Event>, Candidate)> {
-    let boosted = |Spot { moves, best }: Spot| {
-        let mut there = game.clone();
+/// The spot and shot the bot settles on: the game after a switch (Tag), if it switches first; the
+/// walk there; and the shot, boosted if an item makes it better.
+struct Choice {
+    switched: Option<Game>,
+    moves: Vec<Event>,
+    best: Candidate,
+}
+
+/// The best spot and shot at the first of `marks` worth one: at each jewel from where the bot
+/// stands, the best that takes one; if none does, at the enemy (or its feet), walking if it must,
+/// and in Tag switching first if the other mobile has a clearly better shot (`switch`).
+fn best_at(game: &Game, seat: u8, marks: &[Mark]) -> Option<Choice> {
+    let boosted = |switched: Option<Game>, Spot { moves, best }: Spot| {
+        let mut there = switched.clone().unwrap_or_else(|| game.clone());
         for &event in &moves {
             there.apply(event).ok()?;
         }
         let best = boost(&there, seat, &best).unwrap_or(best);
-        Some((moves, best))
+        Some(Choice { switched, moves, best })
     };
-    let better = |best: (Vec<Event>, Candidate), other: (Vec<Event>, Candidate)| if other.1.beats(&best.1) { other } else { best };
+    let better = |best: Choice, other: Choice| if other.best.beats(&best.best) { other } else { best };
     let jewels = marks.iter().filter(|mark| mark.goal == Goal::Jewel);
     let taken = jewels
         .filter_map(|mark| Spot::here(game, seat, mark))
-        .filter_map(boosted)
-        .filter(|(_, best)| best.value > 0.0)
+        .filter_map(|spot| boosted(None, spot))
+        .filter(|choice| choice.best.value > 0.0)
         .reduce(better);
     taken.or_else(|| {
         marks
             .iter()
             .filter(|mark| mark.goal != Goal::Jewel)
-            .filter_map(|mark| Spot::best(game, seat, mark))
-            .filter_map(boosted)
+            .filter_map(|mark| {
+                let spot = Spot::best(game, seat, mark)?;
+                match switch(game, seat, mark, &spot) {
+                    Some((switched, other)) => boosted(Some(switched), other),
+                    None => boosted(None, spot),
+                }
+            })
             .reduce(better)
     })
 }
@@ -677,6 +708,29 @@ fn jewel_value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
         .sum()
 }
 
+/// Tag: whether `seat` switches out the mobile in play to spare it: it is low (`LOW_HP`), and the
+/// one sitting out has a bigger share of its HP left.
+fn wants_to_rest(game: &Game, seat: u8) -> bool {
+    let (Some(me), Some(bench)) = (game.players().get(usize::from(seat)), game.bench(seat)) else {
+        return false;
+    };
+    let share = |hp: i32, max: i32| f64::from(hp) / f64::from(max.max(1));
+    let now = share(me.hp, me.tuning().hp.value);
+    game.can_switch(seat) && now <= LOW_HP && share(bench.hp, bench.mobile.tuning().hp.value) > now
+}
+
+/// Tag: when the best shot from `spot` is weak and `seat` may switch, the game switched and the
+/// other mobile's best spot, if its shot is clearly better (`SWITCH_GAIN` more).
+fn switch(game: &Game, seat: u8, target: &Mark, spot: &Spot) -> Option<(Game, Spot)> {
+    if spot.best.value >= STRONG_SHOT || !game.can_switch(seat) {
+        return None;
+    }
+    let mut switched = game.clone();
+    switched.apply(Event::Switch { seat }).ok()?;
+    let other = Spot::best(&switched, seat, target)?;
+    (other.best.value >= spot.best.value + SWITCH_GAIN).then_some((switched, other))
+}
+
 /// The heal `seat` uses first when it is low: Big Heal if it carries one, else Heal.
 fn heal(game: &Game, seat: u8) -> Option<Event> {
     let me = game.players().get(usize::from(seat))?;
@@ -895,6 +949,7 @@ mod unit {
                     spawn_x: 200 + 250 * i,
                     facing: if i % 2 == 0 { Facing::Right } else { Facing::Left },
                     items: LOADOUT,
+                    second: None,
                 })
                 .collect();
             let setup = Setup {
@@ -1145,6 +1200,7 @@ mod over_a_hill {
                         spawn_x: 360,
                         facing: Facing::Right,
                         items: Loadout::default(),
+                        second: None,
                     },
                     Seat {
                         team: Team::B,
@@ -1152,6 +1208,7 @@ mod over_a_hill {
                         spawn_x: 1440,
                         facing: Facing::Left,
                         items: Loadout::default(),
+                        second: None,
                     },
                 ],
                 order: vec![1, 0],
@@ -1169,6 +1226,80 @@ mod over_a_hill {
                 .sum();
             assert!(damage > 0, "wind toward {direction}: the bot should reach its target");
         }
+    }
+}
+
+#[cfg(test)]
+mod tag {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+    use crate::{
+        game::{
+            MobileKind, Seat, Team,
+            testing::{damage_to, game_in, seat},
+        },
+        mode::Mode,
+        terrain::Terrain,
+    };
+
+    /// A Tag duel on flat ground at y = 600: seat 0 plays `first` with `second` sitting out at x =
+    /// 300, seat 1 a Coilback pair at x = 1100. `wall` stands a wall 200 px tall from x = 360 to 520.
+    fn duel(first: MobileKind, second: MobileKind, wall: bool) -> Game {
+        let terrain = Terrain::from_fn(1600, 800, |x, y| y >= 600 || (wall && (360..520).contains(&x) && y >= 400)).unwrap();
+        let pair = |team, first, second, x, facing| Seat {
+            second: Some(second),
+            ..seat(team, first, x, facing)
+        };
+        let seats = vec![
+            pair(Team::A, first, second, 300, Facing::Right),
+            pair(Team::B, MobileKind::Coilback, MobileKind::Coilback, 1100, Facing::Left),
+        ];
+        game_in(Mode::Tag, terrain, seats)
+    }
+
+    fn switches(events: &[Event]) -> usize {
+        events.iter().filter(|event| matches!(event, Event::Switch { .. })).count()
+    }
+
+    #[test]
+    fn a_low_bot_switches_out_to_spare_its_mobile_in_play() {
+        let mut game = duel(MobileKind::Coilback, MobileKind::Hookclaw, false);
+        game.players[0].hp = 300;
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert_eq!(events.first(), Some(&Event::Switch { seat: 0 }), "first thing: {events:?}");
+        assert_eq!(switches(&events), 1);
+        let mut played = game.clone();
+        for event in events {
+            played.apply(event).unwrap();
+        }
+        assert_eq!(played.bench(0).map(|bench| (bench.mobile, bench.hp)), Some((MobileKind::Coilback, 300)), "the Coilback rests");
+    }
+
+    #[test]
+    fn a_low_bot_with_a_lower_mobile_sitting_out_stays() {
+        let mut game = duel(MobileKind::Coilback, MobileKind::Hookclaw, false);
+        game.players[0].hp = 300;
+        game.mode_state.bench_mut(0).unwrap().hp = 100;
+        assert_eq!(switches(&plan(&game, 0, Level::Hard, 7).unwrap()), 0);
+    }
+
+    #[test]
+    fn a_bot_switches_in_the_mobile_with_the_clearly_better_shot() {
+        // Pinned behind the wall, the Coilback (55 degrees at most) can't clear it; the Hookclaw
+        // (90) lobs over.
+        let mut game = duel(MobileKind::Coilback, MobileKind::Hookclaw, true);
+        game.players[0].moves_left = 0;
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        assert_eq!(switches(&events), 1, "{events:?}");
+        let damage: i32 = events.into_iter().map(|event| damage_to(&game.apply(event).unwrap(), 1)).sum();
+        assert!(damage > 0, "and hits");
+    }
+
+    #[test]
+    fn a_bot_with_a_good_shot_keeps_its_mobile() {
+        let game = duel(MobileKind::Coilback, MobileKind::Hookclaw, false);
+        assert_eq!(switches(&plan(&game, 0, Level::Hard, 7).unwrap()), 0);
     }
 }
 

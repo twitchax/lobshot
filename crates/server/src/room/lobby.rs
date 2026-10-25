@@ -83,6 +83,7 @@ impl Room {
                 ready: true,
                 bot: true,
                 connected: true,
+                second: None,
             },
             token: None,
             socket: None,
@@ -97,6 +98,13 @@ impl Room {
         self.ensure_master(id)?;
         ensure!(self.entry(bot)?.member.bot, "only a bot's mobile is the master's to pick");
         self.choose(bot, |member| member.mobile = mobile)
+    }
+
+    /// The master picks a bot's second mobile for Tag, as a player picks their own.
+    pub(super) fn bot_second(&mut self, id: MemberId, bot: MemberId, mobile: Option<MobileKind>) -> Void {
+        self.ensure_master(id)?;
+        ensure!(self.entry(bot)?.member.bot, "only a bot's mobiles are the master's to pick");
+        self.choose(bot, |member| member.second = mobile)
     }
 
     /// The master removes a member: their token stops working and their socket closes. Mid-game
@@ -193,6 +201,9 @@ mod unit {
         assert!(h.take(1).iter().all(|msg| matches!(msg, ServerMsg::Room(_))), "each change is broadcast");
         h.send(1, ClientMsg::Mobile(None));
         assert_eq!(h.member(pip).mobile, None, "Random");
+        assert_eq!(h.member(pip).second, None, "a second for Tag is Random until picked");
+        h.send(1, ClientMsg::Second(Some(MobileKind::Lanternwing)));
+        assert_eq!(h.member(pip).second, Some(MobileKind::Lanternwing));
 
         h.send(1, ClientMsg::Rider("../../etc".into()));
         assert_eq!(h.rejections(1), ["\"../../etc\" is not a rider name"]);
@@ -227,10 +238,16 @@ mod unit {
         assert_eq!(h.member(bot).mobile, Some(MobileKind::Sparkhorn));
         h.send(1, ClientMsg::BotMobile { bot, mobile: None });
         assert_eq!(h.member(bot).mobile, None, "Random");
+        h.send(1, ClientMsg::BotSecond { bot, mobile: Some(MobileKind::Hookclaw) });
+        assert_eq!(h.member(bot).second, Some(MobileKind::Hookclaw));
         for target in [master, other] {
             h.send(1, ClientMsg::BotMobile { bot: target, mobile: None });
             assert_eq!(h.rejections(1), ["only a bot's mobile is the master's to pick"]);
+            h.send(1, ClientMsg::BotSecond { bot: target, mobile: None });
+            assert_eq!(h.rejections(1), ["only a bot's mobiles are the master's to pick"]);
         }
+        h.send(2, ClientMsg::BotSecond { bot, mobile: None });
+        assert_eq!(h.rejections(2), ["only the room master can do that"]);
     }
 
     #[test]
@@ -278,7 +295,7 @@ mod unit {
     }
 
     #[test]
-    fn a_room_plays_the_modes_built_and_refuses_the_rest() {
+    fn a_room_plays_every_mode() {
         let mut h = Harness::new();
         h.join(1, "Master");
         let with = |mode| {
@@ -289,14 +306,11 @@ mod unit {
             })
         };
         assert_eq!(h.room.view().options.mode, Mode::Solo, "a new room plays Solo");
-        for mode in [Mode::Score, Mode::Jewel] {
+        for mode in [Mode::Score, Mode::Tag, Mode::Jewel] {
             h.send(1, with(mode));
             assert_eq!(h.rejections(1), Vec::<String>::new());
             assert_eq!(h.room.view().options.mode, mode);
         }
-        h.send(1, with(Mode::Tag));
-        assert_eq!(h.rejections(1), ["Tag mode isn't built yet: rooms play Solo, Score or Jewel"]);
-        assert_eq!(h.room.view().options.mode, Mode::Jewel, "a refusal changes nothing");
     }
 
     #[test]
@@ -467,6 +481,7 @@ mod unit {
             ClientMsg::Team(None),
             ClientMsg::Mobile(Some(MobileKind::Coilback)),
             ClientMsg::Mobile(None),
+            ClientMsg::Second(Some(MobileKind::Coilback)),
             ClientMsg::Loadout(Loadout::new(&[Item::Heal]).unwrap()),
             ClientMsg::Rider("pip".into()),
             flat(1),

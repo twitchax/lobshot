@@ -20,6 +20,7 @@ pub mod movement;
 pub mod referee;
 pub mod score;
 mod shots;
+pub mod tag;
 pub mod terrain;
 pub mod tuning;
 pub mod turn;

@@ -122,7 +122,11 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   mobile drops in, nudged a little by the wind, when its delay runs out. **Score** (GunBound
   Classic, `docs/research/modes-score.md`): each team has its players + 1 lives, every death
   costs one, a team is out at no lives or no one standing, and the dead drop back in 4 turns
-  after picking, at full HP, with no slot machine. Tag and Jewel build on the same ground.
+  after picking, at full HP, with no slot machine. **Tag** (`sim::tag`, `docs/research/modes-tag.md`):
+  each player brings two mobiles, the second on half HP; once a turn, on their own turn, they may
+  switch, the benched one coming in where the other stood; when the mobile in play dies the player
+  is out, whatever the other has left. HP, shield, SS lock and Frostfin's brittleness are each
+  mobile's own, and nothing changes on the bench. Jewel builds on the same ground.
 
 ## Protocol
 

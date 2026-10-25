@@ -155,7 +155,8 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             | Effect::SsLocked { .. }
             | Effect::Spun { .. }
             | Effect::DropRolled { .. }
-            | Effect::RespawnPicked { .. } => stage.base,
+            | Effect::RespawnPicked { .. }
+            | Effect::Switched { .. } => stage.base,
         };
         busy = busy.max(time);
         at.push(time);
@@ -217,6 +218,7 @@ mod unit {
             spawn_x,
             facing,
             items: Loadout::default(),
+            second: None,
         };
         let setup = Setup {
             map: MapRef::Flat { width: 1600, height: 900, ground: 700 },

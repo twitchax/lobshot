@@ -222,6 +222,7 @@ pub fn action(event: Event) -> Option<Action> {
         Event::UseItem { slot, .. } => Some(Action::Item { slot }),
         Event::Spin { .. } => Some(Action::Spin),
         Event::Respawn { x, .. } => Some(Action::Respawn { x }),
+        Event::Switch { .. } => Some(Action::Switch),
         Event::Forfeit { .. } | Event::Wind(_) | Event::Weather(_) | Event::Drop(_) | Event::Jewel(_) => None,
     }
 }
