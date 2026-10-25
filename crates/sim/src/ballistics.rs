@@ -28,6 +28,29 @@ impl Flight {
         )
     }
 
+    /// The corners of a box holding every point of the flight from tick `from` to tick `to`, ticks
+    /// between included: each axis's ends, and its turning point if it turns in between. Exact up to
+    /// rounding, so a caller that needs certainty widens it a little.
+    #[must_use]
+    pub fn bounds(&self, from: u32, to: u32) -> (Vec2, Vec2) {
+        let (t0, t1) = (f64::from(from) * TICK, f64::from(to) * TICK);
+        let axis = |origin: f64, velocity: f64, accel: f64| {
+            let at = |t: f64| origin + velocity * t + 0.5 * accel * t * t;
+            let (a, b) = (at(t0), at(t1));
+            let (mut low, mut high) = (a.min(b), a.max(b));
+            if accel != 0.0 {
+                let turn = -velocity / accel;
+                if t0 < turn && turn < t1 {
+                    low = low.min(at(turn));
+                    high = high.max(at(turn));
+                }
+            }
+            (low, high)
+        };
+        let (x, y) = (axis(self.origin.x, self.velocity.x, self.accel.x), axis(self.origin.y, self.velocity.y, self.accel.y));
+        (Vec2::new(x.0, y.0), Vec2::new(x.1, y.1))
+    }
+
     /// Velocity after `tick` ticks.
     #[must_use]
     pub fn velocity_at(&self, tick: u32) -> Vec2 {
@@ -121,6 +144,28 @@ mod unit {
         let landing = flight.at(tick);
         assert!((landing.x - range).abs() < 0.5, "{landing:?} vs {range}");
         assert!(landing.y.abs() < 0.5, "{landing:?}");
+    }
+
+    #[test]
+    fn bounds_hold_every_tick_and_the_top_of_the_arc() {
+        let flight = Flight {
+            origin: Vec2::new(100.0, 500.0),
+            velocity: Vec2::new(-250.0, -600.0),
+            accel: Vec2::new(40.0, 620.0),
+        };
+        for (from, to) in [(0, 0), (0, 64), (1500, 2100), (900, 4000), (0, 8000)] {
+            let (low, high) = flight.bounds(from, to);
+            let ticks: Vec<Vec2> = (from..=to).map(|tick| flight.at(tick)).collect();
+            for at in &ticks {
+                assert!(
+                    at.x >= low.x - 1e-9 && at.x <= high.x + 1e-9 && at.y >= low.y - 1e-9 && at.y <= high.y + 1e-9,
+                    "{at:?} outside {low:?}..{high:?}"
+                );
+            }
+            // Tight: each side is within a tick's travel of some tick.
+            let near = |side: f64, of: fn(&Vec2) -> f64| ticks.iter().any(|at| (of(at) - side).abs() < 1.0);
+            assert!(near(low.x, |v| v.x) && near(high.x, |v| v.x) && near(low.y, |v| v.y) && near(high.y, |v| v.y), "{from}..{to}");
+        }
     }
 
     #[test]

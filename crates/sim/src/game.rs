@@ -795,6 +795,73 @@ impl Senses {
     pub const ALL: Self = Self { mobiles: true, terrain: true };
 }
 
+/// What a flight through `game` can touch: its mobiles' hitboxes (when it senses them), its
+/// terrain and its weather columns, and the map's sides and bottom (`Game::fly_through`).
+struct Sky<'g> {
+    game: &'g Game,
+    targets: Vec<(u8, HitFrame)>,
+    senses: Senses,
+}
+
+impl Sky<'_> {
+    /// How far a flight's computed point may stray from the true path it is bounded by
+    /// (`Flight::bounds`), with room to spare: rounding moves it by about 1e-9 px.
+    const SLACK: f64 = 1.0;
+
+    /// What the flight at `at`, at `tick`, touches first, if anything: the map's edge, a mobile
+    /// (before terrain, so a shot grazing a mobile's feet is direct), terrain, or a column it has
+    /// just come into. `inside` says which columns it was in at the tick before, and is updated.
+    fn touch(&self, at: Vec2, tick: u32, inside: &mut [bool]) -> Option<Impact> {
+        let terrain = &self.game.terrain;
+        if at.x < 0.0 || at.x >= f64::from(terrain.width()) || at.y >= f64::from(terrain.height()) {
+            return Some(Impact { tick, at, contact: Contact::Gone });
+        }
+        if let Some(&(seat, _)) = self.targets.iter().find(|(_, frame)| frame.contains(at)) {
+            return Some(Impact { tick, at, contact: Contact::Mobile(seat) });
+        }
+        // In range: x is inside the map, and y is below it or above the bottom.
+        #[allow(clippy::cast_possible_truncation)]
+        if self.senses.terrain && terrain.is_solid(at.x.floor() as i32, at.y.floor() as i32) {
+            return Some(Impact { tick, at, contact: Contact::Terrain });
+        }
+        for (index, column) in self.game.weather.columns.iter().enumerate() {
+            let now = column.contains(at.x);
+            if now && !inside[index] {
+                let index = u8::try_from(index).unwrap_or(u8::MAX);
+                return Some(Impact {
+                    tick,
+                    at,
+                    contact: Contact::Column(index),
+                });
+            }
+            inside[index] = now;
+        }
+        None
+    }
+
+    /// Whether `touch` would find nothing at any tick from `from` to `to` and leave `inside` as it
+    /// is: the flight's box over those ticks, widened by `SLACK`, stays inside the map, clear of
+    /// every hitbox's reach and of every block with solid ground (when it senses terrain), and wholly
+    /// in or out of each column, as it already is. `false` only means it can't be sure.
+    fn clear(&self, flight: &Flight, from: u32, to: u32, inside: &[bool]) -> bool {
+        let terrain = &self.game.terrain;
+        let (low, high) = flight.bounds(from, to);
+        let (low, high) = (low - Vec2::new(Self::SLACK, Self::SLACK), high + Vec2::new(Self::SLACK, Self::SLACK));
+        if low.x < 0.0 || high.x >= f64::from(terrain.width()) || high.y >= f64::from(terrain.height()) {
+            return false;
+        }
+        if self.targets.iter().any(|(_, frame)| frame.may_touch(low, high)) {
+            return false;
+        }
+        // Inside the map's width and above its bottom, so the casts are exact (or saturate above it).
+        #[allow(clippy::cast_possible_truncation)]
+        if self.senses.terrain && terrain.any_solid(low.x.floor() as i32, low.y.floor() as i32, high.x.floor() as i32, high.y.floor() as i32) {
+            return false;
+        }
+        self.game.weather.columns.iter().zip(inside).all(|(column, &was)| column.spans(low.x, high.x) == Some(was))
+    }
+}
+
 /// A seated player's state.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Player {
@@ -1420,37 +1487,39 @@ impl Game {
     }
 
     /// `fly_sensing` up to tick `last`: `None` if the flight touched nothing by then.
+    ///
+    /// Every tick is a sample, but a run of ticks whose whole stretch of path is provably clear
+    /// (`Sky::clear`) is passed over without sampling it, so a long flight costs its few ticks near
+    /// something rather than all of them. A skipped tick could have touched nothing, so the impact
+    /// is the one tick-by-tick sampling finds, to the bit. Runs start long, halve when not clear down
+    /// to `SKIP_MIN` ticks (then sampled one by one), and double again once clear.
     fn fly_through(&self, flight: &Flight, from_tick: u32, launched: bool, senses: Senses, last: u32) -> Option<Impact> {
-        let width = f64::from(self.terrain.width());
-        let height = f64::from(self.terrain.height());
-        let targets = if senses.mobiles { self.hit_frames() } else { Vec::new() };
-        let columns = &self.weather.columns;
-        let mut inside: Vec<bool> = columns.iter().map(|c| !launched && c.contains(flight.at(from_tick).x)).collect();
-
-        for tick in from_tick..=last {
-            let at = flight.at(tick);
-            if at.x < 0.0 || at.x >= width || at.y >= height {
-                return Some(Impact { tick, at, contact: Contact::Gone });
-            }
-            if let Some(&(seat, _)) = targets.iter().find(|(_, frame)| frame.contains(at)) {
-                return Some(Impact { tick, at, contact: Contact::Mobile(seat) });
-            }
-            // In range: x is inside the map, and y is below it or above the bottom.
-            #[allow(clippy::cast_possible_truncation)]
-            if senses.terrain && self.terrain.is_solid(at.x.floor() as i32, at.y.floor() as i32) {
-                return Some(Impact { tick, at, contact: Contact::Terrain });
-            }
-            for (index, column) in columns.iter().enumerate() {
-                let now = column.contains(at.x);
-                if now && !inside[index] {
-                    let index = u8::try_from(index).unwrap_or(u8::MAX);
-                    return Some(Impact {
-                        tick,
-                        at,
-                        contact: Contact::Column(index),
-                    });
+        const SKIP_MIN: u32 = 8;
+        const SKIP_MAX: u32 = 512;
+        let sky = Sky {
+            game: self,
+            targets: if senses.mobiles { self.hit_frames() } else { Vec::new() },
+            senses,
+        };
+        let mut inside: Vec<bool> = self.weather.columns.iter().map(|c| !launched && c.contains(flight.at(from_tick).x)).collect();
+        let (mut tick, mut run) = (from_tick, SKIP_MAX);
+        while tick <= last {
+            let end = tick.saturating_add(run - 1).min(last);
+            if sky.clear(flight, tick, end, &inside) {
+                run = (run * 2).min(SKIP_MAX);
+            } else if run > SKIP_MIN {
+                run /= 2;
+                continue;
+            } else {
+                for tick in tick..=end {
+                    if let Some(impact) = sky.touch(flight.at(tick), tick, &mut inside) {
+                        return Some(impact);
+                    }
                 }
-                inside[index] = now;
+            }
+            match end.checked_add(1) {
+                Some(next) => tick = next,
+                None => break,
             }
         }
         None
@@ -2045,6 +2114,55 @@ mod unit {
         *,
     };
     use crate::{drops::DropKind, map::NoAssets};
+
+    /// `fly_through` the slow way: every tick sampled.
+    fn fly_tick_by_tick(game: &Game, flight: &Flight, from_tick: u32, launched: bool, senses: Senses, last: u32) -> Option<Impact> {
+        let sky = Sky {
+            game,
+            targets: if senses.mobiles { game.hit_frames() } else { Vec::new() },
+            senses,
+        };
+        let mut inside: Vec<bool> = game.weather.columns.iter().map(|c| !launched && c.contains(flight.at(from_tick).x)).collect();
+        (from_tick..=last).find_map(|tick| sky.touch(flight.at(tick), tick, &mut inside))
+    }
+
+    #[test]
+    fn skipping_clear_sky_finds_the_impact_tick_by_tick_sampling_does() {
+        // Rolling hills with floating specks and an overhang, mobiles tilted on the slopes, and
+        // columns of every width, so every check that may rule a run out gets its turn.
+        let terrain = Terrain::from_fn(1600, 700, |x, y| {
+            let hill = 520.0 + 90.0 * libm::sin(f64::from(x) / 140.0);
+            f64::from(y) >= hill || ((x * 13 + y * 7) % 211 == 0 && y > 200) || ((700..760).contains(&x) && (300..312).contains(&y))
+        })
+        .unwrap();
+        let seats = vec![
+            testing::seat(Team::A, MobileKind::Coilback, 250, Facing::Right),
+            testing::seat(Team::B, MobileKind::Frostfin, 1000, Facing::Left),
+            testing::seat(Team::B, MobileKind::Lanternwing, 1350, Facing::Left),
+        ];
+        let mut game = testing::game_on(terrain, seats);
+        game.weather.columns = vec![Column::new(WeatherKind::Tornado, 600), Column::new(WeatherKind::Force, 1180), Column::new(WeatherKind::Random, 420)];
+        game.wind = Wind::new(19, 70).unwrap();
+        let last = MAX_FLIGHT_SECONDS.value * TICKS_PER_SECOND;
+        let mut checked = 0;
+        for aim in (-10..=170).step_by(7) {
+            for power in (2..=80).step_by(3) {
+                let flight = game.launch(0, Shot::S1, aim, f64::from(power) / 20.0).unwrap();
+                for (from_tick, launched) in [(0, true), (0, false), (900, false)] {
+                    for senses in [Senses::ALL, Senses { mobiles: false, terrain: true }, Senses { mobiles: true, terrain: false }] {
+                        let fast = game.fly_through(&flight, from_tick, launched, senses, last);
+                        assert_eq!(
+                            fast,
+                            fly_tick_by_tick(&game, &flight, from_tick, launched, senses, last),
+                            "{aim} degrees, {power}/20 bars from {from_tick}"
+                        );
+                        checked += usize::from(fast.is_some_and(|impact| impact.contact != Contact::Gone));
+                    }
+                }
+            }
+        }
+        assert!(checked > 2000, "most flights touch something: {checked}");
+    }
 
     #[test]
     fn a_new_game_seats_everyone_on_the_ground_and_starts_with_the_rolled_order() {
