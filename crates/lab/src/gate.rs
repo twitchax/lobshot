@@ -29,13 +29,10 @@ const SPARKHORN: &str = "Sparkhorn fires at 18 to 40 degrees (CR-mob): its balls
 const FLOATS: &str = "Kitewyrm floats, and J.Frog's walking shots can't hit a Dragon (SW-mob, WP06): only a sponge's blast timed \
                       under it reaches across the 16 px gap (OB).";
 const FLARECROW: &str = "Flarecrow's S2 is three of Skyeye's beams, from level 1 (SW-mob's 140-500, CR-aduka): less a hit than the \
-                         roster's middle, and Dual adds less to beams than to shells. It wins 34% at Hard against the field.";
-const COILBACK: &str = "Coilback is Armor, GunBound's reference shot, every number cited (CR-mob, DB-mob): its winner's shots \
-                        forgive a misread wind as its shells don't, and it wins 38% at Normal against the field.";
-const NEAR: &str = "Within 6 points of the band after T-010's tuning: no further pick or contradiction in either mobile was found \
-                    to bring it in.";
-const HARD: &str = "Lopsided at Hard, where exact aim leaves the race to damage per delay (Lanternwing over Sudsotter 83%, \
-                    Marblemole over Tinbadger 87%), near the band at Normal: T-010 found nothing within either mobile's sources \
+                         roster's middle, and Dual adds less to beams than to shells. It wins 33% at Hard against the field.";
+const COILBACK: &str = "Coilback is Armor, GunBound's reference shot (CR-mob, DB-mob): its winner's shots forgive a misread wind as \
+                        its shells don't (82-83% at Normal), and it wins 39% at Normal against the field.";
+const NEAR: &str = "Within 8 points of the band after T-010's tuning: no further pick or contradiction in either mobile was found \
                     to bring it in.";
 
 /// The matchups known to sit outside 35-65% at the gate's settings, as `cargo make balance-gate`
@@ -49,36 +46,34 @@ pub const KNOWN: &[Known] = &[
     known(Frostfin, Sparkhorn, 77.5, SPARKHORN),
     known(Augerdillo, Sparkhorn, 76.8, SPARKHORN),
     known(Needlemouse, Sparkhorn, 75.0, SPARKHORN),
-    known(Herdhound, Sparkhorn, 71.8, SPARKHORN),
     known(Tuskrack, Sparkhorn, 71.5, SPARKHORN),
+    known(Tinbadger, Sparkhorn, 71.0, SPARKHORN),
     known(Hookclaw, Sparkhorn, 69.8, SPARKHORN),
     known(Thistleback, Sparkhorn, 69.0, SPARKHORN),
     known(Spoutpot, Sparkhorn, 67.5, SPARKHORN),
-    known(Coilback, Sparkhorn, 67.0, SPARKHORN),
+    known(Sudsotter, Sparkhorn, 66.0, SPARKHORN),
+    known(Herdhound, Sparkhorn, 65.5, SPARKHORN),
     known(Kitewyrm, Sudsotter, 93.5, FLOATS),
     known(Marblemole, Flarecrow, 75.5, FLARECROW),
-    known(Herdhound, Flarecrow, 74.0, FLARECROW),
+    known(Tinbadger, Flarecrow, 73.0, FLARECROW),
     known(Lanternwing, Flarecrow, 70.0, FLARECROW),
     known(Kitewyrm, Flarecrow, 67.0, FLARECROW),
     known(Lodestoad, Flarecrow, 66.5, FLARECROW),
     known(Tuskrack, Flarecrow, 66.0, FLARECROW),
     known(Needlemouse, Flarecrow, 65.5, FLARECROW),
-    known(Tinbadger, Flarecrow, 65.5, FLARECROW),
-    known(Marblemole, Coilback, 78.5, COILBACK),
-    known(Lodestoad, Coilback, 73.5, COILBACK),
-    known(Herdhound, Coilback, 69.0, COILBACK),
-    known(Kitewyrm, Coilback, 65.5, COILBACK),
-    known(Augerdillo, Coilback, 65.5, COILBACK),
-    known(Lanternwing, Sudsotter, 75.5, HARD),
-    known(Marblemole, Tinbadger, 75.0, HARD),
-    known(Kitewyrm, Tinbadger, 70.5, NEAR),
+    known(Marblemole, Coilback, 79.0, COILBACK),
+    known(Lodestoad, Coilback, 73.0, COILBACK),
+    known(Lanternwing, Sudsotter, 72.0, NEAR),
     known(Tuskrack, Lensowl, 68.5, NEAR),
     known(Kitewyrm, Frostfin, 68.0, NEAR),
     known(Tuskrack, Frostfin, 67.5, NEAR),
-    known(Herdhound, Sudsotter, 67.5, NEAR),
+    known(Marblemole, Tinbadger, 67.0, NEAR),
     known(Augerdillo, Lensowl, 66.5, NEAR),
     known(Marblemole, Lodestoad, 66.5, NEAR),
+    known(Tinbadger, Frostfin, 66.0, NEAR),
     known(Augerdillo, Lanternwing, 66.0, NEAR),
+    known(Coilback, Sudsotter, 66.0, NEAR),
+    known(Kitewyrm, Tinbadger, 66.0, NEAR),
 ];
 
 const fn known(winner: MobileKind, loser: MobileKind, percent: f64, why: &'static str) -> Known {
