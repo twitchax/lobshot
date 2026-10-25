@@ -63,6 +63,9 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Jewel mode (M6): jewels fall onto the map, worth 5, 10, 25 or -5 points; deal 100, 200 or 300
+  damage to one in a turn to take it, and the first team to 100 wins. No one is hurt, so only a
+  bunge kills, and the bunged drop back in. Bots shoot jewels and dig under enemies.
 - Tag mode (M6): two mobiles each, the second on half HP; switch once a turn on your own turn (F7 or
   T, or the HUD's button), and you're out when the mobile in play dies. Bots pick two and switch
   when it helps.
