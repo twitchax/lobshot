@@ -1,10 +1,10 @@
 //! The HUD, in GunBound's functional layout: weather queue, wind dial and turn timer (with the
-//! sudden-death countdown and, in Score, each team's lives) across the top; turn list, shots,
-//! items, angle, power bar and move bar along the bottom; chat above the turn list; the aim arc,
-//! with its true-angle wedge, around your mobile. In Tag, your mobile sitting out and its HP stand
-//! beside the controls, with the button (and the key, F7 or T) that switches it in. Once you're dead, the
-//! slot machine stands there, or in Score, where you'll drop back in and when; drops and drop
-//! points coming down are marked on the map.
+//! sudden-death countdown and, in Score, each team's lives, or in Jewel, its points toward 100)
+//! across the top; turn list, shots, items, angle, power bar and move bar along the bottom; chat
+//! above the turn list; the aim arc, with its true-angle wedge, around your mobile. In Tag, your
+//! mobile sitting out and its HP stand beside the controls, with the button (and the key, F7 or T)
+//! that switches it in. Once you're dead, the slot machine stands there, or in Score and Jewel,
+//! where you'll drop back in and when; drops and drop points coming down are marked on the map.
 
 use bevy::{ecs::system::SystemParam, picking::Pickable, prelude::*, ui::InteractionDisabled};
 use lobshot_sim::{
@@ -96,6 +96,9 @@ struct PointsRow;
 /// A team's lives.
 #[derive(Component)]
 struct PointsText(Team);
+/// What the points row counts: lives, or points.
+#[derive(Component)]
+struct PointsTitle;
 /// Where a dead player in Score drops back in, and when.
 #[derive(Component)]
 struct RespawnPanel;
@@ -217,7 +220,7 @@ fn top_bar(top: &mut ChildSpawnerCommands) {
                 ..default()
             },
             children![
-                text("Lives", 13.0, theme::MUTED),
+                (PointsTitle, text("Lives", 13.0, theme::MUTED)),
                 (PointsText(Team::A), text("", 15.0, team_color(Team::A))),
                 (PointsText(Team::B), text("", 15.0, team_color(Team::B))),
             ],
@@ -1031,8 +1034,22 @@ fn drop_markers(game: Option<Res<Match>>, session: Res<Session>, markers: Query<
     *shown = falling;
 }
 
-/// Each team's lives, in a mode that counts them.
-fn points(game: Option<Res<Match>>, mut rows: Query<&mut Node, With<PointsRow>>, mut texts: Query<(&PointsText, &mut Text)>) {
+/// What the points row counts in `mode`.
+fn points_title(mode: Mode) -> &'static str {
+    if mode.jewels() { "Points" } else { "Lives" }
+}
+
+/// What a team's points read in `mode`: Score's lives, or Jewel's points toward the target.
+fn points_label(mode: Mode, team: Team, points: i32) -> String {
+    if mode.jewels() {
+        format!("{team:?} {points}/{}", lobshot_sim::tuning::jewels::TARGET_POINTS.value)
+    } else {
+        format!("{team:?} {points}")
+    }
+}
+
+/// Each team's lives or points, in a mode that counts them.
+fn points(game: Option<Res<Match>>, mut rows: Query<&mut Node, With<PointsRow>>, mut texts: Query<(&PointsText, &mut Text), Without<PointsTitle>>, mut titles: Query<&mut Text, With<PointsTitle>>) {
     let Some(game) = game else { return };
     let counted = game.predicted.points(Team::A).is_some();
     let display = if counted { Display::Flex } else { Display::None };
@@ -1042,9 +1059,15 @@ fn points(game: Option<Res<Match>>, mut rows: Query<&mut Node, With<PointsRow>>,
         }
     }
     for (team, mut text) in &mut texts {
-        let label = game.predicted.points(team.0).map_or_else(String::new, |points| format!("{:?} {points}", team.0));
+        let label = game.predicted.points(team.0).map_or_else(String::new, |points| points_label(game.predicted.mode(), team.0, points));
         if **text != label {
             **text = label;
+        }
+    }
+    let title = points_title(game.predicted.mode());
+    for mut text in &mut titles {
+        if **text != title {
+            title.clone_into(&mut **text);
         }
     }
 }
@@ -1188,6 +1211,13 @@ mod unit {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+
+    #[test]
+    fn points_read_as_lives_in_score_and_toward_the_target_in_jewel() {
+        assert_eq!(points_label(Mode::Score, Team::A, 3), "A 3");
+        assert_eq!(points_label(Mode::Jewel, Team::B, 35), "B 35/100");
+        assert_eq!((points_title(Mode::Score), points_title(Mode::Jewel)), ("Lives", "Points"));
+    }
 
     #[test]
     fn the_turn_list_counts_delay_from_you_or_the_next_mover() {

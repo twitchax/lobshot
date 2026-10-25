@@ -74,7 +74,7 @@ fn storm(game: &mut Game, gun: &Gun, track: &Track, effects: &mut Vec<Effect>) {
         let strike = bolt::from_sky(game, x);
         bolt::flash(game, &strike, BOLT_CRATER.value * gun.salvo.crater, tick, effects);
         let blast = gun.blast(strike.at, BOLT_REACH.value, SS_BOLT_DAMAGE.value, track.marks.boost());
-        bolt::zap(game, &strike, &blast, effects);
+        bolt::zap(game, &strike, &blast, tick, effects);
     }
 }
 

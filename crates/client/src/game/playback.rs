@@ -14,6 +14,7 @@ use lobshot_sim::{
     ballistics::{self, Spin},
     game::{Death, Effect, Event, Leg, MobileKind, Phase, Shot, SuddenDeathKind, Team},
     items::Item,
+    jewels::Jewel,
     mines::{Mine, MineId},
     movement::Footing,
     tuning::TURN_TIME_LIMIT,
@@ -23,6 +24,7 @@ use lobshot_sim::{
 use super::{
     Focus, GameRoot,
     fx::{Bolts, Dot, pop, puff, rising},
+    jewels::{self, Gem, JewelView},
     world,
     world::{Glide, MapArt, MineView, MobileView, Shown, depth, mine_sprite, mine_transform, shot_sprite},
 };
@@ -231,6 +233,29 @@ fn mine_cues(effect: &Effect, at: f32, cues: &mut Vec<(f32, MineCue)>) {
     }
 }
 
+/// What a jewel's effect at `at` does to its jewel on screen, and when (`jewels::stage`); nothing
+/// for any other effect. A falling jewel flies its fall (`take_off`) and lands at its end.
+fn jewel_cues(effect: &Effect, at: f32, cues: &mut Vec<(f32, jewels::Cue)>) {
+    let mut cue = |when: f32, jewel: jewels::Cue| cues.push((when, jewel));
+    match *effect {
+        Effect::JewelDropped { id, drop, ref legs, to: Some(to) } => {
+            let jewel = Jewel {
+                id,
+                kind: drop.kind,
+                at: to,
+                damage: 0,
+                landed: 0,
+            };
+            cue(at + pacing::flight_seconds(legs), jewels::Cue::Landed(jewel));
+        }
+        Effect::JewelHit { id, amount, .. } => cue(at, jewels::Cue::Hit { id, amount }),
+        Effect::JewelTaken { id, team, .. } => cue(at, jewels::Cue::Taken { id, team }),
+        Effect::JewelFell { id, to } => cue(at, jewels::Cue::At { id, at: Jewel::middle_at(to) }),
+        Effect::JewelGone { id } => cue(at, jewels::Cue::Hide(id)),
+        _ => {}
+    }
+}
+
 /// How one strand of a helix winds about its path, for `ballistics::helix_point`.
 #[derive(Debug, Clone, Copy)]
 struct Winding {
@@ -302,6 +327,9 @@ struct Scene {
     /// The mines' cues, and the next to play.
     mines: Vec<(f32, MineCue)>,
     next_mine: usize,
+    /// The jewels' cues, and the next to play.
+    jewels: Vec<(f32, jewels::Cue)>,
+    next_jewel: usize,
     flyers: Vec<Flyer>,
     motion: Motion,
     end: f32,
@@ -391,6 +419,8 @@ struct Props<'a> {
     mobiles: &'a [MobileKind],
     /// The mobiles' rigs, for the pictures some of their shots are drawn with.
     rigs: &'a Rigs,
+    /// A falling jewel's picture, once it is made.
+    gem: Option<&'a Gem>,
 }
 
 /// Whose volley a scene is showing, and which shot.
@@ -537,6 +567,16 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
             };
             fly(legs, None, at + pacing::flight_seconds(legs), sprite);
         }
+        // A jewel falling from the sky: a gem in its color, the size it sits.
+        Effect::JewelDropped { drop, legs, .. } => {
+            let sprite = Sprite {
+                image: props.gem.map_or_else(|| props.dot.0.clone(), |gem| gem.0.clone()),
+                color: jewels::color(drop.kind),
+                custom_size: Some(Vec2::splat(24.0)),
+                ..default()
+            };
+            fly(legs, None, at + pacing::flight_seconds(legs), sprite);
+        }
         _ => {}
     }
     flyers
@@ -632,8 +672,9 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         Effect::Switched { .. } => switched(&effect, at, cues),
         Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
         Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
-        // Flyers took off above, and mines are staged on their own (`mine_cues`); the HUD shows the
-        // rest from the game itself (the wind, the moondisk, the reel).
+        // Flyers took off above, and mines and jewels are staged on their own (`mine_cues`,
+        // `jewel_cues`); the HUD shows the rest from the game itself (the wind, the moondisk, the
+        // reel, the points), and a jewel that turned is drawn anew once the scene is over.
         Effect::Fired { .. }
         | Effect::Helix { .. }
         | Effect::Beacon { .. }
@@ -653,7 +694,13 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
         | Effect::MineFell { .. }
         | Effect::MineGone { .. }
         | Effect::Points { .. }
-        | Effect::RespawnPicked { .. } => {}
+        | Effect::RespawnPicked { .. }
+        | Effect::JewelDropped { .. }
+        | Effect::JewelHit { .. }
+        | Effect::JewelTaken { .. }
+        | Effect::JewelFell { .. }
+        | Effect::JewelGone { .. }
+        | Effect::JewelTurned { .. } => {}
     }
 }
 
@@ -692,6 +739,7 @@ fn born_in_flight(effect: &Effect) -> Option<(f32, SimVec2)> {
 fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Shown)>, commands: &mut Commands) -> Scene {
     let mut cues = Vec::new();
     let mut mines = Vec::new();
+    let mut jewels = Vec::new();
     let mut flyers = Vec::new();
     let schedule = pacing::schedule(&played.effects);
 
@@ -716,22 +764,28 @@ fn stage(played: Played, props: &Props, views: &mut Query<(&MobileView, &mut Sho
             // cannon; a drop falls quietly.
             Some((after, origin)) => cues.push((at + after, Cue::Burst { at: origin, color: shooter.color(false) })),
             // A guide rides its warhead's flight, which sounded already.
-            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. } | Effect::Guide { .. }) => cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire))),
+            None if !launched.is_empty() && !matches!(effect, Effect::Dropped { .. } | Effect::Guide { .. } | Effect::JewelDropped { .. }) => {
+                cues.push((at + leaves(&effect), Cue::Sound(Sound::Fire)));
+            }
             None => {}
         }
         flyers.extend(launched);
         mine_cues(&effect, at, &mut mines);
+        jewel_cues(&effect, at, &mut jewels);
         cue(effect, at, &mut cues);
     }
     // Stable, so cues at the same moment keep the sim's order (the turn passing last).
     cues.sort_by(|a, b| a.0.total_cmp(&b.0));
     mines.sort_by(|a, b| a.0.total_cmp(&b.0));
+    jewels.sort_by(|a, b| a.0.total_cmp(&b.0));
     Scene {
         elapsed: 0.0,
         cues,
         next: 0,
         mines,
         next_mine: 0,
+        jewels,
+        next_jewel: 0,
         flyers,
         motion: Motion::default(),
         end: schedule.end,
@@ -754,15 +808,24 @@ struct Stagehands<'w> {
     sounds: MessageWriter<'w, Play>,
     game: Option<Res<'w, Match>>,
     rigs: Res<'w, Rigs>,
+    gem: Option<Res<'w, Gem>>,
 }
 
-/// The flyers' sprites: everything a scene moves that is neither a mobile nor a mine.
-type FlyerParts<'w, 's> = Query<'w, 's, (&'static mut Transform, &'static mut Visibility), (Without<MobileView>, Without<MineView>)>;
+/// The flyers' sprites: everything a scene moves that is neither a mobile, a mine nor a jewel.
+type FlyerParts<'w, 's> = Query<'w, 's, (&'static mut Transform, &'static mut Visibility), (Without<MobileView>, Without<MineView>, Without<JewelView>)>;
 
 /// The mines on screen.
-type MineParts<'w, 's> = Query<'w, 's, (&'static MineView, &'static mut Transform, &'static mut Visibility), Without<MobileView>>;
+type MineParts<'w, 's> = Query<'w, 's, (&'static MineView, &'static mut Transform, &'static mut Visibility), (Without<MobileView>, Without<JewelView>)>;
 
-fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<(&MobileView, &mut Shown)>, mut transforms: FlyerParts, mut mines: MineParts, mut commands: Commands) {
+fn play(
+    mut timeline: ResMut<Timeline>,
+    mut hands: Stagehands,
+    mut views: Query<(&MobileView, &mut Shown)>,
+    mut transforms: FlyerParts,
+    mut mines: MineParts,
+    mut jewel_parts: jewels::Parts,
+    mut commands: Commands,
+) {
     let Some(dot) = hands.dot.as_deref().map(|dot| Dot(dot.0.clone())) else { return };
     // What each seat plays as this scene starts: in Tag, a switch shown before it changed it.
     let mut mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
@@ -778,6 +841,7 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
             server: &hands.server,
             mobiles: &mobiles,
             rigs: &hands.rigs,
+            gem: hands.gem.as_deref(),
         };
         timeline.scene = Some(stage(next, &props, &mut views, &mut commands));
     }
@@ -802,6 +866,13 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
         }
         scene.next_mine += 1;
     }
+    while let Some(&(at, cue)) = scene.jewels.get(scene.next_jewel) {
+        if at > now {
+            break;
+        }
+        jewels::stage(cue, hands.gem.as_deref(), &dot, &mut jewel_parts, &mut commands);
+        scene.next_jewel += 1;
+    }
     for change in &scene.motion.moves {
         let t = f64::from(((now - change.started) / FALL_SECONDS).clamp(0.0, 1.0));
         // Falls accelerate, like a drop; swaps glide.
@@ -811,7 +882,7 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
     }
     scene.motion.descents.retain(|descent| descend(descent, now, &mut views, &mut hands));
 
-    if now >= scene.end && scene.next >= scene.cues.len() && scene.next_mine >= scene.mines.len() {
+    if now >= scene.end && scene.next >= scene.cues.len() && scene.next_mine >= scene.mines.len() && scene.next_jewel >= scene.jewels.len() {
         timeline.scene = None;
     }
 }

@@ -6,7 +6,7 @@ use super::{Gun, helix::cut};
 use crate::{
     ballistics::Flight,
     game::{Contact, Effect, Game, Impact, Leg, Senses, Shot, Track},
-    mines,
+    jewels, mines,
     tuning::{
         MAX_FLIGHT_SECONDS,
         augerdillo::{S1_BLAST, S1_DAMAGE, S2_BLAST, S2_BURROW_LIFT, S2_BURROW_SPEED, S2_DAMAGE, SS_BLAST, SS_DAMAGE},
@@ -38,22 +38,15 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             // It goes off where it first touches a mobile, a direct hit worth most at the hitbox's
             // center: its weak spot, which only a shot from overlapping the target reaches.
             let track = game.track_sensing(flight, 0, 0, THROUGH_GROUND);
-            // Or on a mine it meets first: Nak's SS "explodes upon impact with a mobile, a jewel,
-            // or a mini-Raon" (WP06). Its blast sets the mine off.
-            let mine = mines::crossed(game, &track.legs)
-                .first()
-                .copied()
-                .filter(|&(_, tick)| tick < track.impact.tick || track.impact.contact == Contact::Gone);
-            if let Some((mine, tick)) = mine {
+            // Or on a mine or a jewel it meets first: Nak's SS "explodes upon impact with a mobile,
+            // a jewel, or a mini-Raon" (WP06). Its blast sets the mine off, or hits the jewel.
+            let met = first_met(game, &track.legs).filter(|&(_, tick)| tick < track.impact.tick || track.impact.contact == Contact::Gone);
+            if let Some((at, tick)) = met {
                 effects.push(Effect::Fired {
                     seat: gun.seat,
                     legs: cut(track.legs, &[tick]),
                 });
-                let impact = Impact {
-                    tick,
-                    at: mine.middle(),
-                    contact: Contact::Terrain,
-                };
+                let impact = Impact { tick, at, contact: Contact::Terrain };
                 gun.land(
                     game,
                     &gun.blast(impact.at, SS_BLAST.value, SS_DAMAGE.value, track.marks.boost()),
@@ -68,6 +61,14 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
             gun.land(game, &gun.blast_on(&track, SS_BLAST.value, SS_DAMAGE.value), SS_BLAST.value, &track.impact, track.marks, effects);
         }
     }
+}
+
+/// Where and when a path first meets a mine or a jewel, the mine first if both at once: the middle
+/// of what it met, and the stage tick.
+fn first_met(game: &Game, legs: &[Leg]) -> Option<(Vec2, u32)> {
+    let mine = mines::crossed(game, legs).first().map(|&(mine, tick)| (mine.middle(), tick));
+    let jewel = jewels::crossed(game, legs).first().map(|&(jewel, tick)| (jewel.middle(), tick));
+    [mine, jewel].into_iter().flatten().min_by_key(|&(_, tick)| tick)
 }
 
 /// Where a shot `seat` fires along `flight` does its work, for SearchBot's aim pass: where the S2

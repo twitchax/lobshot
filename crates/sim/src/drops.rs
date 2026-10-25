@@ -102,7 +102,7 @@ fn land(game: &mut Game, Falling { seat, drop, .. }: Falling, effects: &mut Vec<
             false_angle: false,
             boost: 1.0,
         };
-        bolt::zap(game, &strike, &blast, effects);
+        bolt::zap(game, &strike, &blast, 0, effects);
         return;
     }
     let push = if drop.kind == DropKind::Dynamite { DYNAMITE_WIND.value } else { 0.0 };

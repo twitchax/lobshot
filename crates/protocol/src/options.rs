@@ -244,20 +244,18 @@ mod unit {
         assert_eq!(refusal(RoomOptions { team_size: 5, ..options.clone() }), "teams are 1 to 4 players, not 5");
         assert_eq!(refusal(RoomOptions { max_wind: 13, ..options.clone() }), "max wind is 0, 12 or 26, not 13");
         assert_eq!(refusal(RoomOptions { turn_seconds: 7, ..options.clone() }), "turns are 5, 10 or 20 seconds, not 7");
-        assert_eq!(refusal(RoomOptions { mode: Mode::Jewel, ..options }), "Jewel mode isn't built yet: rooms play Solo, Score or Tag");
         assert_eq!(one_of(&[3]), "3");
     }
 
     #[test]
-    fn modes_step_through_those_built_and_default_to_solo() {
+    fn modes_step_through_every_one_and_default_to_solo() {
         let options = RoomOptions::default();
         assert_eq!(options.mode, Mode::Solo);
-        assert_eq!(modes(), [Mode::Solo, Mode::Score, Mode::Tag]);
+        assert_eq!(modes(), Mode::ALL, "every mode is built");
         assert_eq!(options.next_mode().mode, Mode::Score);
         assert_eq!(options.next_mode().next_mode().mode, Mode::Tag);
-        assert_eq!(options.next_mode().next_mode().next_mode().mode, Mode::Solo, "wrapping around");
-        let unbuilt = RoomOptions { mode: Mode::Jewel, ..options };
-        assert_eq!(unbuilt.next_mode().mode, Mode::Solo, "an unbuilt mode starts over");
+        assert_eq!(options.next_mode().next_mode().next_mode().mode, Mode::Jewel);
+        assert_eq!(options.next_mode().next_mode().next_mode().next_mode().mode, Mode::Solo, "wrapping around");
     }
 
     #[test]

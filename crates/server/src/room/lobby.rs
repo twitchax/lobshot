@@ -295,7 +295,7 @@ mod unit {
     }
 
     #[test]
-    fn a_room_plays_the_modes_built_and_refuses_the_rest() {
+    fn a_room_plays_every_mode() {
         let mut h = Harness::new();
         h.join(1, "Master");
         let with = |mode| {
@@ -306,15 +306,11 @@ mod unit {
             })
         };
         assert_eq!(h.room.view().options.mode, Mode::Solo, "a new room plays Solo");
-        h.send(1, with(Mode::Score));
-        assert_eq!(h.rejections(1), Vec::<String>::new());
-        assert_eq!(h.room.view().options.mode, Mode::Score);
-        h.send(1, with(Mode::Tag));
-        assert_eq!(h.rejections(1), Vec::<String>::new());
-        assert_eq!(h.room.view().options.mode, Mode::Tag);
-        h.send(1, with(Mode::Jewel));
-        assert_eq!(h.rejections(1), ["Jewel mode isn't built yet: rooms play Solo, Score or Tag"]);
-        assert_eq!(h.room.view().options.mode, Mode::Tag, "a refusal changes nothing");
+        for mode in [Mode::Score, Mode::Tag, Mode::Jewel] {
+            h.send(1, with(mode));
+            assert_eq!(h.rejections(1), Vec::<String>::new());
+            assert_eq!(h.room.view().options.mode, mode);
+        }
     }
 
     #[test]

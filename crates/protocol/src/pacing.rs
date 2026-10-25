@@ -79,12 +79,12 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
     let mut sudden_death = None;
     for (i, effect) in effects.iter().enumerate() {
         let time = match effect {
-            Effect::Volley { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } | Effect::Respawned { .. } => {
+            Effect::Volley { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } | Effect::Respawned { .. } | Effect::JewelDropped { .. } => {
                 // A new stage waits until the one before has played out, falls included.
                 stage = Stage::starting(if busy > 0.0 { busy + FALL_SECONDS + TAIL_SECONDS } else { stage.base });
                 match effect {
                     // A drop's landing is the stage's blast, for what follows it: a heal, the wind.
-                    Effect::Dropped { legs, .. } | Effect::Respawned { legs, .. } => {
+                    Effect::Dropped { legs, .. } | Effect::Respawned { legs, .. } | Effect::JewelDropped { legs, .. } => {
                         stage.blast += flight_seconds(legs);
                         stage.last_blast = stage.blast;
                         busy = busy.max(stage.blast);
@@ -97,7 +97,10 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             }
             // Gone with what came before it: its layer's death, or a fall off the map; and a life
             // goes as its mobile dies.
-            Effect::MineGone { tick: None, .. } | Effect::Points { .. } => at.last().copied().unwrap_or(stage.base),
+            Effect::MineGone { tick: None, .. } | Effect::Points { .. } | Effect::JewelGone { .. } => at.last().copied().unwrap_or(stage.base),
+            // A jewel's damage shows as the blast's does, and a jewel taken goes as a mobile dies.
+            Effect::JewelHit { tick, .. } => stage.base + ticks_to_seconds(*tick) + DAMAGE_AFTER_BLAST,
+            Effect::JewelTaken { tick, .. } => stage.base + ticks_to_seconds(*tick) + DEATH_AFTER_BLAST,
             Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Guide { legs, .. } => {
                 busy = busy.max(stage.base + flight_seconds(legs));
                 stage.base
@@ -131,14 +134,15 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 Death::Forfeited => stage.base,
             },
             // Everything that falls falls together, after the blasts that shook it loose.
-            Effect::Fell { .. } | Effect::MineFell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
+            Effect::Fell { .. } | Effect::MineFell { .. } | Effect::JewelFell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
             Effect::Swapped { .. } => stage.base + FALL_SECONDS,
             Effect::WindChanged(_) => stage.blast,
             Effect::SuddenDeath { .. } => {
                 sudden_death = Some(i);
                 0.0
             }
-            Effect::TurnStarted { .. } | Effect::GameOver { .. } | Effect::ShieldRestored { .. } | Effect::SsReady { .. } => {
+            // An Onyx turns blue as the turn passes.
+            Effect::TurnStarted { .. } | Effect::GameOver { .. } | Effect::ShieldRestored { .. } | Effect::SsReady { .. } | Effect::JewelTurned { .. } => {
                 finale.push(i);
                 0.0
             }
@@ -231,6 +235,10 @@ mod unit {
                 lobshot_sim::game::Roll::Weather { .. } => Event::Weather(lobshot_sim::weather::Forecast::new(lobshot_sim::weather::WeatherKind::Wind, 0)),
                 lobshot_sim::game::Roll::Drop { .. } => Event::Drop(lobshot_sim::drops::Drop {
                     kind: lobshot_sim::drops::DropKind::Calm,
+                    x: 0,
+                }),
+                lobshot_sim::game::Roll::Jewel { .. } => Event::Jewel(lobshot_sim::jewels::JewelDrop {
+                    kind: lobshot_sim::jewels::JewelKind::Onyx,
                     x: 0,
                 }),
             };
@@ -400,6 +408,59 @@ mod unit {
         assert_eq!(schedule.at[4], stage, "the drop waits for the shot to play out");
         assert_eq!(schedule.end, stage + 2.0 + FALL_SECONDS + TAIL_SECONDS, "and the turn for the drop to land");
         assert_eq!(super::schedule(&[Effect::RespawnPicked { seat: 3, x: 5, lands: 9 }]).end, 0.0, "a pick is instant");
+    }
+
+    #[test]
+    fn a_jewel_falls_as_a_drop_does_takes_its_damage_with_the_blast_and_goes_as_a_mobile_dies() {
+        let fall = Leg {
+            flight: lobshot_sim::ballistics::Flight {
+                origin: Vec2::ZERO,
+                velocity: Vec2::ZERO,
+                accel: Vec2::new(0.0, 600.0),
+            },
+            from: 0,
+            to: TICKS_PER_SECOND,
+            offset: 0,
+        };
+        let id = lobshot_sim::jewels::JewelId(0);
+        let drop = lobshot_sim::jewels::JewelDrop {
+            kind: lobshot_sim::jewels::JewelKind::Ruby,
+            x: 5,
+        };
+        let dropped = schedule(&[Effect::JewelDropped {
+            id,
+            drop,
+            legs: vec![fall],
+            to: Some(Footing { x: 5, y: 600 }),
+        }]);
+        assert_eq!(dropped.end, 1.0 + FALL_SECONDS + TAIL_SECONDS, "it falls for a second");
+        let team = lobshot_sim::game::Team::A;
+        let effects = vec![
+            Effect::Exploded {
+                at: Vec2::ZERO,
+                radius: 30.0,
+                tick: TICKS_PER_SECOND,
+                dirty: None,
+            },
+            Effect::JewelHit { id, amount: 300, tick: TICKS_PER_SECOND },
+            Effect::JewelTaken { id, team, tick: TICKS_PER_SECOND },
+            Effect::Points { team, points: 25 },
+            Effect::JewelFell {
+                id: lobshot_sim::jewels::JewelId(1),
+                to: Footing { x: 0, y: 700 },
+            },
+            Effect::JewelTurned {
+                id: lobshot_sim::jewels::JewelId(2),
+                kind: lobshot_sim::jewels::JewelKind::Sapphire,
+            },
+            Effect::TurnStarted { seat: 1 },
+        ];
+        let schedule = schedule(&effects);
+        assert_eq!(schedule.at[1], 1.0 + DAMAGE_AFTER_BLAST);
+        assert_eq!(schedule.at[2], 1.0 + DEATH_AFTER_BLAST);
+        assert_eq!(schedule.at[3], schedule.at[2], "the points come with it");
+        assert_eq!(schedule.at[4], 1.0 + SETTLE_SECONDS, "a jewel falls with the mobiles");
+        assert_eq!(schedule.at[5], schedule.end, "an Onyx turns blue as the turn passes");
     }
 
     #[test]

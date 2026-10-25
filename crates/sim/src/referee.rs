@@ -11,8 +11,10 @@ use crate::{
     drops::{Drop, DropKind},
     game::{Event, MobileKind, Roll, Seat, Setup, SuddenDeath, Team},
     items::Loadout,
+    jewels::{JewelDrop, JewelKind},
     map::Arena,
     mode::Mode,
+    tuning::jewels,
     units::{Centis, Facing, Wind},
     weather::{Forecast, WeatherKind},
 };
@@ -159,7 +161,7 @@ pub fn wind(max: u8, dice: &mut impl Dice) -> Wind {
     }
 }
 
-/// The event that answers `roll`: any weather or drop, anywhere across the map; wind up to
+/// The event that answers `roll`: any weather, drop or jewel, anywhere across the map; wind up to
 /// `max_wind`.
 pub fn answer(roll: Roll, max_wind: u8, dice: &mut impl Dice) -> Event {
     match roll {
@@ -174,6 +176,22 @@ pub fn answer(roll: Roll, max_wind: u8, dice: &mut impl Dice) -> Event {
             kind: DropKind::ALL[roll_index(DropKind::ALL.len(), dice)],
             x: column(width, dice),
         }),
+        Roll::Jewel { width } => Event::Jewel(jewel(width, dice)),
+    }
+}
+
+/// A jewel falling anywhere across the map: its kind by `tuning::jewels::ODDS`.
+fn jewel(width: u32, dice: &mut impl Dice) -> JewelDrop {
+    let odds = jewels::ODDS.value;
+    let mut roll = dice.below(odds.iter().sum());
+    let kind = JewelKind::ALL.into_iter().zip(odds).find(|&(_, weight)| {
+        let hit = roll < weight;
+        roll = roll.saturating_sub(weight);
+        hit
+    });
+    JewelDrop {
+        kind: kind.map_or(JewelKind::ALL[0], |(kind, _)| kind),
+        x: column(width, dice),
     }
 }
 
@@ -374,6 +392,23 @@ mod unit {
         }
         assert_eq!((weathers.len(), drops.len()), (WeatherKind::ALL.len(), DropKind::ALL.len()));
         assert_eq!(hidden.len(), WeatherKind::HIDDEN.len(), "{hidden:?}");
+    }
+
+    #[test]
+    fn jewels_roll_every_kind_by_its_odds_across_the_whole_map() {
+        let mut dice = XorShift::new(11);
+        let mut counts = [0_u32; 4];
+        for _ in 0..4000 {
+            let Event::Jewel(drop) = answer(Roll::Jewel { width: 50 }, 26, &mut dice) else { panic!() };
+            assert!((0..50).contains(&drop.x));
+            counts[JewelKind::ALL.iter().position(|&kind| kind == drop.kind).unwrap()] += 1;
+        }
+        let odds = jewels::ODDS.value;
+        let total: u32 = odds.iter().sum();
+        for (count, weight) in counts.into_iter().zip(odds) {
+            let expected = 4000 * weight / total;
+            assert!(count.abs_diff(expected) < expected / 5 + 20, "{counts:?} against {odds:?}");
+        }
     }
 
     #[test]
