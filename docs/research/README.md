@@ -20,6 +20,7 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`lensowl.md`](lensowl.md) | A.Sate (Lensowl): the tracer, its satellite's heights and lasers, the S1's side bias and the SS sweep. |
 | [`needlemouse.md`](needlemouse.md) | Knight (Needlemouse): its sword counts, where the swords come from, and its GunBound and DragonBound stats. |
 | [`tinbadger.md`](tinbadger.md) | Raon (Tinbadger): when its mines crawl, whom they hunt, what sets them off, the walking SS, and every contradiction between the guides. |
+| [`lodestoad.md`](lodestoad.md) | J.D. (Lodestoad): the pull and the push, their boxes and distances (DBR), the 2004 patch that stopped the push going over cliffs, and armor's share. |
 | [`modes-score.md`](modes-score.md) | Score mode: lives, what a death costs, the drop-in delay and wind, the turn on return, and the contradictions between the guides. |
 | [`modes-tag.md`](modes-tag.md) | Tag mode: switching once a turn, the second mobile's half HP, who is out, what each mobile keeps, Random with two picks. |
 | [`modes-jewel.md`](modes-jewel.md) | Jewel mode: the win, jewel values and the damage each needs, who scores, respawns, items, and the era split between 2002-03 and 2004+ sources. |

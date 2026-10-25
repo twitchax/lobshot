@@ -273,7 +273,10 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   a wind-up toy horse, Knight's: the same tracer, with a pincushion raining pins on it) and Tinbadger
   (a badger tinker pushing a crate-cart of wind-up tin beetles, Raon's: its S2 lays mines, the
   first state that outlives a turn, which crawl at the nearest mobile on its turn and go off under a
-  mobile's middle or in any blast; its SS winds up a big beetle that walks until it meets something).
+  mobile's middle or in any blast; its SS winds up a big beetle that walks until it meets something) and Lodestoad
+  (a toad on a magnet tractor, J.D.'s: its S2 pulls the mobiles, mines and jewels near where it lands
+  to the ground under it, over edges and off the map too; its SS pushes them 100 px away (DBR) but,
+  since GunBound's 2004 patch, not off a cliff, and hurts most a mobile pinned against a wall).
   Maps: Clockrise (tall tower: a cuckoo-clock tower town, A one tower, B twin towers bridged) and
   Tumblehill (practice slope: a training ground, A two hills, B a long slope down to a pond) and
   Neonbay (city: a harbor city at night, A downtown towers, B the docks) and Rootmere (root tangle:

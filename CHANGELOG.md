@@ -73,6 +73,9 @@ why the version moved the way it did.
 - Score mode (M6): each team has its players + 1 lives; the dead pick a drop point on the map
   and drop back in 4 turns later, nudged by the wind. Rooms, practice and the lab all play it, and
   bots pick their drop points. Modes are a room option (Solo by default).
+- Lodestoad (M5), a toad on a magnet tractor: S1 an electric orb with a flat splash, S2 a magnet
+  that pulls mobiles, mines and jewels in to where it lands (and can drag them off the map), SS a
+  pyramid that pushes them away, though not off a cliff. Mobiles slide when they're moved.
 - Tinbadger (M5), a badger tinker with a crate-cart of wind-up tin beetles: S1 three cogs that wind
   around one path, S2 two shells that lay mines (they crawl at the nearest mobile on its turn and
   go off under a mobile's middle, or in any blast nearby), SS a big beetle that walks until it
