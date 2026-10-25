@@ -15,7 +15,9 @@
 //!    its work somewhere else (a walking sponge, `shots::aim_point`) is scored by where that is.
 //! 2. **Shot.** For each shot it may fire (never a locked or disabled SS), the two best distinct
 //!    trajectories in its own range, refined, are fired in a scratch game and valued by what they
-//!    did: damage to enemies, kills, and twice the cost of any harm to its own side.
+//!    did: damage to enemies, kills, and twice the cost of any harm to its own side. A bot that
+//!    isn't sure of the wind or its hands (`Doubt`) values each by its mean over a few draws of
+//!    both, so it takes the shot it expects to do most, not the one that only lands as it read.
 //! 3. **Item.** A heal first when it is low; otherwise Dual (on S1 or S2) or Power Up when the
 //!    chosen shot is strong and the item makes it better.
 //!
@@ -28,8 +30,9 @@
 //! with the other mobile too and switches if that one's is clearly better (`switch`).
 //!
 //! Difficulty is error around the search (`tuning::bot`): the bot misreads the wind before it
-//! searches, then misses the aim and power it found. Both come from a seed the server rolls, so
-//! a bot's turn is still a pure function of its inputs.
+//! searches, then misses the aim and power it found, and it knows it may: it values shots over
+//! that same error. All of it comes from a seed the server rolls, so a bot's turn is still a pure
+//! function of its inputs.
 //!
 //! Dead, it plays the mode's objective (`while_dead`): it spins its slot machine (Solo), or picks
 //! where to drop back in (Score, `respawn`): on firm ground, at a fair range from an enemy, with
@@ -53,7 +56,7 @@ use crate::{
     referee::XorShift,
     shots,
     terrain::Terrain,
-    tuning::{self, AimRange, Barrel, bot::Noise},
+    tuning::{self, AimRange, Barrel, MobileTuning, bot::Noise},
     units::{Centis, Facing, Power, Vec2, Wind},
 };
 
@@ -76,6 +79,10 @@ const WALK_PARTS: u16 = 3;
 
 /// What a kill is worth on top of its damage, in damage.
 const KILL_VALUE: f64 = 300.0;
+
+/// How many draws of the wind and its hands a bot that isn't sure of them values each shot over
+/// (`Doubt`): enough that a shot that only lands in a still wind and steady hands shows it.
+const DOUBT_DRAWS: usize = 8;
 
 /// In Jewel, it searches a shot at this many of the nearest jewels worth points.
 const JEWEL_MARKS: usize = 2;
@@ -148,12 +155,15 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         scratch.apply(heal).ok()?;
         events.push(heal);
     }
-    // It picks its spot and its shot, and values them, in the wind as it reads it.
+    // It picks its spot and its shot in the wind as it reads it, and values each shot by what it
+    // expects it to do, knowing it may have read the wind wrong and that its hands may slip.
     let noise = level.noise();
     let mut rng = XorShift::new(seed);
     scratch.wind = misread(scratch.wind(), noise, &mut rng);
+    let slip = (within(&mut rng, noise.power_steps.value), within(&mut rng, noise.aim_degrees.value));
+    let doubt = Doubt::new(scratch.wind(), noise, &mut rng);
 
-    let Choice { switched, moves, best } = best_at(&scratch, seat, &targets)?;
+    let Choice { switched, moves, best } = best_at(&scratch, seat, &targets, &doubt)?;
     if let Some(switched) = switched {
         scratch = switched;
         events.push(Event::Switch { seat });
@@ -164,10 +174,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         events.push(Event::UseItem { seat, slot, time: Centis(0) });
     }
 
-    let range = best.shot.tuning(me.tuning()).aim.value;
-    let power = i32::from(best.power) + within(&mut rng, noise.power_steps.value);
-    let aim = (best.aim + i16::try_from(within(&mut rng, noise.aim_degrees.value)).unwrap_or(0)).clamp(range.min, range.max);
-    let power = Power::from_twentieths(u8::try_from(power.clamp(0, i32::from(Power::MAX.twentieths()))).ok()?).ok()?;
+    let (aim, power) = slipped(me.tuning(), best.shot, best.aim, best.power, slip);
     events.push(Event::Shoot {
         seat,
         shot: best.shot,
@@ -176,6 +183,44 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         time: Centis(0),
     });
     Some(events)
+}
+
+/// The aim and power a bot's hands fire for `aim` and `power` when they slip by `slip` (power
+/// steps, degrees), kept to the shot's range and the power bar.
+fn slipped(tuning: &MobileTuning, shot: Shot, aim: i16, power: u8, (power_slip, aim_slip): (i32, i32)) -> (i16, Power) {
+    let range = shot.tuning(tuning).aim.value;
+    let aim = (aim + i16::try_from(aim_slip).unwrap_or(0)).clamp(range.min, range.max);
+    let twentieths = (i32::from(power) + power_slip).clamp(0, i32::from(Power::MAX.twentieths()));
+    (aim, Power::from_twentieths(u8::try_from(twentieths).unwrap_or(0)).unwrap_or(Power::MAX))
+}
+
+/// What a bot is unsure of as it values a shot: the true wind, about the one it read, and where
+/// its hands will put the aim and power. It values a shot by its mean over `DOUBT_DRAWS` draws of
+/// those, the same draws for every shot it weighs that turn, so the comparison is between shots,
+/// not luck. Hard is sure of all three, and values each shot once, as it is.
+struct Doubt {
+    /// Each draw's wind, and its hands' slip in power steps and degrees.
+    draws: Vec<(Wind, (i32, i32))>,
+}
+
+impl Doubt {
+    /// No doubt: each shot valued as the search found it.
+    #[cfg(test)]
+    const NONE: Self = Self { draws: Vec::new() };
+
+    fn new(read: Wind, noise: &Noise, rng: &mut XorShift) -> Self {
+        let spreads = [noise.power_steps.value, noise.aim_degrees.value, noise.wind_strength.value, noise.wind_degrees.value];
+        if spreads.iter().all(|&spread| spread == 0) {
+            return Self { draws: Vec::new() };
+        }
+        let draws = (0..DOUBT_DRAWS)
+            .map(|_| {
+                let wind = misread(read, noise, rng);
+                (wind, (within(rng, noise.power_steps.value), within(rng, noise.aim_degrees.value)))
+            })
+            .collect();
+        Self { draws }
+    }
 }
 
 /// What a dead bot does now, on anyone's turn, when the game lets it: spins its slot machine
@@ -268,29 +313,29 @@ struct Choice {
 /// The best spot and shot at the first of `marks` worth one: at each jewel from where the bot
 /// stands, the best that takes one; if none does, at the enemy (or its feet), walking if it must,
 /// and in Tag switching first if the other mobile has a clearly better shot (`switch`).
-fn best_at(game: &Game, seat: u8, marks: &[Mark]) -> Option<Choice> {
+fn best_at(game: &Game, seat: u8, marks: &[Mark], doubt: &Doubt) -> Option<Choice> {
     let boosted = |switched: Option<Game>, Spot { moves, best }: Spot| {
         let mut there = switched.clone().unwrap_or_else(|| game.clone());
         for &event in &moves {
             there.apply(event).ok()?;
         }
-        let best = boost(&there, seat, &best).unwrap_or(best);
+        let best = boost(&there, seat, &best, doubt).unwrap_or(best);
         Some(Choice { switched, moves, best })
     };
     let better = |best: Choice, other: Choice| if other.best.beats(&best.best) { other } else { best };
     let jewels = marks.iter().filter(|mark| mark.goal == Goal::Jewel);
     let taken = jewels
-        .filter_map(|mark| Spot::here(game, seat, mark))
+        .filter_map(|mark| Spot::here(game, seat, mark, doubt))
         .filter_map(|spot| boosted(None, spot))
-        .filter(|choice| choice.best.value > 0.0)
+        .filter(|choice| choice.best.sure > 0.0)
         .reduce(better);
     taken.or_else(|| {
         marks
             .iter()
             .filter(|mark| mark.goal != Goal::Jewel)
             .filter_map(|mark| {
-                let spot = Spot::best(game, seat, mark)?;
-                match switch(game, seat, mark, &spot) {
+                let spot = Spot::best(game, seat, mark, doubt)?;
+                match switch(game, seat, mark, &spot, doubt) {
                     Some((switched, other)) => boosted(Some(switched), other),
                     None => boosted(None, spot),
                 }
@@ -364,19 +409,20 @@ struct Spot {
 
 impl Spot {
     /// Where it stands, turned to shoot at `target`.
-    fn here(game: &Game, seat: u8, target: &Mark) -> Option<Self> {
+    fn here(game: &Game, seat: u8, target: &Mark, doubt: &Doubt) -> Option<Self> {
         let (scratch, moves) = walked(game, seat, None, target)?;
-        Self::searched(&scratch, moves, seat, target)
+        Self::searched(&scratch, moves, seat, target, doubt)
     }
 
-    /// Where it stands, unless its best shot from there is weak; then the best of a few spots up
-    /// to its whole move budget each way. Shorter walks come first, so a tie stays closer.
-    fn best(game: &Game, seat: u8, target: &Mark) -> Option<Self> {
+    /// Where it stands, unless its best shot from there is weak, even were it sure of the wind and
+    /// its hands; then the best of a few spots up to its whole move budget each way. Shorter walks
+    /// come first, so a tie stays closer.
+    fn best(game: &Game, seat: u8, target: &Mark, doubt: &Doubt) -> Option<Self> {
         let me = game.players().get(usize::from(seat))?;
         let (scratch, moves) = walked(game, seat, None, target)?;
         let mut seen = vec![me.footing];
-        let mut best = Self::searched(&scratch, moves, seat, target)?;
-        if best.best.value >= STRONG_SHOT {
+        let mut best = Self::searched(&scratch, moves, seat, target, doubt)?;
+        if best.best.sure >= STRONG_SHOT {
             return Some(best);
         }
         let toward = facing_toward(me, target);
@@ -390,7 +436,7 @@ impl Spot {
                     continue;
                 }
                 seen.push(footing);
-                if let Some(spot) = Self::searched(&scratch, moves, seat, target)
+                if let Some(spot) = Self::searched(&scratch, moves, seat, target, doubt)
                     && spot.best.beats(&best.best)
                 {
                     best = spot;
@@ -401,10 +447,10 @@ impl Spot {
     }
 
     /// The best shot from where `game` has the bot stand, after `moves`.
-    fn searched(game: &Game, moves: Vec<Event>, seat: u8, target: &Mark) -> Option<Self> {
+    fn searched(game: &Game, moves: Vec<Event>, seat: u8, target: &Mark, doubt: &Doubt) -> Option<Self> {
         Some(Self {
             moves,
-            best: best_shot(game, seat, target)?,
+            best: best_shot(game, seat, target, doubt)?,
         })
     }
 }
@@ -443,8 +489,9 @@ fn facing_to_shoot(me: &Player, target: &Mark) -> Facing {
     if me.tuning().s1.aim.value.backward() { toward.flip() } else { toward }
 }
 
-/// The best shot `seat` can take from where it stands, as it faces.
-fn best_shot(game: &Game, seat: u8, target: &Mark) -> Option<Candidate> {
+/// The best shot `seat` can take from where it stands, as it faces, by what it expects each to do
+/// (`Doubt`).
+fn best_shot(game: &Game, seat: u8, target: &Mark, doubt: &Doubt) -> Option<Candidate> {
     game.players().get(usize::from(seat))?;
     let search = Search::new(game, seat, target);
     let mut best: Option<Candidate> = None;
@@ -453,7 +500,7 @@ fn best_shot(game: &Game, seat: u8, target: &Mark) -> Option<Candidate> {
             continue;
         }
         for (aim, power) in search.trajectories(shot) {
-            let candidate = Candidate::fired(game, seat, None, shot, aim, power, search.proxy(shot, aim, power));
+            let candidate = Candidate::new(None, shot, aim, power, search.proxy(shot, aim, power)).fired(game, seat, doubt);
             if best.as_ref().is_none_or(|best| candidate.beats(best)) {
                 best = Some(candidate);
             }
@@ -626,22 +673,64 @@ struct Candidate {
     shot: Shot,
     aim: i16,
     power: u8,
+    /// What the bot expects it to do, over its doubt (`Doubt`).
     value: f64,
+    /// What it does in the wind as the bot read it, fired just as found: whether it can do any good
+    /// from here at all.
+    sure: f64,
     /// The aim pass's score, to break ties between shots that did nothing.
     proxy: f64,
 }
 
 impl Candidate {
-    /// Fires `shot` (after the item at `item`, if any) in a scratch copy of `game` and values it.
-    fn fired(game: &Game, seat: u8, item: Option<u8>, shot: Shot, aim: i16, power: u8, proxy: f64) -> Self {
-        let mut scratch = game.clone();
-        let used = item.is_none_or(|slot| scratch.apply(Event::UseItem { seat, slot, time: Centis(0) }).is_ok());
-        let effects = Power::from_twentieths(power)
-            .ok()
-            .filter(|_| used)
-            .and_then(|power| scratch.apply(Event::Shoot { seat, shot, aim, power, time: Centis(0) }).ok());
-        let value = effects.map_or(f64::MIN, |effects| value(game, seat, &effects));
-        Self { item, shot, aim, power, value, proxy }
+    /// A shot to value (`fired`).
+    fn new(item: Option<u8>, shot: Shot, aim: i16, power: u8, proxy: f64) -> Self {
+        Self {
+            item,
+            shot,
+            aim,
+            power,
+            value: f64::MIN,
+            sure: f64::MIN,
+            proxy,
+        }
+    }
+
+    /// Fires the shot (after its item, if any) in scratch copies of `game` and values it: as found,
+    /// in the wind as read (`sure`), and over each of the doubt's draws, whose mean is `value`.
+    fn fired(self, game: &Game, seat: u8, doubt: &Doubt) -> Self {
+        let Some(me) = game.players().get(usize::from(seat)) else { return self };
+        let tuning = me.tuning();
+        let once = |wind: Option<Wind>, slip: (i32, i32)| {
+            let mut scratch = game.clone();
+            if let Some(wind) = wind {
+                scratch.wind = wind;
+            }
+            let used = self.item.is_none_or(|slot| scratch.apply(Event::UseItem { seat, slot, time: Centis(0) }).is_ok());
+            let (aim, power) = slipped(tuning, self.shot, self.aim, self.power, slip);
+            let effects = used
+                .then(|| {
+                    scratch
+                        .apply(Event::Shoot {
+                            seat,
+                            shot: self.shot,
+                            aim,
+                            power,
+                            time: Centis(0),
+                        })
+                        .ok()
+                })
+                .flatten();
+            effects.map(|effects| value(game, seat, &effects))
+        };
+        let Some(sure) = once(None, (0, 0)) else { return self };
+        let value = if doubt.draws.is_empty() {
+            sure
+        } else {
+            let total: f64 = doubt.draws.iter().map(|&(wind, slip)| once(Some(wind), slip).unwrap_or(0.0)).sum();
+            total / f64::from(u32::try_from(doubt.draws.len()).unwrap_or(1))
+        };
+        Self { value, sure, ..self }
     }
 
     /// More value, then a better landing. Shots are tried cheapest first, so a tie keeps the
@@ -721,13 +810,13 @@ fn wants_to_rest(game: &Game, seat: u8) -> bool {
 
 /// Tag: when the best shot from `spot` is weak and `seat` may switch, the game switched and the
 /// other mobile's best spot, if its shot is clearly better (`SWITCH_GAIN` more).
-fn switch(game: &Game, seat: u8, target: &Mark, spot: &Spot) -> Option<(Game, Spot)> {
-    if spot.best.value >= STRONG_SHOT || !game.can_switch(seat) {
+fn switch(game: &Game, seat: u8, target: &Mark, spot: &Spot, doubt: &Doubt) -> Option<(Game, Spot)> {
+    if spot.best.sure >= STRONG_SHOT || !game.can_switch(seat) {
         return None;
     }
     let mut switched = game.clone();
     switched.apply(Event::Switch { seat }).ok()?;
-    let other = Spot::best(&switched, seat, target)?;
+    let other = Spot::best(&switched, seat, target, doubt)?;
     (other.best.value >= spot.best.value + SWITCH_GAIN).then_some((switched, other))
 }
 
@@ -745,15 +834,15 @@ fn heal(game: &Game, seat: u8) -> Option<Event> {
 
 /// Dual (for S1 or S2) or Power Up on a strong shot, if the bot carries one and it makes the shot
 /// better.
-fn boost(game: &Game, seat: u8, best: &Candidate) -> Option<Candidate> {
+fn boost(game: &Game, seat: u8, best: &Candidate, doubt: &Doubt) -> Option<Candidate> {
     // In Jewel a shot short of what a jewel needs may take it with Dual: weak isn't hopeless.
-    if (best.value < STRONG_SHOT && !game.mode().jewels()) || best.item.is_some() {
+    if (best.sure < STRONG_SHOT && !game.mode().jewels()) || best.item.is_some() {
         return None;
     }
     let me = game.players().get(usize::from(seat))?;
     let wanted: &[Item] = if best.shot == Shot::Ss { &[Item::PowerUp] } else { &[Item::Dual, Item::PowerUp] };
     let slot = wanted.iter().find_map(|&item| slot_of(game, me, seat, item))?;
-    let boosted = Candidate::fired(game, seat, Some(slot), best.shot, best.aim, best.power, best.proxy);
+    let boosted = Candidate::new(Some(slot), best.shot, best.aim, best.power, best.proxy).fired(game, seat, doubt);
     (boosted.value > best.value).then_some(boosted)
 }
 
@@ -998,6 +1087,35 @@ mod unit {
     }
 
     #[test]
+    fn a_bot_unsure_of_the_wind_and_its_hands_draws_its_doubt_about_what_it_read() {
+        let read = Wind::new(10, 90).unwrap();
+        assert!(Doubt::new(read, Level::Hard.noise(), &mut XorShift::new(5)).draws.is_empty(), "Hard is sure");
+        let noise = Level::Normal.noise();
+        let doubt = Doubt::new(read, noise, &mut XorShift::new(5));
+        assert_eq!(doubt.draws.len(), DOUBT_DRAWS);
+        for &(wind, (power, aim)) in &doubt.draws {
+            assert!((2..=18).contains(&wind.strength) && (0..=180).contains(&wind.direction), "{wind:?}");
+            assert!(power.abs() <= noise.power_steps.value && aim.abs() <= noise.aim_degrees.value);
+        }
+        assert!(doubt.draws.windows(2).any(|pair| pair[0] != pair[1]), "draws differ");
+    }
+
+    #[test]
+    fn a_shot_is_worth_what_it_does_on_average_over_the_doubt() {
+        let game = duel(700);
+        let target = Mark::of(&game.players()[1]);
+        let found = best_shot(&game, 0, &target, &Doubt::NONE).unwrap();
+        assert!(found.sure >= 120.0 && found.value.to_bits() == found.sure.to_bits(), "a direct hit, valued as found: {found:?}");
+        // Two draws: the wind as read and steady hands, then a hand that slips two bars long.
+        let doubt = Doubt {
+            draws: vec![(game.wind(), (0, 0)), (game.wind(), (40, 0))],
+        };
+        let doubted = Candidate::new(None, found.shot, found.aim, found.power, found.proxy).fired(&game, 0, &doubt);
+        assert_eq!(doubted.sure.to_bits(), found.sure.to_bits());
+        assert!((doubted.value - found.sure / 2.0).abs() < 1e-9, "half the hit, for half the draws: {doubted:?}");
+    }
+
+    #[test]
     fn normal_lands_between_hard_and_easy() {
         // The same duel in a crosswind, eight seeds a level: the damage each level deals.
         let mut game = duel(700);
@@ -1144,7 +1262,7 @@ mod walking {
     fn it_walks_out_from_behind_a_wall_it_cannot_shoot_over() {
         let mut game = behind_a_wall(0..0);
         let target = Mark::of(&game.players()[1]);
-        assert!(best_shot(&game, 0, &target).unwrap().value <= 0.0, "nothing clears the wall from here");
+        assert!(best_shot(&game, 0, &target, &Doubt::NONE).unwrap().value <= 0.0, "nothing clears the wall from here");
         let events = plan(&game, 0, Level::Hard, 7).unwrap();
         assert!(walks(&events).iter().any(|&(facing, steps)| facing == Facing::Left && steps > 0), "{events:?}");
         let effects: Vec<Effect> = events.into_iter().flat_map(|event| game.apply(event).unwrap()).collect();
