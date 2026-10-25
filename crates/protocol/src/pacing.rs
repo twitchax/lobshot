@@ -97,7 +97,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
             }
             // Gone with what came before it: its layer's death, or a fall off the map; and a life
             // goes as its mobile dies.
-            Effect::MineGone { tick: None, .. } | Effect::Points { .. } | Effect::JewelGone { .. } => at.last().copied().unwrap_or(stage.base),
+            Effect::MineGone { tick: None, .. } | Effect::Points { .. } => at.last().copied().unwrap_or(stage.base),
             // A jewel's damage shows as the blast's does, and a jewel taken goes as a mobile dies.
             Effect::JewelHit { tick, .. } => stage.base + ticks_to_seconds(*tick) + DAMAGE_AFTER_BLAST,
             Effect::JewelTaken { tick, .. } => stage.base + ticks_to_seconds(*tick) + DEATH_AFTER_BLAST,
@@ -134,7 +134,7 @@ pub fn schedule(effects: &[Effect]) -> Schedule {
                 Death::Forfeited => stage.base,
             },
             // Everything that falls falls together, after the blasts that shook it loose.
-            Effect::Fell { .. } | Effect::MineFell { .. } | Effect::JewelFell { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
+            Effect::Fell { .. } | Effect::MineFell { .. } | Effect::JewelFell { .. } | Effect::JewelGone { .. } => *stage.falls_at.get_or_insert(stage.last_blast + SETTLE_SECONDS),
             Effect::Swapped { .. } => stage.base + FALL_SECONDS,
             Effect::WindChanged(_) => stage.blast,
             Effect::SuddenDeath { .. } => {
@@ -449,6 +449,10 @@ mod unit {
                 id: lobshot_sim::jewels::JewelId(1),
                 to: Footing { x: 0, y: 700 },
             },
+            Effect::JewelGone {
+                id: lobshot_sim::jewels::JewelId(3),
+                team: Some(team),
+            },
             Effect::JewelTurned {
                 id: lobshot_sim::jewels::JewelId(2),
                 kind: lobshot_sim::jewels::JewelKind::Sapphire,
@@ -460,7 +464,8 @@ mod unit {
         assert_eq!(schedule.at[2], 1.0 + DEATH_AFTER_BLAST);
         assert_eq!(schedule.at[3], schedule.at[2], "the points come with it");
         assert_eq!(schedule.at[4], 1.0 + SETTLE_SECONDS, "a jewel falls with the mobiles");
-        assert_eq!(schedule.at[5], schedule.end, "an Onyx turns blue as the turn passes");
+        assert_eq!(schedule.at[5], schedule.at[4], "and out of the map with them");
+        assert_eq!(schedule.at[6], schedule.end, "an Onyx turns blue as the turn passes");
     }
 
     #[test]

@@ -713,9 +713,11 @@ pub enum Effect {
         id: JewelId,
         to: Footing,
     },
-    /// Jewel `id` fell out of the map, with what came before it.
+    /// Jewel `id` fell out of the map, with the mobiles that fell: the team whose turn it is took it
+    /// (`Points` follows), as one destroyed (SW-gp). `None` with no turn on.
     JewelGone {
         id: JewelId,
+        team: Option<Team>,
     },
     /// Jewel `id` is a `kind` now, as a turn ended: an Onyx that sat long enough turned blue.
     JewelTurned {

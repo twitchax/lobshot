@@ -693,7 +693,7 @@ fn jewel_value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
     effects
         .iter()
         .map(|effect| match *effect {
-            Effect::JewelTaken { id, team: taker, .. } => {
+            Effect::JewelTaken { id, team: taker, .. } | Effect::JewelGone { id, team: Some(taker) } => {
                 let points = game.jewels().iter().find(|jewel| jewel.id == id).map_or(0, |jewel| jewel.kind.points());
                 let sign = if Some(taker) == mine { 1.0 } else { -1.0 };
                 sign * f64::from(points) * JEWEL_POINT_VALUE

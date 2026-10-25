@@ -249,9 +249,10 @@ fn jewel_cues(effect: &Effect, at: f32, cues: &mut Vec<(f32, jewels::Cue)>) {
             cue(at + pacing::flight_seconds(legs), jewels::Cue::Landed(jewel));
         }
         Effect::JewelHit { id, amount, .. } => cue(at, jewels::Cue::Hit { id, amount }),
-        Effect::JewelTaken { id, team, .. } => cue(at, jewels::Cue::Taken { id, team }),
+        // Out of the map, the turn's team took it as if it were destroyed.
+        Effect::JewelTaken { id, team, .. } | Effect::JewelGone { id, team: Some(team) } => cue(at, jewels::Cue::Taken { id, team }),
         Effect::JewelFell { id, to } => cue(at, jewels::Cue::At { id, at: Jewel::middle_at(to) }),
-        Effect::JewelGone { id } => cue(at, jewels::Cue::Hide(id)),
+        Effect::JewelGone { id, team: None } => cue(at, jewels::Cue::Hide(id)),
         _ => {}
     }
 }
