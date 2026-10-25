@@ -88,8 +88,9 @@ pub const S1_BLAST: Tuned<f64> = picked(18.0, "A small hole (CR-aduka), smaller 
 pub const S1_AFTERSHOCK: Tuned<i32> = cited(70, &["CR-aduka"]);
 /// How far from the landing the aftershock reaches a hitbox.
 pub const S1_AFTERSHOCK_REACH: Tuned<f64> = picked(
-    50.0,
-    "\"The splash effect is large, so if Aduka misses completely the splash can still hit\" (CR-aduka): twice a bolt's reach (OB).",
+    75.0,
+    "\"The splash effect is large, so if Aduka misses completely the splash can still hit\" (CR-aduka): three times a \
+     bolt's reach (OB). Balance (PRD-0006 T-010): from twice.",
 );
 /// Each mobile the aftershock hits passes a weaker one on to its neighbors, and they to theirs:
 /// "BOB will get some splash damage from you (much less, 15-30 points)" (CR-aduka), down "a line

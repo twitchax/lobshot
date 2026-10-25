@@ -39,8 +39,9 @@ pub const MOBILE: MobileTuning = MobileTuning {
         ),
     },
     s2: ShotTuning {
-        // SW-mob says 480 (CONTRADICTION with CR-mob and SW-mds); DragonBound agrees on 400.
-        delay: cited(400, &["CR-mob", "SW-mds"]),
+        // CR-mob and SW-mds say 400, and DragonBound agrees (CONTRADICTION). Balance (PRD-0006
+        // T-010) takes SW-mob's: Marblemole led every other mobile.
+        delay: cited(480, &["SW-mob"]),
         aim: cited(
             AimRange {
                 min: 30,
@@ -94,6 +95,11 @@ pub const S2_MAX_BOUNCES: Tuned<u8> = picked(16, "A guard: more bounces than any
 /// up on the ground (DB-mob). A touch deals at least `min`, more the longer it lasts, up to `max`.
 pub const SS_TOUCH_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 400, max: 1000 }, &["DB-mob"]);
 /// Damage per second of touch on top of `SS_TOUCH_DAMAGE.min`.
-pub const SS_TOUCH_PER_SECOND: Tuned<f64> = picked(4000.0, "A ball crossing a body in about 0.1 s deals about 800; a long, slow touch reaches the max.");
+pub const SS_TOUCH_PER_SECOND: Tuned<f64> = picked(
+    600.0,
+    "Balance (PRD-0006 T-010): a ball crossing a body in about 0.1 s deals about 460, near DB-mob's 400 floor, and a long, \
+     slow touch reaches the max. At 4000 a crossing dealt about 800, and the SS, which needs only to pass through a mobile, \
+     made Marblemole win 89% of its games at Hard.",
+);
 pub const SS_LAND_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 80, max: 130 }, "Where it lands it blows up like an S1.");
 pub const SS_LAND_BLAST: Tuned<f64> = picked(30.0, "A bigger crater than S1's.");

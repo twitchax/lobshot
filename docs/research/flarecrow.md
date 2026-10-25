@@ -38,7 +38,7 @@ Wayback Machine, Creedo's guide from its own site), and every page was read as u
 - `[SNX-aduka]`: "Weapon 1 has electrical damage added to it, so it's good to make some additional
   damage and can give splash damage."
 - **As built:** a small blast (18 px) of 70–90 Electric, then the aftershock: a flat 70 on every
-  mobile within 50 px of the landing, the one struck included, and from each mobile it hits a flat
+  mobile within 75 px of the landing (50 until balance, PRD-0006 T-010), the one struck included, and from each mobile it hits a flat
   22 to every mobile within 60 px of that one's center, and on down the line. It is splash
   (`[GF-max]`): flat, once a turn on each mobile, Dual or not. A direct hit totals 140–160 against a
   neutral armor. **Picks:** the 70–90 split (so the total is `[SW-mob]`'s), both reaches, and 22

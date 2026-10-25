@@ -15,14 +15,16 @@
         "mobile": "Sudsotter",
         "spawn_x": 440,
         "facing": "Right",
-        "items": []
+        "items": [],
+        "second": null
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1420,
         "facing": "Left",
-        "items": []
+        "items": [],
+        "second": null
       }
     ],
     "order": [
@@ -33,7 +35,8 @@
       "strength": 7,
       "direction": 140
     },
-    "sudden_death": null
+    "sudden_death": null,
+    "mode": "Solo"
   },
   "events": [
     {
@@ -190,30 +193,30 @@
     },
     {
       "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Pass": {
-        "seat": 1,
-        "time": 2000
-      }
-    },
-    {
-      "Walk": {
         "seat": 0,
         "facing": "Right",
         "steps": 0
       }
     },
     {
-      "Shoot": {
+      "Pass": {
         "seat": 0,
+        "time": 2000
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
         "shot": "S2",
-        "aim": 45,
-        "power": 72,
+        "aim": 32,
+        "power": 14,
         "time": 1259
       }
     },
@@ -226,25 +229,9 @@
     },
     {
       "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "Ss",
-        "aim": 30,
-        "power": 47,
-        "time": 1396
-      }
-    },
-    {
-      "Walk": {
         "seat": 0,
         "facing": "Right",
-        "steps": 25
+        "steps": 0
       }
     },
     {
@@ -252,7 +239,23 @@
         "seat": 0,
         "shot": "S1",
         "aim": 45,
-        "power": 61,
+        "power": 72,
+        "time": 1396
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 32,
+        "power": 51,
         "time": 1533
       }
     },
@@ -275,7 +278,7 @@
         "seat": 0,
         "shot": "S2",
         "aim": 45,
-        "power": 61,
+        "power": 60,
         "time": 1670
       }
     },
@@ -289,9 +292,9 @@
     {
       "Shoot": {
         "seat": 1,
-        "shot": "S1",
-        "aim": 32,
-        "power": 45,
+        "shot": "Ss",
+        "aim": 30,
+        "power": 53,
         "time": 307
       }
     },
@@ -314,20 +317,20 @@
         "seat": 0,
         "shot": "S1",
         "aim": 45,
-        "power": 61,
+        "power": 60,
         "time": 444
       }
     },
     {
       "Walk": {
-        "seat": 1,
-        "facing": "Left",
+        "seat": 0,
+        "facing": "Right",
         "steps": 25
       }
     },
     {
       "Pass": {
-        "seat": 1,
+        "seat": 0,
         "time": 2000
       }
     },
@@ -336,22 +339,6 @@
         "kind": "Mirror",
         "x": 668,
         "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "Ss",
-        "aim": 45,
-        "power": 65,
-        "time": 718
       }
     },
     {
@@ -367,6 +354,22 @@
         "shot": "S1",
         "aim": 32,
         "power": 50,
+        "time": 718
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 45,
+        "power": 65,
         "time": 855
       }
     },
@@ -403,7 +406,7 @@
     {
       "Shoot": {
         "seat": 0,
-        "shot": "S1",
+        "shot": "Ss",
         "aim": 45,
         "power": 43,
         "time": 1129
@@ -418,6 +421,22 @@
     },
     {
       "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 1,
+        "shot": "S1",
+        "aim": 32,
+        "power": 49,
+        "time": 1266
+      }
+    },
+    {
+      "Walk": {
         "seat": 0,
         "facing": "Right",
         "steps": 0
@@ -426,10 +445,59 @@
     {
       "Shoot": {
         "seat": 0,
-        "shot": "S1",
+        "shot": "S2",
         "aim": 45,
         "power": 52,
-        "time": 1266
+        "time": 1403
+      }
+    },
+    {
+      "Wind": {
+        "strength": 20,
+        "direction": 95
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Lock",
+        "x": 224,
+        "hides": null
+      }
+    },
+    {
+      "Walk": {
+        "seat": 1,
+        "facing": "Left",
+        "steps": 0
+      }
+    },
+    {
+      "Pass": {
+        "seat": 1,
+        "time": 2000
+      }
+    },
+    {
+      "Walk": {
+        "seat": 0,
+        "facing": "Right",
+        "steps": 25
+      }
+    },
+    {
+      "Shoot": {
+        "seat": 0,
+        "shot": "S1",
+        "aim": 45,
+        "power": 41,
+        "time": 1677
+      }
+    },
+    {
+      "Weather": {
+        "kind": "Balm",
+        "x": 613,
+        "hides": null
       }
     },
     {
@@ -444,8 +512,8 @@
         "seat": 1,
         "shot": "S2",
         "aim": 32,
-        "power": 49,
-        "time": 1403
+        "power": 43,
+        "time": 314
       }
     }
   ]

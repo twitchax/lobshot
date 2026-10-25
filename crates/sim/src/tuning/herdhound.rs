@@ -61,8 +61,9 @@ pub const MOBILE: MobileTuning = MobileTuning {
         aim: AIM,
     },
     ss: ShotTuning {
-        // CR-bot says 880 (CONTRADICTION).
-        delay: cited(800, &["SW-mob", "DB-mob", "OB"]),
+        // SW-mob, DB-mob and OB say 800 (CONTRADICTION). Balance (PRD-0006 T-010) takes CR-bot's:
+        // Herdhound led at both levels.
+        delay: cited(880, &["CR-bot"]),
         // Nak's SS range is all true (CR-mob).
         aim: picked(
             AimRange {
@@ -92,16 +93,19 @@ pub const LOOP_TURNS: Tuned<f64> = cited(2.0, &["KAL-gbomb"]);
 
 /// A missile's speed, px/s. Missiles are rockets: neither gravity nor wind moves them.
 pub const MISSILE_SPEED: Tuned<f64> = picked(
-    360.0,
-    "Loops about 57 px across at two a second, so an apex lower than that over the ground or a mobile crashes them, \
-     as close, flat shots do (SW-mob, CR-kal); and a missile reaches a guide a screen off in about two seconds.",
+    450.0,
+    "Loops about 72 px across at two a second, so an apex lower than that over the ground or a mobile crashes them, \
+     as close, flat shots do (SW-mob, CR-kal); and a missile reaches a guide a screen off in under two seconds. \
+     Balance (PRD-0006 T-010): 360 let slow missiles settle onto the guide every time.",
 );
 
 /// How fast a homing missile may turn toward its guide, radians per second.
 pub const HOMING_TURN: Tuned<f64> = picked(
-    6.0,
-    "Turns a missile around in about half a second: it comes about after its loops and dives onto the guide, \
-     arriving at an angle (CR-pb218), not straight down a path no source describes.",
+    3.0,
+    "Turns a missile around in about a second: \"partial homing towards the tracer\" (KAL-dlh), so it swings wide after \
+     its loops and comes in on the guide at an angle (CR-pb218), and a guide that lands beside a target scatters them \
+     about it rather than onto it. Balance (PRD-0006 T-010): at 6, missiles landed on the guide every time, which made \
+     Herdhound the strongest mobile at Normal and the second at Hard.",
 );
 
 /// A missile that has hit nothing this long after it burst out goes off where it is.
