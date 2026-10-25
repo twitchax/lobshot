@@ -176,7 +176,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
 - `sim` defines a controller: given what a player can see, return intents. Bots see only what a
   player sees, with no oracle wind.
 - **Human:** a remote player on the server.
-- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage. When
+- **SearchBot:** searches angle, power, shot and item in `sim`, scored by expected damage (the mean
+  over draws of its own wind misread and slip, judged where each shot does its work). When
   nothing good reaches from where it stands, it searches a few spots within its move budget too
   and walks to the best. Its levels differ by how badly they read the wind and miss the aim and power they found
   (`sim::tuning::bot`): Hard is exact, Normal hurts an enemy with about two shots in three. It
@@ -196,8 +197,12 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   reports the win-rate matrix, damage per 1000 delay (by shot too), turns to kill, hit rates, a
   by-arena table and the first mover's edge, as text or JSON; any game replays by its id. Results
   depend on the bots' level (Normal misreads the wind, which costs the most wind-sensitive mobiles
-  most), so read Normal and Hard together. Once the roster passes ~5 mobiles, CI fails any matchup
-  outside a 35–65% win-rate band (`cargo make balance-gate`).
+  most), so read Normal and Hard together. **The balance gate** (`cargo make balance-gate`, part
+  of `ci`) pools the two: 100 games a level, 200 a matchup, failing any matchup whose win rate
+  falls outside 35–65%. A true 50% matchup can't fail; a true 40% one fails about one run in 13.
+  Matchups the sources won't bring into the band are listed in `gate::KNOWN` with their measured
+  rate and the reason, and each must stay no worse than that rate plus its margin; a run names
+  them, and flags any that come back inside. CI plays the gate in 12 parallel parts.
 
 ## Client
 
@@ -298,7 +303,8 @@ Each crate lives in `crates/<name>` as package `lobshot-<name>`; the server's bi
   locked), driving the installed Chrome over CDP from Rust (`headless_chrome`): no browser
   download. The client publishes its state, and where its buttons are, as `window.lobshot` for
   them. The first two check that each turn's clock starts only once the shot before it has shown.
-- Balance: the `lab` win-rate gate, once the roster passes ~5 mobiles.
+- Balance: the `lab` win-rate gate (`gate::KNOWN` lists the matchups the sources leave outside the
+  band), in `ci`.
 
 ## Performance goals
 

@@ -110,6 +110,16 @@ why the version moved the way it did.
 
 ### Changed
 
+- The balance gate is in `ci` (M5): Normal and Hard bots pooled, 200 games a matchup, 35-65%,
+  with the matchups the sources leave outside listed and held to their measured rates. CI plays
+  it in 12 parallel parts; `cargo make checks` is the old `ci`.
+- SearchBot values a shot by what it expects it to do over its own misread and slip, judges each
+  shot where it does its work (Lodestoad's magnet, Spoutpot's fan, Coilback's and Hookclaw's
+  ripened SS, Tinbadger's crawling mines), and plans about 12 times faster.
+- Balance, within the sources: Marblemole's SS rolls through for less and its S2 costs 480;
+  Herdhound's missiles home less and its SS costs 880; Frostfin's SS hits harder; Sudsotter's
+  base delay is 430 and its suds stronger; Flarecrow's aftershock reaches farther; Tinbadger's
+  gravity is refitted.
 - Protocol and log wire versions are 4 (the room's mode and the drop-in pick): logs from earlier
   builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
