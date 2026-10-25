@@ -216,7 +216,9 @@ pub(crate) fn use_item(game: &mut Game, seat: u8, slot: u8, effects: &mut Vec<Ef
         }
         Item::Sacrifice => {
             let cost = percent_of(max_hp, SACRIFICE_PERCENT.value).min(player.hp - 1);
-            if cost > 0 {
+            // Where shots hurt no one, it "drains you some of your health, which doesn't exist in
+            // this mode" (GF-vgg): it costs nothing.
+            if cost > 0 && game.mode().harms() {
                 game.players[index].hp -= cost;
                 effects.push(Effect::Damaged { seat, amount: cost });
             }

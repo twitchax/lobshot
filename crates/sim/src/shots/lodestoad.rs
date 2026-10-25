@@ -10,7 +10,7 @@ use crate::{
     ballistics::Flight,
     damage,
     game::{Contact, Effect, Game, Impact, Player, Senses, Shot, Track},
-    mines,
+    jewels, mines,
     movement::{self, Edge},
     tuning::{
         Tuned,
@@ -98,7 +98,7 @@ fn orb(game: &mut Game, gun: &mut Gun, flight: Flight, effects: &mut Vec<Effect>
 }
 
 /// S2: the ball flies through mobiles to the ground and bursts there, burning low; then it pulls
-/// the mobiles near it in, and the mines near it, and its bolt and beam follow (Thunder, Electricity, Skyeye) onto
+/// the mobiles near it in, and the jewels and mines near it, and its bolt and beam follow (Thunder, Electricity, Skyeye) onto
 /// wherever they now stand.
 fn magnet(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Effect>) {
     let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: true });
@@ -109,7 +109,9 @@ fn magnet(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Effect>)
     let blast = gun.blast_on(&track, S2_BLAST.value, S2_DAMAGE.value);
     game.explode_by(&blast, S2_BLAST.value * gun.salvo.crater, track.impact.tick, effects, |_, target| damage::low(&blast, target));
     shove(game, &track.impact, heading(&track), &Field::pull(), effects);
-    // The mines near it are dragged into its hole, under whoever it pulled there.
+    // The jewels and mines near it are dragged into its hole, the mines going off under whoever
+    // it pulled there.
+    jewels::drag(game, track.impact.at, PULL_REACH.value.0, effects);
     mines::drag(game, track.impact.at, PULL_REACH.value.0, track.impact.tick, effects);
     gun.follow_up(game, blast.center, track.impact.tick, track.marks, effects);
 }
@@ -199,8 +201,10 @@ mod unit {
     use crate::{
         game::{
             Death, Event, MobileKind, Team,
-            testing::{damage_to, direct_hit_power, duel_of, game_of, game_on, seat, shoot},
+            testing::{damage_to, direct_hit_power, duel_of, game_in, game_of, game_on, seat, shoot},
         },
+        jewels::{JewelDrop, JewelKind},
+        mode::Mode,
         movement::Footing,
         terrain::Terrain,
         units::{Centis, Power, Vec2},
@@ -485,6 +489,24 @@ mod unit {
         assert!(slid < dragged && dragged < gone, "{effects:?}");
         assert_eq!(game.players()[1].footing.x, 960, "pulled to the bottom of the hole");
         assert_eq!(game.mines(), [], "it went off under the Coilback");
+    }
+
+    #[test]
+    fn in_jewel_mode_its_shots_hurt_no_one_but_the_magnet_still_pulls_and_drags_jewels_in() {
+        let open = Terrain::from_fn(2400, 600, |_, y| y >= 500).unwrap();
+        let seats = vec![seat(Team::A, MobileKind::Lodestoad, 300, Facing::Right), seat(Team::B, MobileKind::Coilback, 1000, Facing::Left)];
+        let mut game = game_in(Mode::Jewel, open, seats);
+        let mut dropped = Vec::new();
+        crate::jewels::drop(&mut game, JewelDrop { kind: JewelKind::Sapphire, x: 990 }, &mut dropped);
+        let jewel = game.jewels().last().unwrap().id;
+        let pulled = drop_shots(&mut game, Shot::S2, 960.5, 1);
+        assert_eq!(game.players()[1].footing.x, 960, "the pull still drags it into the hole");
+        assert!(pulled.iter().any(|e| matches!(e, Effect::JewelFell { id, .. } if *id == jewel)), "and the jewel: {pulled:?}");
+        // The orb's discharge, and a pyramid pinning it in the hole's side.
+        let mut effects = pulled;
+        effects.extend(drop_shots(&mut game, Shot::S1, 960.5, 1));
+        effects.extend(drop_shots(&mut game, Shot::Ss, 961.5, 1));
+        assert_eq!((damage_to(&effects, 0), damage_to(&effects, 1)), (0, 0), "bullets don't hurt players: {effects:?}");
     }
 
     #[test]

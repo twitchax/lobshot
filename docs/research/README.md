@@ -24,6 +24,7 @@ Sources sections at the end of `mechanics.md`, `weather.md` and each mobile's ow
 | [`modes-tag.md`](modes-tag.md) | Tag mode: switching once a turn, the second mobile's half HP, who is out, what each mobile keeps, Random with two picks. |
 | [`modes-score.md`](modes-score.md) | Score mode: team lives, what a death costs, and how the dead drop back in, with every pick. Gathered on 2026-10-24. |
 | [`modes-tag.md`](modes-tag.md) | Tag mode: two mobiles each, the second on half HP, one switch a turn, out when the one in play falls; what each mobile keeps, and every pick. Gathered on 2026-10-24. |
+| [`modes-jewel.md`](modes-jewel.md) | Jewel mode: what each jewel is worth and takes, who wins, why no one is hurt, the bunged dropping back in, and the shots that meet jewels, with every pick. Gathered on 2026-10-24. |
 | [`openbound.md`](openbound.md) | How OpenBound (a C# GunBound remake) implements physics, movement, turn order and damage. GPLv3 code and ripped assets: use the numbers, never the code. |
 | [`dragonbound-live.md`](dragonbound-live.md) | A live DragonBound game and its official guide: HUD layout, room options, timeout cost, the full mobile table. |
 | [`physics-fit.md`](physics-fit.md) | How the ballistics were fitted to the community aiming formulas, which formulas are acceptance tests, and why the rest are not. |

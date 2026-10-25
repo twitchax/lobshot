@@ -75,8 +75,7 @@ from `mechanics.md` (`SW-mob`, `SW-mds`, `CR-mob`, `CR-fixed`, `DB-mob`, `WP06`,
 - **Everyone near, the shooter too.** "Don't shoot so close to yourself that you get bunged from
   the magnetic pull of shot 2 also"; "don't use shot 2 to suck an enemy and a teammate together"
   `[CR-all]`. It "attracts all mobiles/corpses near it" `[GF-max]`, and "jewels and also
-  mini-Raons" `[WP06-list]` (Jewel mode is M6). A hovering Dragon is "(almost) immune"
-  `[GF-tiro]`.
+  mini-Raons" `[WP06-list]`. A hovering Dragon is "(almost) immune" `[GF-tiro]`.
 - **When.** Dual+ with S2 first: "they'd be pulled in to where the shot 2 landed, then hit with
   shot 1" `[GF-vgg]`, `[GF-tiro]`. In `[DBR]`'s client, the crater and blast come first, then the
   damage and the move, then every player falls; the move is a 250 ms slide.
@@ -130,9 +129,10 @@ position, which is either its feet or its middle.
   low (`damage::low`, Thistleback's SS's rule): 200 at or under a mobile's feet, through it, less
   up its body, less again beside it. Its 30 px hole is carved first; then every mobile in reach
   slides toward its column, Mechanical ones all the way, Shield ones half, Bionic ones a quarter,
-  into the hole if it's there. The mines near it (Tinbadger's) are dragged into the hole too,
-  going off under whoever it pulled there (`mines::drag`, `[WP06-list]`'s "mini-Raons"); its own
-  blast sets off those it touches. Then its bolt and beam follow (Thunder, Electricity, Skyeye)
+  into the hole if it's there. The jewels (Jewel mode) and mines (Tinbadger's) near it are dragged
+  into the hole too (`jewels::drag`, `mines::drag`: `[WP06-list]`'s "jewels and also mini-Raons"),
+  a mine going off under whoever it pulled there; its own blast sets off the mines it touches. In
+  Jewel mode no shot hurts a mobile, so the pull and the push are how Lodestoad bunges. Then its bolt and beam follow (Thunder, Electricity, Skyeye)
   onto where they now stand.
 - **A floating mobile** (Kitewyrm, Dragon's behavior) isn't pulled: Dragon "hovers above the land,
   thus being (almost) immune to... the cakebot's weapon 2" `[GF-tiro]`. No source exempts it from

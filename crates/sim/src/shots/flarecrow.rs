@@ -9,7 +9,7 @@ use super::{Gun, land_in_order, skyeye};
 use crate::{
     ballistics::Flight,
     game::{Contact, Effect, Game, Senses, Shot, Track},
-    mines,
+    jewels, mines,
     tuning::{
         flarecrow::{S1_AFTERSHOCK, S1_AFTERSHOCK_REACH, S1_BLAST, S1_CHAIN, S1_CHAIN_REACH, S1_DAMAGE, S2_FLARE_SECONDS, S2_FLARES, SS_BEAM_BOOST},
         weather::SKYEYE_DELAY_SECONDS,
@@ -118,6 +118,8 @@ fn pass_through(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Ef
     // triggers it as an enemy does), in the order it meets them.
     let mut calls: Vec<(u32, Call)> = entries(game, gun.seat, &track).into_iter().map(|(seat, tick)| (tick, Call::Enemy(seat))).collect();
     calls.extend(mines::crossed(game, &track.legs).into_iter().map(|(mine, tick)| (tick, Call::Mine(mine.middle()))));
+    // And each jewel it passes through, as Aduka's SS does in Jewel mode (WP06-list).
+    calls.extend(jewels::crossed(game, &track.legs).into_iter().map(|(jewel, tick)| (tick, Call::Jewel(jewel.middle()))));
     calls.sort_by_key(|&(tick, _)| tick);
     for (tick, call) in calls {
         let target = match call {
@@ -128,7 +130,7 @@ fn pass_through(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Ef
                 }
                 enemy.center()
             }
-            Call::Mine(at) => at,
+            Call::Mine(at) | Call::Jewel(at) => at,
         };
         skyeye::beam_by(game, target, tick + delay, SS_BEAM_BOOST.value, effects);
     }
@@ -139,6 +141,7 @@ fn pass_through(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Ef
 enum Call {
     Enemy(u8),
     Mine(Vec2),
+    Jewel(Vec2),
 }
 
 /// Each time `track` passes into an enemy of `shooter`'s, in order: the enemy, and the stage tick.

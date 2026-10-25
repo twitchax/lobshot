@@ -11,6 +11,7 @@ pub mod drops;
 pub mod game;
 pub mod hash;
 pub mod items;
+pub mod jewels;
 pub mod log;
 pub mod map;
 pub mod mines;

@@ -20,6 +20,7 @@ use crate::{
     damage::{self, Blast, Target},
     drops::{self, Drop, Falling},
     items::{self, Item, Loadout, MAX_ITEMS},
+    jewels::{self, Jewel, JewelDrop, JewelId, JewelKind},
     map::{MapAssets, MapRef},
     mines::{self, Mine, MineId, Minefield},
     mode::{self, Mode, ModeState, Respawn},
@@ -323,6 +324,8 @@ pub enum Event {
     Respawn { seat: u8, x: i32 },
     /// The active player switches in the mobile sitting out (Tag), once a turn (`tag::switch`).
     Switch { seat: u8 },
+    /// The server rolled the jewel it owed (`Roll::Jewel`): it falls down its column at once.
+    Jewel(JewelDrop),
 }
 
 /// Something random the server owes the game before anyone may act.
@@ -335,6 +338,9 @@ pub enum Roll {
     Wind,
     /// A slot machine was spun: any `DropKind`, and a column x in `0..width`.
     Drop { width: u32 },
+    /// A jewel is due to fall (Jewel mode): a `JewelKind` by `tuning::jewels::ODDS`, and a column x
+    /// in `0..width`.
+    Jewel { width: u32 },
 }
 
 /// Why a mobile died.
@@ -653,7 +659,8 @@ pub enum Effect {
         mine: MineId,
         tick: Option<u32>,
     },
-    /// A death cost `team` points (Score's lives, just after its `Died`): it has `points` left.
+    /// `team`'s points changed: a death cost it a life in Score (just after its `Died`), or it took
+    /// a jewel in Jewel (just after its `JewelTaken`). It has `points` now.
     Points {
         team: Team,
         points: i32,
@@ -681,6 +688,43 @@ pub enum Effect {
         hp: i32,
         shield: i32,
         brittle: u8,
+    },
+    /// The rolled jewel `id` falls from the sky down its column, starting a stage: `legs` is its
+    /// fall. `to` is the ground it sits on now (`Game::jewels`); `None` if it fell through the map,
+    /// and is lost.
+    JewelDropped {
+        id: JewelId,
+        drop: JewelDrop,
+        legs: Vec<Leg>,
+        to: Option<Footing>,
+    },
+    /// Jewel `id` took `amount` at `tick`: its damage this turn adds up toward what it needs.
+    JewelHit {
+        id: JewelId,
+        amount: i32,
+        tick: u32,
+    },
+    /// `team` took jewel `id` at `tick`: it had taken what it needs this turn. It is off the map,
+    /// and the team's points (`Points`, next) count it.
+    JewelTaken {
+        id: JewelId,
+        team: Team,
+        tick: u32,
+    },
+    /// Jewel `id`'s ground was blown away, or J.D.'s pull dragged it: it fell to `to`, with the
+    /// mobiles that fell.
+    JewelFell {
+        id: JewelId,
+        to: Footing,
+    },
+    /// Jewel `id` fell out of the map, with what came before it.
+    JewelGone {
+        id: JewelId,
+    },
+    /// Jewel `id` is a `kind` now, as a turn ended: an Onyx that sat long enough turned blue.
+    JewelTurned {
+        id: JewelId,
+        kind: JewelKind,
     },
     /// Lodestoad's magnet pulled `seat` toward where it struck, or its pyramid pushed it away:
     /// it slid along the ground from stage tick `from` to `to`, through `path` (a footing a step,
@@ -973,13 +1017,19 @@ impl Game {
         self.mines.mines()
     }
 
+    /// The jewels on the map (Jewel mode), in the order they fell.
+    #[must_use]
+    pub fn jewels(&self) -> &[Jewel] {
+        self.mode_state.jewelry.jewels()
+    }
+
     /// What the game is played for.
     #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode_state.mode()
     }
 
-    /// `team`'s points, in a mode that counts them: Score's lives left.
+    /// `team`'s points, in a mode that counts them: Score's lives left, or Jewel's points.
     #[must_use]
     pub fn points(&self, team: Team) -> Option<i32> {
         self.mode_state.points(team)
@@ -1034,6 +1084,8 @@ impl Game {
             })
         } else if self.spin_owed.is_some() {
             Some(Roll::Drop { width: self.terrain.width() })
+        } else if self.mode_state.jewelry.owed() {
+            Some(Roll::Jewel { width: self.terrain.width() })
         } else {
             None
         }
@@ -1175,6 +1227,11 @@ impl Game {
                 tag::switch(self, seat, &mut effects);
                 // A mobile that floated over a mine is a grounded one on it now.
                 self.trip_under(seat, &mut effects);
+            }
+            Event::Jewel(drop) => {
+                ensure!(matches!(self.pending_roll(), Some(Roll::Jewel { .. })), "no jewel is owed");
+                ensure!(self.on_map(drop.x), "jewel x {} is off the map", drop.x);
+                jewels::drop(self, drop, &mut effects);
             }
         }
         Ok(effects)
@@ -1563,12 +1620,16 @@ impl Game {
             }
         }
         mines::set_off(self, blast.center, blast.radius, tick, effects);
+        jewels::blast(self, blast, tick, effects);
     }
 
     /// Deals `amount` to a living mobile: its shield soaks what it can, then its HP takes the rest.
+    /// Every hurt a mobile takes comes through here, so a mode where shots don't hurt (`Mode::harms`)
+    /// says so here, once.
     pub(crate) fn hurt(&mut self, seat: u8, amount: i32, effects: &mut Vec<Effect>) {
+        let harms = self.mode().harms();
         let player = &mut self.players[usize::from(seat)];
-        if amount <= 0 || !player.alive {
+        if amount <= 0 || !player.alive || !harms {
             return;
         }
         let soaked = amount.min(player.shield).max(0);
@@ -1583,6 +1644,17 @@ impl Game {
             if player.hp <= 0 {
                 self.kill(seat, Death::Blasted, effects);
             }
+        }
+    }
+
+    /// Strips a living mobile's shield at `tick`, so the blast that follows hits its HP (Lanternwing's
+    /// SS). A mode where shots don't hurt (`Mode::harms`) leaves it whole, as `hurt` does.
+    pub(crate) fn strip(&mut self, seat: u8, tick: u32, effects: &mut Vec<Effect>) {
+        let harms = self.mode().harms();
+        let player = &mut self.players[usize::from(seat)];
+        if player.alive && player.shield > 0 && harms {
+            effects.push(Effect::ShieldStripped { seat, amount: player.shield, tick });
+            player.shield = 0;
         }
     }
 
@@ -1625,6 +1697,7 @@ impl Game {
             }
         }
         mines::settle(self, effects);
+        jewels::settle(self, effects);
     }
 
     /// Stands `seat` at `footing`, tilted to the ground there.
@@ -1656,6 +1729,7 @@ impl Game {
         drops::land_due(self, effects);
         self.reveal_passed(effects, dropped);
         mode::land_due(self, effects);
+        jewels::turn_ended(self, effects);
         // A game that just ended doesn't announce sudden death on its way out.
         if let Some(sudden_death) = self.sudden_death
             && self.turns == i64::from(sudden_death.turn)
@@ -1727,6 +1801,8 @@ impl Game {
                 effects.push(Effect::GameOver { winner: None });
                 return;
             };
+            // Its turn counts the jewels' damage from here on, its mines' crawl included.
+            jewels::turn_starts(self, seat);
             // Its mines crawl first; one that blows up its own layer hands the turn on.
             mines::crawl(self, seat, effects);
             if self.players[usize::from(seat)].alive {
@@ -1821,13 +1897,14 @@ pub(crate) mod testing {
     }
 
     /// Answers every owed roll with calm, harmless weather: Force beams at the map's far-left edge
-    /// (no test shot goes there), no wind, and a Calm drop.
+    /// (no test shot goes there), no wind, a Calm drop, and a black jewel there too.
     pub fn answer_rolls(game: &mut Game) {
         while let Some(roll) = game.pending_roll() {
             let event = match roll {
                 Roll::Weather { .. } => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
                 Roll::Wind => Event::Wind(Wind::default()),
                 Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
+                Roll::Jewel { .. } => Event::Jewel(JewelDrop { kind: JewelKind::Onyx, x: 1 }),
             };
             game.apply(event).expect("an owed roll is accepted");
         }

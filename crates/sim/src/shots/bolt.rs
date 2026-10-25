@@ -95,8 +95,9 @@ pub(crate) fn nearest(strike: &Strike, point: Vec2) -> Vec2 {
 
 /// Hurts every living mobile the strike struck or passed near, by `blast`'s damage model: the
 /// point of its path nearest each mobile's center stands in for the blast's center, since a bolt
-/// runs the whole way down rather than bursting at one point.
-pub(crate) fn zap(game: &mut Game, strike: &Strike, blast: &Blast, effects: &mut Vec<Effect>) {
+/// runs the whole way down rather than bursting at one point. Jewels near it take it too
+/// (`jewels::zap`), at `tick`.
+pub(crate) fn zap(game: &mut Game, strike: &Strike, blast: &Blast, tick: u32, effects: &mut Vec<Effect>) {
     for seat in 0..game.players().len() {
         let player = game.players()[seat];
         let Ok(seat) = u8::try_from(seat) else { continue };
@@ -109,6 +110,7 @@ pub(crate) fn zap(game: &mut Game, strike: &Strike, blast: &Blast, effects: &mut
         };
         game.hurt(seat, damage::damage(&blast, &player.target(), strike.contact == Contact::Mobile(seat)), effects);
     }
+    crate::jewels::zap(game, strike, blast, tick, effects);
 }
 
 /// Splash: a flat `amount` to each living mobile within `reach` of the strike's path that splash

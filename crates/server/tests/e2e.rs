@@ -22,6 +22,7 @@ use lobshot_protocol::{Action, ClientMsg, RoomOptions, ServerMsg, Stage};
 use lobshot_server::tests::{INDEX_HTML, create_room, http_get, write_bundle, write_map};
 use lobshot_sim::{
     game::{Effect, Event, Game, Phase, SuddenDeath, SuddenDeathKind, Team},
+    log::Log,
     map::NoAssets,
     mode::Mode,
     terrain::Terrain,
@@ -335,6 +336,91 @@ async fn e2e_modes_tag_four_bots_play_a_2v2_to_the_end() {
     }
     println!("the Tag 2v2 ran {} turns: {switches} switches, {out_with_one_left} out with a mobile left", game.turns());
     assert!(switches >= 1 && out_with_one_left >= 2, "{switches} switches, {out_with_one_left} out with a mobile left");
+}
+
+/// PRD-0007 T-003: two bots play Jewel against the real binary, to its end: a side's 100 points,
+/// or a side bunged. They shoot the jewels the server rolls down and dig under each other, and no
+/// one is hurt. On a small shelf over the void, so the digging tells within a test's time: a
+/// Normal bot takes a jewel about one turn in eight, and a game to 100 on deep ground runs a few
+/// hundred turns, past what a debug build plays in one.
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_modes_jewel_two_bots_play_a_1v1_to_the_end() {
+    const SPAWNS: [i32; 2] = [200, 700];
+    let cwd = TempDir::new().unwrap();
+    let dist = TempDir::new().unwrap();
+    write_bundle(dist.path()).unwrap();
+    // A shelf 60 px thick, ground from y = 480.
+    let shelf = Terrain::from_fn(900, 600, |_, y| (480..540).contains(&y)).unwrap();
+    write_map(dist.path(), "shelf", &shelf, &SPAWNS).unwrap();
+    let server = start_with(dist.path(), cwd.path(), &["--bot-delay-ms", "0", "--no-playback-wait"]);
+    let addr = server.addr;
+    let code = tokio::task::spawn_blocking(move || create_room(addr)).await.unwrap().unwrap();
+
+    let mut host = Client::connect(addr, &code, true).await;
+    host.hello("Host", None).await;
+    host.send(&ClientMsg::Team(None)).await;
+    host.send(&ClientMsg::Configure(RoomOptions {
+        map: "shelf".into(),
+        team_size: 1,
+        max_wind: 12,
+        turn_seconds: 5,
+        random_teams: false,
+        sudden_death: None,
+        mode: Mode::Jewel,
+    }))
+    .await;
+    for team in [Team::A, Team::B] {
+        host.send(&ClientMsg::AddBot { team }).await;
+    }
+    host.recv_until(|msg| matches!(msg, ServerMsg::Room(view) if view.members.iter().filter(|m| m.bot).count() == 2 && view.options.mode == Mode::Jewel))
+        .await;
+    host.send(&ClientMsg::Start).await;
+
+    // The host spectates: the game's log as the server sends it, on the shelf.
+    let maps = Maps::new(&dist.path().join("assets"));
+    let mut log: Option<Log> = None;
+    loop {
+        match host.recv().await {
+            ServerMsg::Game { log: started } => log = Some(started),
+            ServerMsg::Event { event, .. } => log.as_mut().expect("the game came first").events.push(event),
+            ServerMsg::Room(view) if view.stage == Stage::Lobby && log.is_some() => break,
+            _ => {}
+        }
+    }
+    let log = log.unwrap();
+    let game = log.replay(&maps).unwrap();
+    assert_eq!(log.setup.mode, Mode::Jewel);
+    let Phase::Over { winner: Some(winner) } = game.phase() else { panic!("{:?}", game.phase()) };
+    let loser = if winner == Team::A { Team::B } else { Team::A };
+    let standing = game.players().iter().any(|p| p.alive && p.team == loser);
+    let target = lobshot_sim::tuning::jewels::TARGET_POINTS.value;
+    assert!(
+        game.points(winner).is_some_and(|points| points >= target) || !standing,
+        "team {winner:?} won with {:?}",
+        game.points(winner)
+    );
+
+    // Replayed: jewels fell and were taken, and no one was hurt.
+    let mut replay = Game::new(&log.setup, &maps).unwrap();
+    let (mut taken, mut hurt) = (0, 0);
+    for &event in &log.events {
+        for effect in replay.apply(event).unwrap() {
+            match effect {
+                Effect::JewelTaken { .. } => taken += 1,
+                Effect::Damaged { .. } | Effect::Shielded { .. } => hurt += 1,
+                _ => {}
+            }
+        }
+    }
+    let rolled = log.events.iter().filter(|event| matches!(event, Event::Jewel(_))).count();
+    println!(
+        "the Jewel 1v1 ran {} turns: {rolled} jewels rolled, {taken} taken; {:?} to {:?}",
+        game.turns(),
+        game.points(winner),
+        game.points(loser)
+    );
+    assert_eq!(hurt, 0, "no one is hurt in Jewel");
+    assert!(rolled > taken, "{rolled} rolled, {taken} taken");
 }
 
 /// PRD-0007 T-001: a human player in Score dies, sends `Action::Respawn` over its socket, and its

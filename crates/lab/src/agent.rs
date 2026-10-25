@@ -17,6 +17,7 @@ use lobshot_sim::{
     bot::{self, Level},
     game::{Death, Effect, Event, Game, MobileKind, Phase, Player, Shot, SsState, Team},
     items::Item,
+    jewels::JewelKind,
     map::MapRef,
     mode::Mode,
     referee::{self, Entrant, XorShift},
@@ -48,7 +49,7 @@ pub struct NewGame {
     pub map: Option<String>,
     /// Players a team, 1 to 4 (1 when left out). Your teammates are bots too.
     pub team_size: Option<u8>,
-    /// What the game is played for: solo, score or tag (solo when left out).
+    /// What the game is played for: solo, score, tag or jewel (solo when left out).
     pub mode: Option<String>,
     /// Your second mobile, by name, in Tag; random when left out (the bots' are random).
     pub second: Option<String>,
@@ -248,7 +249,7 @@ fn mode(name: &str) -> Res<Mode> {
     Mode::ALL
         .into_iter()
         .find(|mode| mode.name().eq_ignore_ascii_case(name.trim()))
-        .with_context(|| format!("{name:?} isn't a mode: solo, score or tag"))
+        .with_context(|| format!("{name:?} isn't a mode: solo, score, tag or jewel"))
 }
 
 /// A seed from the clock: an agent's game needn't be reproducible unless it asks for a seed.
@@ -409,14 +410,19 @@ pub struct View {
     /// Mines on the map (Tinbadger's S2): each crawls toward an enemy near it as its layer's turn
     /// comes up, and goes off on touching a mobile.
     pub mines: Vec<MineView>,
-    /// What the game is played for: `Solo` (the last team standing wins) or `Score` (team lives).
+    /// What the game is played for: `Solo` (the last team standing wins), `Score` (team lives) or
+    /// `Jewel` (jewels for points).
     pub mode: Mode,
-    /// Each team's points, in a mode that counts them: Score's lives left. Empty in Solo.
+    /// Each team's points, in a mode that counts them: Score's lives left, or Jewel's points.
+    /// Empty in Solo.
     pub points: Vec<TeamPoints>,
     /// The dead who may drop back in (Score), with where and when each lands once picked.
     pub respawns: Vec<RespawnView>,
     /// You're dead and may pick where to drop back in now, with `{"Respawn": {"x": 600}}`.
     pub can_respawn: bool,
+    /// The jewels on the map (Jewel): what each is worth, what it takes in one turn, and what it
+    /// has taken this turn.
+    pub jewels: Vec<JewelView>,
     /// What you may do, on your turn.
     pub options: Option<Options>,
     /// What happened since you last looked, in order.
@@ -547,6 +553,20 @@ pub struct MineView {
     /// The seat that laid it: it crawls as that seat's turn comes up.
     pub seat: u8,
     pub yours: bool,
+    /// Where it sits: the ground under it.
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct JewelView {
+    pub kind: JewelKind,
+    /// What it is worth to the team that takes it (an Onyx costs 5, until it turns blue).
+    pub points: i32,
+    /// The damage it must take in one turn to be taken.
+    pub needs: i32,
+    /// The damage it has taken this turn.
+    pub damage: i32,
     /// Where it sits: the ground under it.
     pub x: i32,
     pub y: i32,
@@ -685,9 +705,25 @@ fn view(session: &Session, happened: &[Happened]) -> View {
             })
             .collect(),
         can_respawn,
+        jewels: jewels(game),
         options: your_turn.then(|| options(game, you)),
         happened: narrate(game, you, happened),
     }
+}
+
+/// The jewels on the map, as the view shows them.
+fn jewels(game: &Game) -> Vec<JewelView> {
+    game.jewels()
+        .iter()
+        .map(|jewel| JewelView {
+            kind: jewel.kind,
+            points: jewel.kind.points(),
+            needs: jewel.kind.needs(),
+            damage: jewel.damage,
+            x: jewel.at.x,
+            y: jewel.at.y,
+        })
+        .collect()
 }
 
 fn round2(value: f64) -> f64 {
@@ -974,7 +1010,13 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
+        Effect::Points { team, points } if names.game.mode().jewels() => format!(" Team {team:?} has {points} points."),
         Effect::Points { team, points } => format!(" Team {team:?} has {points} {} left.", if *points == 1 { "life" } else { "lives" }),
+        Effect::JewelDropped { drop, to: Some(to), .. } => format!(" A {} fell at x={}, y={}.", drop.kind.name(), to.x, to.y),
+        Effect::JewelDropped { drop, to: None, .. } => format!(" A {} fell through the map at x={}.", drop.kind.name(), drop.x),
+        Effect::JewelHit { amount, .. } => format!(" A jewel took {amount} damage."),
+        Effect::JewelTaken { team, .. } => format!(" Team {team:?} took a jewel."),
+        Effect::JewelTurned { kind, .. } => format!(" An Onyx turned into a {}.", kind.name()),
         Effect::RespawnPicked { seat, x, lands } => format!(" {} will drop back in at x={x} as turn {lands} ends.", names.who(*seat)),
         Effect::Respawned { seat, to: Some(to), .. } => format!(" {} dropped back in at x={}.", names.who(*seat), to.x),
         Effect::Respawned { seat, to: None, .. } => format!(" {} fell through the map dropping back in: no life lost, but it picks again.", names.who(*seat)),
@@ -997,7 +1039,9 @@ pub fn rules() -> String {
     let mut text = RULES
         .replace("{PASS}", &tuning::PASS_DELAY.value.to_string())
         .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string())
-        .replace("{RESPAWN}", &tuning::modes::SCORE_RESPAWN_TURNS.value.to_string());
+        .replace("{RESPAWN}", &tuning::modes::SCORE_RESPAWN_TURNS.value.to_string())
+        .replace("{JEWEL_TARGET}", &tuning::jewels::TARGET_POINTS.value.to_string())
+        .replace("{JEWEL_RESPAWN}", &tuning::jewels::RESPAWN_TURNS.value.to_string());
     text.push_str("\n## Mobiles\n");
     for mobile in MobileKind::ALL {
         let t = mobile.tuning();
@@ -1112,6 +1156,15 @@ turn, on your turn (`options.can_switch`), `\"Switch\"` brings it in where the o
 facing the same way, and sends that one out; the turn goes on, with your loadout, the steps you
 have walked and any item you used. You are out when the mobile in play dies, however much the
 other has left, and then the slot machine is yours.
+
+In Jewel, shots hurt no one: jewels fall onto the map (`jewels`), and the first team to
+{JEWEL_TARGET} `points` wins. A jewel goes to the team whose turn deals it what it `needs` in that
+one turn (blasts, beams and bolts deal it what they would a mobile there; a Dual's two shots add
+up), and its damage starts again each turn: a Sapphire is worth 5 for 100, a Topaz 10 for 200, a
+Ruby 25 for 300, and an Onyx costs 5 for 100 until it turns into a Sapphire. Only a bunge kills:
+dig the ground out from under an enemy. A team whose players are all bunged at once loses;
+otherwise a bunged player picks where to drop back in, as in Score, {JEWEL_RESPAWN} turns later,
+for free. There is no slot machine in Jewel, and Sacrifice costs nothing.
 ";
 
 fn about(mobile: MobileKind) -> String {
@@ -1486,12 +1539,27 @@ mod unit {
     }
 
     #[test]
-    fn modes_go_by_name_and_only_built_ones_play() {
+    fn in_jewel_the_view_shows_the_jewels_and_points_and_the_bots_hurt_no_one() {
+        let new = NewGame { mode: Some("jewel".into()), ..flat(3) };
+        let mut session = Session::new(&new, &maps()).unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert_eq!(view.mode, Mode::Jewel);
+        assert_eq!(view.points.iter().map(|points| points.team).collect::<Vec<_>>(), [Team::A, Team::B], "the bot may have scored already");
+        assert!(!view.jewels.is_empty() && view.jewels.iter().all(|jewel| jewel.damage == 0 && jewel.needs >= 100), "{:?}", view.jewels);
+        assert!(view.happened.iter().any(|line| line.contains(" fell at x=")), "{:?}", view.happened);
+        for _ in 0..3 {
+            session.act(Action::Pass).unwrap();
+        }
+        let view = session.view(&maps()).unwrap();
+        assert!(view.players.iter().all(|player| player.hp == player.max_hp), "{:?}", view.players);
+        assert!(rules().contains("In Jewel, shots hurt no one"), "the rules say how Jewel plays");
+    }
+
+    #[test]
+    fn modes_go_by_name() {
         assert_eq!(mode(" score ").unwrap(), Mode::Score);
         assert_eq!(mode("SOLO").unwrap(), Mode::Solo);
-        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo, score or tag");
-        let jewel = NewGame { mode: Some("jewel".into()), ..flat(1) };
-        assert_eq!(Session::new(&jewel, &maps()).unwrap_err().to_string(), "Jewel mode isn't built yet: rooms play Solo, Score or Tag");
+        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo, score, tag or jewel");
         assert_eq!(Session::new(&flat(1), &maps()).unwrap().game().mode(), Mode::Solo, "Solo when left out");
     }
 

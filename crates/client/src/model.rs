@@ -393,6 +393,8 @@ fn publish(screen: Res<State<Screen>>, game: Option<Res<Match>>, session: Res<Se
         sounds: &page.sounds,
         buttons: &page.buttons,
         map_x: page.pointer.and_then(|pointer| pointer.0),
+        jewels: game.as_ref().map_or(0, |game| game.confirmed.jewels().len()),
+        points: game.as_ref().and_then(|game| Some([game.confirmed.points(Team::A)?, game.confirmed.points(Team::B)?])),
     });
 }
 
@@ -451,6 +453,10 @@ mod unit {
                 Roll::Weather { .. } => Event::Weather(Forecast::new(WeatherKind::Force, 1)),
                 Roll::Wind => Event::Wind(Wind::default()),
                 Roll::Drop { .. } => Event::Drop(Drop { kind: DropKind::Calm, x: 1 }),
+                Roll::Jewel { .. } => Event::Jewel(lobshot_sim::jewels::JewelDrop {
+                    kind: lobshot_sim::jewels::JewelKind::Onyx,
+                    x: 1,
+                }),
             };
             game.referee(event).unwrap();
         }

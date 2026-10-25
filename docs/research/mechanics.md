@@ -457,6 +457,8 @@ From `[SW-gp]`; slots and the second delay value from `[WP06]` and `[AK]`. The l
   - **Jewel:** shoot falling jewels for points; first to 100 wins. Bullets don't hurt players; only bunge does.
     - GB detail: jewels are worth 5, 10, 25, or −5 points, need 100, 200, or 300 damage *in one turn*, and bunged players respawn after 2 turns `[SW-modes]`.
   - **Tag:** pick 2 mobiles. In DB, when the first is defeated you switch to the backup at half HP.
+    **Unconfirmed (2026-10-25):** DragonBound's archived room guide lists no Tag mode at all (Normal,
+    Score, Boss, Same), and no DB source found backs this line; see `modes-tag.md`.
     - **Difference vs GB Classic:** in GB you may switch once per turn, but "if the current mobile's HP is reduced to zero, the player is out, regardless of the other mobile" `[SW-modes]`.
   - **Battle Royale (DB-only):** last one standing wins. Kills pay out immediately, and placing in the top half records a Win.
   - **Boss (DB-only):** escalating bots. Beating bots unlocks the ability to *create* rooms in each mode: Normal after 1, Score after 3, Jewel after 5, Tag after 7, BR after 9.
