@@ -29,6 +29,6 @@ pub const RESPAWN_TURNS_BEFORE: Tuned<usize> = cited(1, &["GF-super"]);
 
 /// The share of its max HP a Tag player's second mobile starts with, in percent: "The first one has
 /// full HP, and the second one has half HP" (SW-modes). Its shield starts full: the sources speak of
-/// HP alone, and a shield regenerates in play anyway. DragonBound instead brings the backup in at
-/// half HP once the first falls (DB-lobby).
-pub const TAG_SECOND_HP_PERCENT: Tuned<u32> = cited(50, &["SW-modes", "GF-vgg", "GF-kurai", "GF-super", "NAMU"]);
+/// HP alone, and a shield regenerates in play anyway. Its max HP is whole: heals mend the half it
+/// lacks (WP20).
+pub const TAG_SECOND_HP_PERCENT: Tuned<u32> = cited(50, &["SW-modes", "GF-vgg", "GF-kurai", "GF-super", "NAMU", "WP20"]);

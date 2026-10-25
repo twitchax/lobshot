@@ -1,8 +1,8 @@
 //! Tag (PRD-0007 T-002): each player brings two mobiles and plays one at a time, switching in the
 //! one sitting out once a turn. The player is out when the mobile in play falls, "regardless of the
-//! other mobile" (SW-modes): GunBound Classic's rule, not DragonBound's switch to the backup at half
-//! HP. The mobile sitting out is off the map: nothing touches it, and nothing on it changes until
-//! it switches back in. Sources and every pick are in `docs/research/modes-tag.md`.
+//! other mobile" (SW-modes): GunBound Classic's rule, not a switch to the backup once the first
+//! falls. The mobile sitting out is off the map: nothing touches it, and nothing on it changes
+//! until it switches back in. Sources and every pick are in `docs/research/modes-tag.md`.
 //!
 //! `ModeState` keeps each seat's bench; `Game` asks here whether a switch is allowed and makes it.
 
