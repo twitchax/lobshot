@@ -21,7 +21,7 @@ use tracing_subscriber::EnvFilter;
 use lobshot_assets::{MAPS, maps::Maps};
 use lobshot_lab::{
     agent::{self, NewGame, Session, TraceRequest},
-    balance::{self, LevelName, Spec},
+    balance::{self, LevelName, Shard, Spec},
     mcp::Server,
     report::{BAND, Band, Report},
 };
@@ -140,9 +140,10 @@ struct BalanceArgs {
     /// Games per matchup (a pair of mobiles, or a mirror).
     #[arg(long, default_value_t = 200)]
     games: u32,
-    /// How well the bots play: easy, normal or hard.
-    #[arg(long, default_value = "normal")]
-    level: LevelName,
+    /// How well the bots play: easy, normal or hard, or several (`normal,hard`), whose games the
+    /// report pools.
+    #[arg(long, value_delimiter = ',', default_value = "normal")]
+    level: Vec<LevelName>,
     /// Maps to play, every variant of each (`flat` is built in and needs no assets).
     #[arg(long, value_delimiter = ',', default_values_t = MAPS.iter().map(|&m| m.to_owned()))]
     maps: Vec<String>,
@@ -155,6 +156,10 @@ struct BalanceArgs {
     /// Threads to play on; every core by default.
     #[arg(long)]
     threads: Option<usize>,
+    /// Play only part I of N of the run (`3/8`): every Nth pair of mobiles, so N machines can
+    /// play a big run between them.
+    #[arg(long)]
+    shard: Option<Shard>,
     /// Print the report as JSON instead of text.
     #[arg(long)]
     json: bool,
@@ -221,7 +226,8 @@ fn balance(args: &BalanceArgs) -> Void {
     let maps = Maps::new(&args.assets.assets);
     let arenas = balance::arenas(&maps, &args.maps).with_context(|| format!("loading maps from {} (`cargo make art` builds them)", args.assets.assets.display()))?;
     let mobiles = if args.mobiles.is_empty() { MobileKind::ALL.to_vec() } else { args.mobiles.clone() };
-    let specs = balance::specs(&mobiles, &arenas, args.games, args.level.0, args.seed);
+    let specs = args.level.iter().flat_map(|level| balance::specs(&mobiles, &arenas, args.games, level.0, args.seed)).collect();
+    let specs = args.shard.unwrap_or(Shard::ALL).of(specs, &mobiles);
     let threads = args.threads.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from));
     let total = specs.len();
     let tty = std::io::stderr().is_terminal();
@@ -243,7 +249,7 @@ fn balance(args: &BalanceArgs) -> Void {
         }
     }
     let outcomes: Vec<_> = played.into_iter().map(|(outcome, _)| outcome).collect();
-    let report = Report::new(&outcomes, &mobiles, args.level.0);
+    let report = Report::new(&outcomes, &mobiles);
     if args.json {
         println!("{}", serde_json::to_string_pretty(&report).context("writing the report")?);
     } else {
