@@ -697,7 +697,8 @@ impl Candidate {
     }
 
     /// Fires the shot (after its item, if any) in scratch copies of `game` and values it: as found,
-    /// in the wind as read (`sure`), and over each of the doubt's draws, whose mean is `value`.
+    /// in the wind as read (`sure`), and, if that does any good, over each of the doubt's draws,
+    /// whose mean is `value`.
     fn fired(self, game: &Game, seat: u8, doubt: &Doubt) -> Self {
         let Some(me) = game.players().get(usize::from(seat)) else { return self };
         let tuning = me.tuning();
@@ -724,7 +725,8 @@ impl Candidate {
             effects.map(|effects| value(game, seat, &effects))
         };
         let Some(sure) = once(None, (0, 0)) else { return self };
-        let value = if doubt.draws.is_empty() {
+        // A shot that does no good even as found isn't worth weighing over the doubt.
+        let value = if doubt.draws.is_empty() || sure <= 0.0 {
             sure
         } else {
             let total: f64 = doubt.draws.iter().map(|&(wind, slip)| once(Some(wind), slip).unwrap_or(0.0)).sum();
