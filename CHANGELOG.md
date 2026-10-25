@@ -65,8 +65,8 @@ why the version moved the way it did.
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
 - Jewel mode (M6): jewels fall onto the map, worth 5, 10, 25 or -5 points; deal 100, 200 or 300
   damage to one in a turn to take it (or knock it off the map), and the first team to 100 wins. No
-  one is hurt, so only a
-  bunge kills, and the bunged drop back in. Bots shoot jewels and dig under enemies.
+  one is hurt, so only a bunge kills, and the bunged drop back in. Bots shoot jewels and dig under
+  enemies.
 - Tag mode (M6): two mobiles each, the second on half HP; switch once a turn on your own turn (F7 or
   T, or the HUD's button), and you're out when the mobile in play dies. Bots pick two and switch
   when it helps.
