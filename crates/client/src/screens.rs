@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use lobshot_protocol::{ClientMsg, Member, MemberId, RoomOptions, RoomView, Token};
-use lobshot_sim::game::{MAX_SEATS, Team};
+use lobshot_sim::{
+    game::{MAX_SEATS, Team},
+    mode::Mode,
+};
 
 use crate::{
     assets::ImageCache,
@@ -99,8 +102,8 @@ fn title(mut commands: Commands, session: Res<Session>, roots: Query<Entity, Wit
 }
 
 /// Your mobile and items, outside any room: rebuilt whenever they change.
-fn garage(mut commands: Commands, session: Res<Session>, picks: Res<Picks>, server: Res<AssetServer>, mut cache: ResMut<ImageCache>, roots: Query<Entity, With<ScreenRoot>>) {
-    if !picks.is_changed() && !session.is_changed() && !roots.is_empty() {
+fn garage(mut commands: Commands, session: Res<Session>, mut art: LobbyArt, roots: Query<Entity, With<ScreenRoot>>) {
+    if !art.picks.is_changed() && !session.is_changed() && !art.picking.is_changed() && !roots.is_empty() {
         return;
     }
     for root in &roots {
@@ -119,8 +122,10 @@ fn garage(mut commands: Commands, session: Res<Session>, picks: Res<Picks>, serv
                 ..default()
             }))
             .with_children(|column| {
-                picks::mobile_picker(column, picks.mobile, None);
-                picks::loadout_editor(column, &picks, &server, &mut cache);
+                let second = art.picking.second;
+                picks::slot_picker(column, art.picks.mobile, art.picks.second, second);
+                picks::mobile_picker(column, if second { art.picks.second } else { art.picks.mobile }, None);
+                picks::loadout_editor(column, &art.picks, &art.server, &mut art.cache);
             });
         if let Some(notice) = &session.notice {
             screen.spawn(text(notice.clone(), 18.0, theme::TEAM_B));
@@ -172,11 +177,17 @@ fn gone(mut commands: Commands, session: Res<Session>) {
     });
 }
 
-/// Whose mobile the lobby's picker sets: this player's (`None`), or, for the room master, a bot's.
+/// Whose mobile the lobby's picker sets, and which.
 #[derive(Resource, Default)]
-pub struct PickingFor(pub Option<MemberId>);
+pub struct PickingFor {
+    /// This player's (`None`), or, for the room master, a bot's.
+    pub bot: Option<MemberId>,
+    /// The second mobile Tag plays rather than the first: in a Tag room's lobby, and in the garage.
+    pub second: bool,
+}
 
-/// What the lobby needs besides the room: this player's picks, whose the picker sets, and the art.
+/// What the lobby needs besides the room: this player's picks, whose the picker sets and which of
+/// the two, and the art.
 #[derive(bevy::ecs::system::SystemParam)]
 struct LobbyArt<'w> {
     picks: Res<'w, Picks>,
@@ -247,13 +258,20 @@ fn lobby(mut commands: Commands, session: Res<Session>, mut art: LobbyArt, roots
                     ..default()
                 }))
                 .with_children(|column| {
-                    // The master may be picking for one of the room's bots.
-                    let bot = art.picking.0.filter(|_| master).and_then(|id| room.members.iter().find(|m| m.id == id && m.bot));
+                    // The master may be picking for one of the room's bots; in Tag, either mobile.
+                    let bot = art.picking.bot.filter(|_| master).and_then(|id| room.members.iter().find(|m| m.id == id && m.bot));
+                    let (first, second) = bot.map_or((art.picks.mobile, art.picks.second), |bot| (bot.mobile, bot.second));
+                    let tag = room.options.mode == Mode::Tag;
+                    let picking_second = tag && art.picking.second;
+                    if tag {
+                        picks::slot_picker(column, first, second, picking_second);
+                    }
+                    let picked = if picking_second { second } else { first };
                     if let Some(bot) = bot {
-                        picks::mobile_picker(column, bot.mobile, Some(&bot.name));
+                        picks::mobile_picker(column, picked, Some(&bot.name));
                         column.spawn(text("Bots bring SearchBot's items.", 13.0, theme::MUTED));
                     } else {
-                        picks::mobile_picker(column, art.picks.mobile, None);
+                        picks::mobile_picker(column, picked, None);
                         picks::loadout_editor(column, &art.picks, &art.server, &mut art.cache);
                     }
                 });
@@ -339,7 +357,7 @@ fn team_panel(row: &mut ChildSpawnerCommands, room: &RoomView, team: Team, me: O
     .with_children(|column| {
         column.spawn(text(format!("Team {team:?}  {}/{}", members.len(), room.options.team_size), 18.0, team_color(team)));
         for member in members {
-            member_row(column, member, room.master, master && Some(member.id) != me);
+            member_row(column, member, room, master && Some(member.id) != me);
         }
         column.spawn(Node::default()).with_children(|buttons| {
             if mine.is_some_and(|m| m.team != Some(team)) {
@@ -360,10 +378,19 @@ fn tags(member: &Member, master: MemberId) -> Vec<&'static str> {
         .collect()
 }
 
-/// A seated member: readiness, name, then their mobile and tags underneath.
-fn member_row(column: &mut ChildSpawnerCommands, member: &Member, master: MemberId, can_kick: bool) {
-    let mut details = vec![picks::mobile_name(member.mobile)];
-    details.extend(tags(member, master));
+/// What a seated member plays: their mobile, and in Tag the second one too.
+fn mobiles(member: &Member, mode: Mode) -> String {
+    if mode == Mode::Tag {
+        picks::pair_name(member.mobile, member.second)
+    } else {
+        picks::mobile_name(member.mobile).to_owned()
+    }
+}
+
+/// A seated member: readiness, name, then their mobiles and tags underneath.
+fn member_row(column: &mut ChildSpawnerCommands, member: &Member, room: &RoomView, can_kick: bool) {
+    let mut details = vec![mobiles(member, room.options.mode)];
+    details.extend(tags(member, room.master).into_iter().map(str::to_owned));
     column
         .spawn(Node {
             align_items: AlignItems::Center,
@@ -507,14 +534,26 @@ fn act(
             }
             // A pick for a bot goes to the room, and the picker comes back to this player's own.
             UiAction::PickMobile(mobile) => {
-                let bot = picking.0.take();
-                if bot.is_none() {
-                    picks.pick(mobile);
+                let bot = picking.bot.take();
+                match (bot, picking.second) {
+                    (None, false) => picks.pick(mobile),
+                    (None, true) => picks.pick_second(mobile),
+                    _ => {}
                 }
-                bot.map(|bot| ClientMsg::BotMobile { bot, mobile })
+                bot.map(|bot| {
+                    if picking.second {
+                        ClientMsg::BotSecond { bot, mobile }
+                    } else {
+                        ClientMsg::BotMobile { bot, mobile }
+                    }
+                })
+            }
+            UiAction::PickSecond(second) => {
+                picking.second = second;
+                None
             }
             UiAction::PickFor(target) => {
-                picking.0 = target;
+                picking.bot = target;
                 None
             }
             UiAction::AddItem(item) => {
@@ -554,7 +593,7 @@ fn act(
             UiAction::Kick(member) => Some(ClientMsg::Kick(member)),
             UiAction::Start => Some(ClientMsg::Start),
             UiAction::Configure(options) => Some(ClientMsg::Configure(options)),
-            UiAction::Shot(_) | UiAction::Item(_) | UiAction::Spin | UiAction::Pass | UiAction::Chat => None,
+            UiAction::Shot(_) | UiAction::Item(_) | UiAction::Spin | UiAction::Pass | UiAction::Chat | UiAction::Switch => None,
         };
         if let Some(message) = message {
             socket.send(&message);
@@ -593,7 +632,7 @@ impl Plugin for ScreensPlugin {
             .add_systems(OnExit(Screen::Garage), clear)
             .add_systems(OnExit(Screen::Name), clear)
             .add_systems(OnExit(Screen::Joining), clear)
-            .add_systems(OnExit(Screen::Lobby), (clear, |mut picking: ResMut<PickingFor>| picking.0 = None))
+            .add_systems(OnExit(Screen::Lobby), (clear, |mut picking: ResMut<PickingFor>| picking.bot = None))
             .add_systems(OnExit(Screen::Gone), clear)
             .add_systems(
                 Update,
@@ -632,5 +671,23 @@ mod unit {
             ..RoomOptions::default()
         };
         assert!(describe(&options).starts_with("Score, ") && describe(&options).ends_with("no sudden death"));
+    }
+
+    #[test]
+    fn a_member_plays_two_mobiles_in_tag_and_one_otherwise() {
+        let member = Member {
+            id: MemberId(1),
+            name: "Pip".to_owned(),
+            team: Some(Team::A),
+            mobile: Some(lobshot_sim::game::MobileKind::Hookclaw),
+            items: lobshot_sim::items::Loadout::default(),
+            rider: "pip".to_owned(),
+            ready: false,
+            bot: false,
+            connected: true,
+            second: None,
+        };
+        assert_eq!(mobiles(&member, Mode::Tag), "Hookclaw + Random");
+        assert_eq!(mobiles(&member, Mode::Solo), "Hookclaw");
     }
 }
