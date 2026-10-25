@@ -70,7 +70,11 @@ pub const S1_COGS: Tuned<usize> = cited(3, &["SW-mob", "DB-mob"]);
 pub const S1_AMPLITUDE: Tuned<f64> = cited(12.0, &["OB"]);
 pub const S1_HERTZ: Tuned<f64> = cited(1.0, &["OB"]);
 /// Each cog's damage: SW-mob's and DB-mob's 100-160 for the three, split evenly.
-pub const S1_COG_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 34, max: 54 }, "SW-mob's and DB-mob's 100-160 for the three cogs, split evenly.");
+pub const S1_COG_DAMAGE: Tuned<DamageRange> = picked(
+    DamageRange { min: 45, max: 60 },
+    "GF-max's 50-60 a disc, GF-cyber's 60, and GF-tiro's 140-180 for the three, over SW-mob's and DB-mob's 100-160 \
+     split evenly (34-54). Balance (PRD-0006 T-010): Tinbadger won 35% at Hard on the even split.",
+);
 /// Each cog's reach: OB's tight r15.
 pub const S1_COG_BLAST: Tuned<f64> = cited(15.0, &["OB"]);
 /// Each cog's crater: wider than its reach, as the cogs "remove a lot of land" (SW-mob).
@@ -136,8 +140,10 @@ pub const MINE_HEIGHT: Tuned<f64> = cited(4.0, &["OB"]);
 /// or when its fuse burns down. GF-lee's homes on the nearest mobile for about 3 s
 /// (CONTRADICTION). A direct hit goes off at once.
 pub const SS_DAMAGE: Tuned<DamageRange> = picked(
-    DamageRange { min: 250, max: 350 },
-    "No source gives a range (SW-mob's is blank, DB-mob's ??); the guides' averages run 200-330 (WP06, CR-tooya, CR-blood, GF-lee, GF-cyber), what walking into a mobile's side deals here.",
+    DamageRange { min: 300, max: 400 },
+    "No source gives a range (SW-mob's is blank, DB-mob's ??); the guides' averages run 200-330 (WP06, CR-tooya, \
+     CR-blood, GF-lee, GF-cyber) and OB deals 500, so a walk into a mobile's side deals about the guides' top. \
+     Balance (PRD-0006 T-010): from 250-350, the guides' middle.",
 );
 pub const SS_BLAST: Tuned<f64> = cited(30.0, &["OB"]);
 /// How fast it walks, px/s: OB walks everything a pixel a frame, at 60 frames a second.

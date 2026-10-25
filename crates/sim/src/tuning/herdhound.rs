@@ -119,7 +119,11 @@ pub const DUD_BLAST: Tuned<f64> = picked(28.0, "A whole warhead's crater: it des
 // ── S1 ───────────────────────────────────────────────────────────────────────
 
 /// S1: two missiles and a guide (SW-mob).
-pub const S1_MISSILE_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 75, max: 110 }, "SW-mob's 150-220 for the two, split evenly.");
+pub const S1_MISSILE_DAMAGE: Tuned<DamageRange> = picked(
+    DamageRange { min: 64, max: 94 },
+    "128-188 for the two: KAL-gma's typical 120-190 and inside CR-kal's 150-200 at the top, under SW-mob's 150-220. \
+     Balance (PRD-0006 T-010): from SW-mob's split evenly (75-110), when Herdhound led at Normal.",
+);
 pub const S1_MISSILE_BLAST: Tuned<f64> = picked(24.0, "Missiles of \"decent damage and bunge\" (KAL-dlh).");
 /// Each missile's heading as it bursts out, in degrees off the warhead's, counterclockwise on
 /// screen; it loops that way round.
@@ -128,7 +132,11 @@ pub const S1_BURST: Tuned<[f64; 2]> = picked([50.0, -50.0], "A figure eight behi
 // ── S2 ───────────────────────────────────────────────────────────────────────
 
 /// S2: four missiles and a guide (SW-mob).
-pub const S2_MISSILE_DAMAGE: Tuned<DamageRange> = picked(DamageRange { min: 63, max: 100 }, "SW-mob's 250-400 for the four, split evenly (it gives about 50-120 each).");
+pub const S2_MISSILE_DAMAGE: Tuned<DamageRange> = picked(
+    DamageRange { min: 54, max: 85 },
+    "216-340 for the four: KAL-gma's typical 220-340 and CR-kal's 230-350, under SW-mob's 250-400 (about 50-120 \
+     each). Balance (PRD-0006 T-010): from SW-mob's split evenly (63-100), when Herdhound led at Normal.",
+);
 pub const S2_MISSILE_BLAST: Tuned<f64> = picked(20.0, "Four smaller blasts.");
 pub const S2_BURST: Tuned<[f64; 4]> = picked([80.0, 30.0, -30.0, -80.0], "Two loops above the opening point and two below, each pair out of step.");
 

@@ -114,7 +114,7 @@ mod unit {
             testing::{damage_to, direct_hit_power, duel_of, explosions, shoot},
         },
         terrain::Terrain,
-        tuning::herdhound::{DUD_BLAST, LOOP_SECONDS},
+        tuning::herdhound::{DUD_BLAST, LOOP_SECONDS, S1_MISSILE_DAMAGE, S2_MISSILE_DAMAGE},
         units::{Power, Vec2, ticks},
         weather::{Column, WeatherKind},
     };
@@ -174,9 +174,9 @@ mod unit {
         let strikes = blasts(&effects);
         assert_eq!(strikes.len(), 2);
         assert!(strikes.iter().all(|(at, _)| at.distance(landed) < 20.0), "where the guide landed, {landed:?}: {strikes:?}");
-        // 75-110 each, Explosion against Mechanical.
-        let dealt = damage_to(&effects, 1);
-        assert!((150..=220).contains(&dealt), "{dealt}");
+        // Each missile's range, Explosion against Mechanical: a direct hit apiece.
+        let (dealt, each) = (damage_to(&effects, 1), S1_MISSILE_DAMAGE.value);
+        assert!((2 * each.min..=2 * each.max).contains(&dealt), "{dealt}");
         assert_eq!(damage_to(&effects, 0), 0);
     }
 
@@ -267,7 +267,7 @@ mod unit {
         let missiles = &fired(&effects)[1..];
         assert_eq!(missiles.len(), 4);
         assert!(missiles.iter().all(|path| path.len() == 1 && path[0].from == path[0].to), "each strikes as it bursts out: {effects:?}");
-        assert!(damage_to(&effects, 1) >= 4 * 63, "{effects:?}");
+        assert!(damage_to(&effects, 1) >= 4 * S2_MISSILE_DAMAGE.value.min, "{effects:?}");
     }
 
     #[test]

@@ -93,7 +93,7 @@ back), and clients draw them from their legs.
 | Missile speed | 450 px/s | Loops about 72 px across, so close, flat shots crash; a missile crosses a screen in under two seconds. 360 until balance (PRD-0006 T-010). |
 | Homing turn | 3 rad/s | "Partial homing towards the tracer" (`[KAL-dlh]`): a missile comes about in a second after its loops and comes in on the guide at an angle (`[CR-pb218]`), scattering about a guide that lands beside its target. 6 until balance (PRD-0006 T-010), when missiles landed on the guide every time and Herdhound led at both levels. |
 | Missile lifetime | 6 s | A guard: a missile that has hit nothing goes off where it is. |
-| Missile damage | S1 75-110, S2 63-100, SS 38-81 each | `[SW-mob]`'s totals split evenly. |
+| Missile damage | S1 64-94, S2 54-85, SS 38-81 each | S1 and S2 at `[KAL-gma]`'s and `[CR-kal]`'s typical totals (128-188, 216-340), under `[SW-mob]`'s, since balance (PRD-0006 T-010); the SS `[SW-mob]`'s total split evenly. |
 | Dud | 40-60, 28 px crater | "Puny damage" `[CR-kal]`, but it carves terrain `[KAL-snx]`. |
 | Burst headings, SS split and guide spread | `tuning::herdhound` | Picked for a readable flower of loops and an SS that lands three or four of eight on a dead-center target, the "pin-point precision" its full damage needs `[SW-mob]`. |
 | Electric shock | none | `[KAL-snx]` mentions a once-a-turn electric shock but gives no number, and lobshot follows `[SW-mob]`'s Explosion. |

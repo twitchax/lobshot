@@ -32,8 +32,9 @@ own: it is where most of lobshot's distances come from, as no GunBound source gi
   weakness, and GF-vgg's "4% Less Damage to Shields"), 10-50 all true, and every mobile's climb and
   move budget.
 - One weight for all three shots: lobshot's gravity is per mobile, so the SS isn't lighter.
-- S1's damage is SW-mob's 100-160 split among the three discs, though the guides find it hits
-  harder.
+- S1's damage was SW-mob's 100-160 split among the three discs (34-54 each), though the guides
+  find it hits harder; balance (PRD-0006 T-010) takes the guides' 45-60 a disc (`[GF-max]`'s
+  50-60, `[GF-cyber]`'s 60, `[GF-tiro]`'s 140-180 for the three).
 
 ## Shot 1: the discs
 
@@ -122,7 +123,9 @@ own: it is where most of lobshot's distances come from, as no GunBound source gi
   corpse" `[SW-mob]`; "A target is not just a player, it can be another Raon mine or just a dead
   mobile" `[CR-icy]`. A floating mobile it passes under, as mines pass under it.
 - **Damage.** It falls the longer it walks (`[GF-vgg]`, `[GF-max]`), or "could miss by a mile, and
-  still do max damage" `[CR-tooya]` (**CONTRADICTION**: lobshot keeps it flat).
+  still do max damage" `[CR-tooya]` (**CONTRADICTION**: lobshot keeps it flat). No source gives a
+  range; lobshot picks 300-400, the top of the guides' averages short of OB's 500 (250-350, their
+  middle, until balance, PRD-0006 T-010).
 
 ## Fitting its weight
 
