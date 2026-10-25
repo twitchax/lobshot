@@ -15,14 +15,16 @@
         "mobile": "Tinbadger",
         "spawn_x": 420,
         "facing": "Right",
-        "items": []
+        "items": [],
+        "second": null
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1400,
         "facing": "Left",
-        "items": []
+        "items": [],
+        "second": null
       }
     ],
     "order": [
@@ -33,7 +35,8 @@
       "strength": 7,
       "direction": 140
     },
-    "sudden_death": null
+    "sudden_death": null,
+    "mode": "Solo"
   },
   "events": [
     {
@@ -122,7 +125,7 @@
         "seat": 0,
         "shot": "Ss",
         "aim": 30,
-        "power": 80,
+        "power": 78,
         "time": 574
       }
     },

@@ -130,7 +130,7 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         include_str!("golden/roster_tinbadger.json"),
         include_bytes!("golden/roster_tinbadger.bin"),
         52,
-        0x6126_598e_30e9_54f2,
+        0xbe44_7204_2f8b_d17c,
     ),
     (
         "mode_score",
@@ -139,13 +139,13 @@ const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
         153,
         0xd5c1_5a65_981b_e721,
     ),
-    ("mode_tag", include_str!("golden/mode_tag.json"), include_bytes!("golden/mode_tag.bin"), 80, 0x3b98_477a_b37b_2108),
+    ("mode_tag", include_str!("golden/mode_tag.json"), include_bytes!("golden/mode_tag.bin"), 80, 0x6f94_a9be_916e_131c),
     (
         "mode_jewel",
         include_str!("golden/mode_jewel.json"),
         include_bytes!("golden/mode_jewel.bin"),
         287,
-        0xc015_bd10_ad12_029b,
+        0x18a5_82a9_0572_bef8,
     ),
     (
         "roster_lodestoad",

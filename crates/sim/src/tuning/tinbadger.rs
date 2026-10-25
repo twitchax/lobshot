@@ -59,7 +59,7 @@ pub const MOBILE: MobileTuning = MobileTuning {
 
 /// Fitted by `cargo test -p lobshot-sim --test formula -- --ignored --nocapture tool_fit`, which
 /// rewrites this line.
-const GRAVITY: f64 = 654.6;
+const GRAVITY: f64 = 659.0;
 
 // ── S1 ───────────────────────────────────────────────────────────────────────
 

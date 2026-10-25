@@ -428,7 +428,7 @@
         "seat": 0,
         "shot": "Ss",
         "aim": 30,
-        "power": 61,
+        "power": 62,
         "time": 1129
       }
     },
@@ -560,7 +560,7 @@
         "seat": 1,
         "shot": "Ss",
         "aim": 30,
-        "power": 71,
+        "power": 0,
         "time": 451
       }
     },
@@ -583,7 +583,7 @@
         "seat": 0,
         "shot": "S1",
         "aim": 30,
-        "power": 70,
+        "power": 73,
         "time": 588
       }
     },
@@ -604,7 +604,7 @@
         "seat": 2,
         "shot": "S2",
         "aim": 45,
-        "power": 50,
+        "power": 49,
         "time": 725
       }
     },
@@ -631,7 +631,7 @@
         "seat": 0,
         "shot": "Ss",
         "aim": 30,
-        "power": 72,
+        "power": 73,
         "time": 862
       }
     }
