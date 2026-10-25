@@ -43,14 +43,21 @@ pub fn turn_delay(base: u32, ending: Ending, items: u32, per_second: u32, time: 
 /// The player who moves next among `clocks` (index, clock) of living players: least delay, then
 /// the tie-break, then seat order.
 pub fn next<'a>(clocks: impl IntoIterator<Item = (usize, &'a Clock)>) -> Option<usize> {
-    clocks
-        .into_iter()
-        .min_by_key(|&(seat, clock)| {
-            // Longest waiting first means the smallest last turn; otherwise the latest goes again.
-            let recency = if TIE_GOES_TO_LONGEST_WAITING.value { clock.last_turn } else { -clock.last_turn };
-            (clock.delay, recency, seat)
-        })
-        .map(|(seat, _)| seat)
+    clocks.into_iter().min_by_key(|&(seat, clock)| rank(seat, clock)).map(|(seat, _)| seat)
+}
+
+/// `clocks` (index, clock) in the order they would move if no one's delay changed: `next` first.
+pub fn order<'a>(clocks: impl IntoIterator<Item = (usize, &'a Clock)>) -> Vec<usize> {
+    let mut ranked: Vec<(usize, &Clock)> = clocks.into_iter().collect();
+    ranked.sort_by_key(|&(seat, clock)| rank(seat, clock));
+    ranked.into_iter().map(|(seat, _)| seat).collect()
+}
+
+/// Where a clock stands in the turn order: least delay, then the tie-break, then seat order.
+fn rank(seat: usize, clock: &Clock) -> (u32, i64, usize) {
+    // Longest waiting first means the smallest last turn; otherwise the latest goes again.
+    let recency = if TIE_GOES_TO_LONGEST_WAITING.value { clock.last_turn } else { -clock.last_turn };
+    (clock.delay, recency, seat)
 }
 
 #[cfg(test)]
@@ -86,5 +93,12 @@ mod unit {
         assert_eq!(next(clocks.iter().enumerate()), Some(1));
         assert_eq!(next(clocks.iter().enumerate().filter(|&(seat, _)| seat != 1)), Some(2));
         assert_eq!(next(std::iter::empty()), None);
+    }
+
+    #[test]
+    fn the_order_starts_with_the_next_mover_and_ranks_as_next_does() {
+        let clocks = [Clock { delay: 900, last_turn: 1 }, Clock { delay: 770, last_turn: 5 }, Clock { delay: 770, last_turn: 3 }];
+        assert_eq!(order(clocks.iter().enumerate()), [2, 1, 0]);
+        assert_eq!(order(clocks.iter().enumerate()).first().copied(), next(clocks.iter().enumerate()));
     }
 }

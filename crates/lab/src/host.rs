@@ -1,7 +1,8 @@
 //! A headless host: the server's job for one game, without the clocks. It seats the game and
-//! answers the sim's rolls through `sim::referee`, as the server does; spins dead bots' slot
-//! machines; plays bot seats with SearchBot, charging each bot turn the time a server's bot takes
-//! (`tuning::bot::THINK`); and hands agent seats back to its caller.
+//! answers the sim's rolls through `sim::referee`, as the server does; plays dead bots (they spin
+//! their slot machines, or pick where to drop back in); plays bot seats with SearchBot, charging
+//! each bot turn the time a server's bot takes (`tuning::bot::THINK`); and hands agent seats back
+//! to its caller, on their turns and when, dead, they may pick where to drop back in.
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
@@ -43,15 +44,15 @@ pub struct Host {
 }
 
 impl Host {
-    /// Seats `entrants` on `arena` under `options`' rules (max wind, sudden death), every roll
-    /// from `dice`. `bots` says who plays each seat.
+    /// Seats `entrants` on `arena` under `options`' rules (max wind, sudden death, mode), every
+    /// roll from `dice`. `bots` says who plays each seat.
     ///
     /// # Errors
     ///
     /// Fails when the arena can't seat them or its map can't be loaded.
     pub fn seat(arena: &Arena, entrants: &[Entrant], options: &RoomOptions, bots: Vec<Option<Level>>, mut dice: XorShift, assets: &dyn MapAssets) -> Res<Self> {
         anyhow::ensure!(bots.len() == entrants.len(), "{} seats but {} players", entrants.len(), bots.len());
-        let setup = referee::setup(arena, entrants, options.max_wind, options.sudden_death, &mut dice)?;
+        let setup = referee::setup(arena, entrants, options.max_wind, options.sudden_death, options.mode, &mut dice)?;
         let game = Game::new(&setup, assets).context("setting up the game")?;
         Ok(Self {
             game,
@@ -113,12 +114,12 @@ impl Host {
         Ok(Happened { event, effects })
     }
 
-    /// Answers every roll the game owes and spins every dead bot's slot machine the game allows,
-    /// as the server does after each event.
+    /// Answers every roll the game owes and plays every dead bot the game lets act (a spin, or a
+    /// drop point: `bot::while_dead`), as the server does after each event.
     ///
     /// # Errors
     ///
-    /// Fails when the game refuses a roll or a spin it asked for: a sim bug.
+    /// Fails when the game refuses a roll, or a dead bot's move it allowed: a sim bug.
     pub fn settle(&mut self, out: &mut Vec<Happened>) -> Void {
         loop {
             while let Some(roll) = self.game.pending_roll() {
@@ -126,21 +127,32 @@ impl Host {
                 out.push(self.commit(event).context("answering a roll")?);
             }
             let seats = u8::try_from(self.saved.bots.len()).unwrap_or(u8::MAX);
-            let Some(spinner) = (0..seats).find(|&seat| self.bot(seat).is_some() && self.game.can_spin(seat)) else {
+            let Some(event) = (0..seats).filter(|&seat| self.bot(seat).is_some()).find_map(|seat| bot::while_dead(&self.game, seat)) else {
                 return Ok(());
             };
-            out.push(self.commit(Event::Spin { seat: spinner }).context("a bot's spin")?);
+            out.push(self.commit(event).context("a dead bot's move")?);
         }
     }
 
+    /// Whether an agent's seat, dead, may pick where to drop back in: the host waits for it.
+    #[must_use]
+    pub fn agent_may_respawn(&self) -> bool {
+        let seats = u8::try_from(self.saved.bots.len()).unwrap_or(u8::MAX);
+        (0..seats).any(|seat| self.bot(seat).is_none() && self.game.can_respawn(seat))
+    }
+
     /// Settles, then plays one bot turn if a bot is to move. Returns the seat that played, or
-    /// `None` when the game is over or an agent's seat is to move.
+    /// `None` when the game is over, an agent's seat is to move, or a dead agent may pick where to
+    /// drop back in.
     ///
     /// # Errors
     ///
     /// Fails when the game refuses an event the host itself chose: a sim bug.
     pub fn step(&mut self, out: &mut Vec<Happened>) -> Res<Option<u8>> {
         self.settle(out)?;
+        if self.agent_may_respawn() {
+            return Ok(None);
+        }
         let Phase::Turn { seat } = self.game.phase() else { return Ok(None) };
         let Some(level) = self.bot(seat) else { return Ok(None) };
         let (turns, think) = (self.game.turns(), tuning::bot::THINK.value);

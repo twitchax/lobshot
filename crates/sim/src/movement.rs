@@ -86,15 +86,17 @@ pub fn step(terrain: &Terrain, from: Footing, facing: Facing, climb: i32) -> Ste
 pub enum Edge {
     /// Stops on the very edge.
     Holds,
-    /// Goes over it, to fall.
+    /// Goes over it, falls, and slides on from where it lands.
     Drops,
 }
 
 /// Slides a mobile from `from` up to `steps` 1 px steps in `direction`, by the walking rules
 /// (`step`: up its `climb`, down `DROP_PX`, stopped by walls and the map's sides) but carried, not
-/// walking, so it spends no move budget: pulled or pushed (Lodestoad's shots). At an edge it holds
-/// or drops (`edge`). Returns the footings it passes through, a step each, ending where it stops;
-/// one that drops ends in the air just over the edge, at the height it left, for `settle` to drop.
+/// walking, so it spends no move budget: pulled or pushed (Lodestoad's shots). At an edge it holds,
+/// or drops (`edge`): it goes over, falls to the ground below and slides on from there, a step
+/// spent on the fall. Returns the footings it passes through, a step each, with the point in the
+/// air just over each edge it goes over, before where it lands. One that falls off the map ends at
+/// that point, for `settle` to find no ground under.
 #[must_use]
 pub fn slide(terrain: &Terrain, from: Footing, direction: Facing, climb: i32, steps: u32, edge: Edge) -> Vec<Footing> {
     let mut path = Vec::new();
@@ -102,9 +104,10 @@ pub fn slide(terrain: &Terrain, from: Footing, direction: Facing, climb: i32, st
     for _ in 0..steps {
         match step(terrain, at, direction, climb) {
             Step::Walked(footing) => at = footing,
-            Step::Fell(_) if edge == Edge::Drops => {
+            Step::Fell(landing) if edge == Edge::Drops => {
                 path.push(Footing { x: at.x + direction.sign(), y: at.y });
-                break;
+                let Landing::On(footing) = landing else { break };
+                at = footing;
             }
             Step::Blocked | Step::Fell(_) => break,
         }
@@ -217,15 +220,20 @@ mod unit {
     }
 
     #[test]
-    fn a_slide_holds_at_an_edge_or_drops_over_it() {
+    fn a_slide_holds_at_an_edge_or_drops_over_it_and_slides_on() {
         let cliff = terrain(50, 100, |x| if x >= 13 { 90 } else { 60 });
         let start = Footing { x: 10, y: 60 };
         let held = slide(&cliff, start, Facing::Right, CLIMB, 10, Edge::Holds);
         assert_eq!(held.last(), Some(&Footing { x: 12, y: 60 }), "on the very edge");
-        let dropped = slide(&cliff, start, Facing::Right, CLIMB, 10, Edge::Drops);
-        assert_eq!(dropped.last(), Some(&Footing { x: 13, y: 60 }), "over the edge, in the air");
-        assert_eq!(settle(&cliff, Footing { x: 13, y: 60 }), Landing::On(Footing { x: 13, y: 90 }));
+        let dropped = slide(&cliff, start, Facing::Right, CLIMB, 5, Edge::Drops);
+        let expected: Vec<Footing> = [(11, 60), (12, 60), (13, 60), (13, 90), (14, 90), (15, 90)].map(|(x, y)| Footing { x, y }).to_vec();
+        assert_eq!(dropped, expected, "over the edge, in the air, then down and on");
         assert_eq!(slide(&cliff, start, Facing::Left, CLIMB, 0, Edge::Drops), [], "no steps, no slide");
+
+        let pit = terrain(50, 100, |x| if x == 13 { 100 } else { 60 });
+        let fallen = slide(&pit, start, Facing::Right, CLIMB, 10, Edge::Drops);
+        assert_eq!(fallen.last(), Some(&Footing { x: 13, y: 60 }), "over the pit, with no ground below");
+        assert_eq!(settle(&pit, Footing { x: 13, y: 60 }), Landing::OffMap);
     }
 
     #[test]

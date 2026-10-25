@@ -21,12 +21,15 @@ use crate::{
     drops::{self, Drop, Falling},
     items::{self, Item, Loadout, MAX_ITEMS},
     map::{MapAssets, MapRef},
+    mines::{self, Mine, MineId, Minefield},
+    mode::{self, Mode, ModeState, Respawn},
     movement::{self, Footing, Landing, Step},
     shots::{self, Salvo},
     terrain::{DirtyRect, Terrain},
     tuning::{
-        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, frostfin, herdhound, hookclaw, lanternwing, lodestoad, marblemole, sparkhorn, spoutpot, sudsotter, thistleback, tuskrack,
+        ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, lensowl, lodestoad, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter,
+        thistleback, tinbadger, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -61,12 +64,18 @@ pub enum MobileKind {
     Frostfin,
     Herdhound,
     Thistleback,
+    Kitewyrm,
+    Flarecrow,
+    Augerdillo,
+    Lensowl,
+    Needlemouse,
+    Tinbadger,
     Lodestoad,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 18] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -78,6 +87,12 @@ impl MobileKind {
         Self::Frostfin,
         Self::Herdhound,
         Self::Thistleback,
+        Self::Kitewyrm,
+        Self::Flarecrow,
+        Self::Augerdillo,
+        Self::Lensowl,
+        Self::Needlemouse,
+        Self::Tinbadger,
         Self::Lodestoad,
     ];
 
@@ -95,6 +110,34 @@ impl MobileKind {
         room
     }
 
+    /// Where this mobile's own satellite hovers while `shot` is picked, if it stands at `foot`:
+    /// straight up over its feet, whatever the slope. `None` for a mobile without one. It fires
+    /// from there, or (for an SS) from over where its tracer lands (`shots::satellite`).
+    #[must_use]
+    pub fn satellite(self, foot: Vec2, shot: Shot) -> Option<Vec2> {
+        let height = match self {
+            Self::Lensowl => lensowl::satellite(shot),
+            Self::Needlemouse => needlemouse::satellite(shot),
+            Self::Coilback
+            | Self::Lanternwing
+            | Self::Hookclaw
+            | Self::Sparkhorn
+            | Self::Marblemole
+            | Self::Spoutpot
+            | Self::Tuskrack
+            | Self::Sudsotter
+            | Self::Frostfin
+            | Self::Herdhound
+            | Self::Thistleback
+            | Self::Kitewyrm
+            | Self::Flarecrow
+            | Self::Augerdillo
+            | Self::Tinbadger
+            | Self::Lodestoad => return None,
+        };
+        Some(foot - Vec2::new(0.0, height))
+    }
+
     #[must_use]
     pub fn tuning(self) -> &'static MobileTuning {
         match self {
@@ -109,8 +152,22 @@ impl MobileKind {
             Self::Frostfin => &frostfin::MOBILE,
             Self::Herdhound => &herdhound::MOBILE,
             Self::Thistleback => &thistleback::MOBILE,
+            Self::Kitewyrm => &kitewyrm::MOBILE,
+            Self::Flarecrow => &flarecrow::MOBILE,
+            Self::Augerdillo => &augerdillo::MOBILE,
+            Self::Lensowl => &lensowl::MOBILE,
+            Self::Needlemouse => &needlemouse::MOBILE,
+            Self::Tinbadger => &tinbadger::MOBILE,
             Self::Lodestoad => &lodestoad::MOBILE,
         }
+    }
+
+    /// Whether it floats over the ground (Kitewyrm's, `tuning::kitewyrm::FLOATS`): what walks,
+    /// rolls or burrows along the ground passes under it and can't strike it, and a mine has nothing
+    /// of it to go for. Shots that travel on the ground sense mobiles through `Game::grounded_frames`.
+    #[must_use]
+    pub fn floats(self) -> bool {
+        self == Self::Kitewyrm && kitewyrm::FLOATS.value
     }
 }
 
@@ -226,6 +283,9 @@ pub struct Setup {
     pub wind: Wind,
     /// `None` plays without sudden death.
     pub sudden_death: Option<SuddenDeath>,
+    /// What the game is played for. Logs from before modes had none: they are Solo.
+    #[serde(default)]
+    pub mode: Mode,
 }
 
 /// Something that happened, accepted by the server. A game is its setup plus these, in order.
@@ -253,6 +313,9 @@ pub enum Event {
     Spin { seat: u8 },
     /// The server rolled what the slot machine dropped (`Roll::Drop`).
     Drop(Drop),
+    /// A dead player picks where to drop back in, in a mode where the dead come back (Score): it
+    /// drops down column `x` some turns later (`mode::RespawnRule`). It works on anyone's turn.
+    Respawn { seat: u8, x: i32 },
 }
 
 /// Something random the server owes the game before anyone may act.
@@ -425,7 +488,8 @@ pub enum Effect {
     /// A bolt of lightning from `from` (in the sky, or off a side of the map) to `to`, where it
     /// struck a mobile or the ground, at `tick`. Its crater (`Exploded`, if it struck the ground)
     /// and the damage it deals follow. Sparkhorn's shots, the Thunder item and the slot machine's
-    /// bolt.
+    /// bolt; also Flarecrow's S1 aftershock arcing from where it landed, or from a mobile it hit,
+    /// to a mobile's center, its damage next.
     Bolt {
         from: Vec2,
         to: Vec2,
@@ -539,10 +603,74 @@ pub enum Effect {
         seat: u8,
         legs: Vec<Leg>,
     },
+    /// `seat`'s own satellite (Lensowl's, Needlemouse's) glides to `at`, leaving where it was at
+    /// stage tick `from` and arriving at `to`: where it fires from next. It goes back over its
+    /// mobile, at the height of the shot picked (`MobileKind::satellite`), once the scene is over.
+    Satellite {
+        seat: u8,
+        at: Vec2,
+        from: u32,
+        to: u32,
+    },
+    /// `seat`'s satellite fired a laser from `from` to what it struck (`to`) at `tick`; its blast's
+    /// `Exploded` and damage follow, if it struck something.
+    Laser {
+        seat: u8,
+        from: Vec2,
+        to: Vec2,
+        tick: u32,
+    },
+    /// Tinbadger's S2 laid `mine` where its shell came down, at `tick` (`sim::mines`). It stays on
+    /// the map, turn after turn, until it is `MineGone`.
+    MineLaid {
+        mine: Mine,
+        tick: u32,
+    },
+    /// `seat`'s `mine` crawled toward an enemy as `seat`'s turn came up, starting a stage: `legs` is
+    /// its walk, from tick 0 (a resting leg at its end). What it does where it stops follows: a
+    /// blast, if it touched a mobile.
+    MineCrawled {
+        seat: u8,
+        mine: MineId,
+        legs: Vec<Leg>,
+    },
+    /// `mine`'s ground was blown away: it fell to `to`, with the mobiles that fell.
+    MineFell {
+        mine: MineId,
+        to: Footing,
+    },
+    /// `mine` is off the map: at `tick` it went off (its `Exploded` follows), walked into a tornado
+    /// or out of the map, or made room for a newer one; or it went with the effect before it
+    /// (`None`): it fell out of the map, its layer died, or a tornado came up over it.
+    MineGone {
+        mine: MineId,
+        tick: Option<u32>,
+    },
+    /// A death cost `team` points (Score's lives, just after its `Died`): it has `points` left.
+    Points {
+        team: Team,
+        points: i32,
+    },
+    /// Dead `seat` picked where to drop back in: down column `x`, at the end of the turn that
+    /// brings the turn count to `lands` (`Game::respawns` lists those still to come).
+    RespawnPicked {
+        seat: u8,
+        x: i32,
+        lands: i64,
+    },
+    /// `seat` drops back in, starting a stage: `legs` is its fall from the sky, the wind nudging
+    /// it. `to` is where it landed, alive and whole; `None` if it fell through the map, which costs
+    /// nothing, but its player picks again.
+    Respawned {
+        seat: u8,
+        legs: Vec<Leg>,
+        to: Option<Footing>,
+    },
     /// Lodestoad's magnet pulled `seat` toward where it struck, or its pyramid pushed it away:
     /// it slid along the ground from stage tick `from` to `to`, through `path` (a footing a step,
-    /// at an even pace), and stands at its last. One dragged over an edge ends in the air just
-    /// past it, and its `Fell` (or a bunge) follows with the others'.
+    /// at an even pace), and stands at its last. One dragged over an edge falls on the way (the
+    /// path has the point in the air over the edge, then where it lands) and slides on; one dragged
+    /// off the map ends in the air over the edge, and its bunge follows.
     Slid {
         seat: u8,
         path: Vec<Footing>,
@@ -693,6 +821,10 @@ pub struct Game {
     pub(crate) drops: Vec<Falling>,
     /// The seat whose spin the server owes a `Roll::Drop` for.
     spin_owed: Option<u8>,
+    /// Mines on the map (Tinbadger's S2), which outlive the turn that laid them.
+    pub(crate) mines: Minefield,
+    /// What the mode keeps: team points, and the dead on their way back.
+    pub(crate) mode_state: ModeState,
 }
 
 impl Game {
@@ -701,9 +833,11 @@ impl Game {
     /// # Errors
     ///
     /// Fails on a bad setup: fewer than two teams, more than 8 seats, an order that is not a
-    /// permutation of the seats, a map that can't be loaded, or a spawn with no ground under it.
+    /// permutation of the seats, a mode this build doesn't play, a map that can't be loaded, or a
+    /// spawn with no ground under it.
     pub fn new(setup: &Setup, assets: &dyn MapAssets) -> Res<Self> {
         let seats = setup.seats.len();
+        ensure!(setup.mode.built(), "{} mode isn't built yet", setup.mode.name());
         ensure!((2..=MAX_SEATS).contains(&seats), "a game needs 2 to {MAX_SEATS} seats, not {seats}");
         ensure!(setup.seats.iter().any(|s| s.team == Team::A) && setup.seats.iter().any(|s| s.team == Team::B), "both teams need a seat");
         let mut sorted = setup.order.clone();
@@ -759,6 +893,8 @@ impl Game {
             sudden_death: setup.sudden_death,
             drops: Vec::new(),
             spin_owed: None,
+            mines: Minefield::default(),
+            mode_state: ModeState::new(setup.mode, &setup.seats),
         };
         game.start_next_turn(&mut Vec::new());
         Ok(game)
@@ -812,6 +948,44 @@ impl Game {
     #[must_use]
     pub fn drops(&self) -> &[Falling] {
         &self.drops
+    }
+
+    /// The mines on the map, in the order they were laid.
+    #[must_use]
+    pub fn mines(&self) -> &[Mine] {
+        self.mines.mines()
+    }
+
+    /// What the game is played for.
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.mode_state.mode()
+    }
+
+    /// `team`'s points, in a mode that counts them: Score's lives left.
+    #[must_use]
+    pub fn points(&self, team: Team) -> Option<i32> {
+        self.mode_state.points(team)
+    }
+
+    /// The dead who may come back, in the order they died, each with where and when it drops in
+    /// once its player has picked.
+    #[must_use]
+    pub fn respawns(&self) -> &[Respawn] {
+        self.mode_state.respawns()
+    }
+
+    /// Whether `seat` may pick where to drop back in now (`Event::Respawn`), so a host knows when a
+    /// dead bot can: it is dead, may come back, hasn't picked yet, and no roll is owed.
+    #[must_use]
+    pub fn can_respawn(&self, seat: u8) -> bool {
+        mode::check_pick(self, seat).is_ok()
+    }
+
+    /// Whether `seat` may forfeit (`Event::Forfeit`): it is alive, or dead and may still come back.
+    #[must_use]
+    pub fn can_forfeit(&self, seat: u8) -> bool {
+        !matches!(self.phase, Phase::Over { .. }) && self.players.get(usize::from(seat)).is_some_and(|player| player.alive || self.respawns().iter().any(|r| r.seat == seat))
     }
 
     /// What the server must roll before anyone may act, if anything: wind first, then forecasts,
@@ -916,12 +1090,16 @@ impl Game {
             }
             Event::Forfeit { seat } => {
                 ensure!(!matches!(self.phase, Phase::Over { .. }), "the game is over");
-                ensure!(self.player(seat)?.alive, "seat {seat} is already out");
-                self.kill(seat, Death::Forfeited, &mut effects);
-                if self.phase == (Phase::Turn { seat }) {
-                    self.end_turn(seat, Ending::Pass, Centis(0), &mut effects);
+                if self.player(seat)?.alive {
+                    self.kill(seat, Death::Forfeited, &mut effects);
+                    if self.phase == (Phase::Turn { seat }) {
+                        self.end_turn(seat, Ending::Pass, Centis(0), &mut effects);
+                    } else {
+                        self.check_over(&mut effects);
+                    }
                 } else {
-                    self.check_over(&mut effects);
+                    // A dead player who leaves doesn't come back.
+                    ensure!(mode::forget(self, seat), "seat {seat} is already out");
                 }
             }
             Event::Walk { seat, facing, steps } => {
@@ -955,6 +1133,11 @@ impl Game {
                 self.players[usize::from(seat)].last_spin = Some(self.turns);
                 self.spin_owed = Some(seat);
                 effects.push(Effect::Spun { seat });
+            }
+            Event::Respawn { seat, x } => {
+                mode::check_pick(self, seat)?;
+                ensure!(self.on_map(x), "drop point x {x} is off the map");
+                mode::pick(self, seat, x, &mut effects);
             }
         }
         Ok(effects)
@@ -1010,6 +1193,7 @@ impl Game {
         }
         let player = self.player(seat)?;
         ensure!(!player.alive, "seat {seat} is alive: only the dead spin");
+        ensure!(self.mode().slot_machine(), "there's no slot machine in {}: the dead drop back in", self.mode().name());
         let recharge = i64::from(self.round) * RECHARGE_ROUNDS.value;
         if let Some(last) = player.last_spin {
             ensure!(self.turns - last >= recharge, "seat {seat}'s slot machine recharges for {} more turns", recharge - (self.turns - last));
@@ -1041,7 +1225,8 @@ impl Game {
             }
             self.players[index].moves_left -= 1;
             taken += 1;
-            if died {
+            // Onto a mine: it goes off under the walker, which stops there.
+            if died || mines::under(self, seat) {
                 break;
             }
         }
@@ -1052,6 +1237,14 @@ impl Game {
             self.kill(seat, Death::Bunged, effects);
             // Walking off the map ends the turn like a pass.
             self.end_turn(seat, Ending::Pass, Centis(0), effects);
+            return;
+        }
+        if mines::trip(self, 0, effects) {
+            self.settle_all(effects);
+            if !self.players[index].alive || self.decided() {
+                // Blown up by a mine: that ends the turn like a pass.
+                self.end_turn(seat, Ending::Pass, Centis(0), effects);
+            }
         }
     }
 
@@ -1163,9 +1356,19 @@ impl Game {
 
     /// Every living mobile's hitbox, by seat, for collision loops.
     pub(crate) fn hit_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|_| true)
+    }
+
+    /// `hit_frames` for what travels along the ground: every living mobile's hitbox but a floating
+    /// one's (`MobileKind::floats`).
+    pub(crate) fn grounded_frames(&self) -> Vec<(u8, HitFrame)> {
+        self.frames_where(|p| !p.mobile.floats())
+    }
+
+    fn frames_where(&self, keep: impl Fn(&Player) -> bool) -> Vec<(u8, HitFrame)> {
         (0_u8..)
             .zip(&self.players)
-            .filter(|(_, p)| p.alive)
+            .filter(|(_, p)| p.alive && keep(p))
             .map(|(seat, p)| (seat, HitFrame::new(&p.pose(), p.tuning().hitbox.value)))
             .collect()
     }
@@ -1316,6 +1519,7 @@ impl Game {
                 self.hurt(seat, harm(seat, &player.target()), effects);
             }
         }
+        mines::set_off(self, blast.center, blast.radius, tick, effects);
     }
 
     /// Deals `amount` to a living mobile: its shield soaks what it can, then its HP takes the rest.
@@ -1355,6 +1559,8 @@ impl Game {
         player.alive = false;
         player.hp = player.hp.max(0);
         effects.push(Effect::Died { seat, death });
+        mines::orphan(self, seat, effects);
+        mode::died(self, seat, death, effects);
     }
 
     /// Drops every living mobile whose ground is gone, and re-reads every tilt.
@@ -1375,6 +1581,7 @@ impl Game {
                 Landing::OffMap => self.kill(seat, Death::Bunged, effects),
             }
         }
+        mines::settle(self, effects);
     }
 
     /// Stands `seat` at `footing`, tilted to the ground there.
@@ -1400,10 +1607,12 @@ impl Game {
                 wind_owed: self.weather.wind_owed,
                 now: self.weather.now,
             });
+            mines::sweep(self, effects);
         }
         let dropped = effects.len();
         drops::land_due(self, effects);
         self.reveal_passed(effects, dropped);
+        mode::land_due(self, effects);
         // A game that just ended doesn't announce sudden death on its way out.
         if let Some(sudden_death) = self.sudden_death
             && self.turns == i64::from(sudden_death.turn)
@@ -1440,18 +1649,23 @@ impl Game {
         effects.extend(revealed);
     }
 
-    /// Whether fewer than two teams have anyone standing.
+    /// Whether fewer than two teams are still in the game (`mode::out`).
     pub(crate) fn decided(&self) -> bool {
-        [Team::A, Team::B].into_iter().filter(|&team| self.players.iter().any(|p| p.alive && p.team == team)).count() < 2
+        self.teams_in().len() < 2
     }
 
-    /// Ends the game if fewer than two teams have anyone standing. Returns whether it did.
+    /// The teams still in the game, by the mode's rule (`mode::out`).
+    fn teams_in(&self) -> Vec<Team> {
+        [Team::A, Team::B].into_iter().filter(|&team| !mode::out(self, team)).collect()
+    }
+
+    /// Ends the game if fewer than two teams are still in it. Returns whether it did.
     fn check_over(&mut self, effects: &mut Vec<Effect>) -> bool {
-        let alive: Vec<Team> = [Team::A, Team::B].into_iter().filter(|&team| self.players.iter().any(|p| p.alive && p.team == team)).collect();
-        if alive.len() >= 2 {
+        let standing = self.teams_in();
+        if standing.len() >= 2 {
             return false;
         }
-        let winner = alive.first().copied();
+        let winner = standing.first().copied();
         self.phase = Phase::Over { winner };
         effects.push(Effect::GameOver { winner });
         true
@@ -1460,14 +1674,21 @@ impl Game {
     /// Hands the turn to whoever has the least delay. As it starts, their shield regenerates
     /// (not under Lock), their SS lock counts down (twice under Lock), and Balm heals them.
     fn start_next_turn(&mut self, effects: &mut Vec<Effect>) {
-        if self.check_over(effects) {
-            return;
-        }
-        let next = turn::next(self.players.iter().enumerate().filter(|(_, p)| p.alive).map(|(seat, p)| (seat, &p.clock)));
-        let Some(seat) = next.and_then(|seat| u8::try_from(seat).ok()) else {
-            self.phase = Phase::Over { winner: None };
-            effects.push(Effect::GameOver { winner: None });
-            return;
+        let seat = loop {
+            if self.check_over(effects) {
+                return;
+            }
+            let next = turn::next(self.players.iter().enumerate().filter(|(_, p)| p.alive).map(|(seat, p)| (seat, &p.clock)));
+            let Some(seat) = next.and_then(|seat| u8::try_from(seat).ok()) else {
+                self.phase = Phase::Over { winner: None };
+                effects.push(Effect::GameOver { winner: None });
+                return;
+            };
+            // Its mines crawl first; one that blows up its own layer hands the turn on.
+            mines::crawl(self, seat, effects);
+            if self.players[usize::from(seat)].alive {
+                break seat;
+            }
         };
         self.phase = Phase::Turn { seat };
         effects.push(Effect::TurnStarted { seat });
@@ -1551,6 +1772,7 @@ pub(crate) mod testing {
             order: vec![0, 1],
             wind: Wind::default(),
             sudden_death: None,
+            mode: Mode::Solo,
         }
     }
 
@@ -1651,13 +1873,25 @@ pub(crate) mod testing {
 
     /// A game on `terrain` with these seats, acting in seat order.
     pub fn game_on(terrain: Terrain, seats: Vec<Seat>) -> Game {
+        game_in(Mode::Solo, terrain, seats)
+    }
+
+    /// A `mode` game on `terrain` with these seats, acting in seat order.
+    pub fn game_in(mode: Mode, terrain: Terrain, seats: Vec<Seat>) -> Game {
         let order = (0..seats.len()).map(|s| u8::try_from(s).unwrap()).collect();
         let map = MapRef::Asset {
             name: "drawn".to_owned(),
             variant: "A".to_owned(),
             mask_hash: terrain.mask_hash(),
         };
-        let mut game = Game::new(&Setup { map, seats, order, ..duel_setup(800) }, &Drawn(terrain)).expect("a valid setup");
+        let setup = Setup {
+            map,
+            seats,
+            order,
+            mode,
+            ..duel_setup(800)
+        };
+        let mut game = Game::new(&setup, &Drawn(terrain)).expect("a valid setup");
         answer_rolls(&mut game);
         game
     }
@@ -1684,7 +1918,7 @@ mod unit {
     use pretty_assertions::assert_eq;
 
     use super::{
-        testing::{answer_rolls, damage_to, direct_hit_power, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
+        testing::{answer_rolls, damage_to, direct_hit_power, direct_hit_power_of, duel, duel_of, duel_setup, explosions, pass, pass_until, shoot, start},
         *,
     };
     use crate::{drops::DropKind, map::NoAssets};
@@ -1706,6 +1940,20 @@ mod unit {
         assert!(wide >= 33 && tall >= 58, "{wide} x {tall}");
         assert!(check_spawn_spacing(&[100, 100 + 2 * wide, 900]).is_ok());
         assert!(check_spawn_spacing(&[900, 100, 99 + 2 * wide]).is_err(), "order doesn't matter");
+    }
+
+    #[test]
+    fn only_a_floating_mobile_is_left_out_of_what_the_ground_can_touch() {
+        assert_eq!(MobileKind::ALL.iter().filter(|m| m.floats()).collect::<Vec<_>>(), [&MobileKind::Kitewyrm]);
+        let game = duel_of(MobileKind::Kitewyrm, MobileKind::Coilback, 800);
+        let seats = |frames: Vec<(u8, HitFrame)>| frames.into_iter().map(|(seat, _)| seat).collect::<Vec<u8>>();
+        assert_eq!(seats(game.hit_frames()), [0, 1]);
+        assert_eq!(seats(game.grounded_frames()), [1]);
+        // Its body floats over its feet: nothing just above the ground under it is inside it.
+        let kitewyrm = game.players()[0];
+        let hover = crate::tuning::kitewyrm::HOVER.value;
+        assert!(!kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover - 1.0)));
+        assert!(kitewyrm.pose().hit(kitewyrm.tuning().hitbox.value, kitewyrm.footing.world() - Vec2::new(0.0, hover + 1.0)));
     }
 
     #[test]
@@ -1971,6 +2219,26 @@ mod unit {
         let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
         assert!(blasts >= 9, "the pumpkin's ring went off: {effects:?}");
         assert_eq!(beams(&effects).len(), 1, "one pumpkin, one beam");
+    }
+
+    #[test]
+    fn flarecrows_flares_call_skyeye_with_or_without_its_weather_and_no_more_under_it() {
+        // Its back to the target, so its shots fly at it.
+        let mut setup = duel_setup(800);
+        setup.seats[0].mobile = MobileKind::Flarecrow;
+        setup.seats[0].facing = Facing::Left;
+        let calm = start(&setup);
+        let power = direct_hit_power_of(&calm, Shot::S2, 130);
+        assert_eq!(beams(&shoot(&mut calm.clone(), 0, Shot::S2, 130, power)).len(), 3);
+        assert_eq!(beams(&shoot(&mut under(calm, WeatherKind::Skyeye), 0, Shot::S2, 130, power)).len(), 3, "GF-lee");
+    }
+
+    #[test]
+    fn skyeye_beams_once_for_each_satellite_laser() {
+        let mut game = under(duel_of(MobileKind::Lensowl, MobileKind::Coilback, 800), WeatherKind::Skyeye);
+        let effects = shoot(&mut game, 0, Shot::Ss, 40, Power::nearest(1.6));
+        let lasers = effects.iter().filter(|e| matches!(e, Effect::Laser { .. })).count();
+        assert_eq!((lasers, beams(&effects).len()), (5, 5), "one beam a laser (GF-asate): {effects:?}");
     }
 
     #[test]

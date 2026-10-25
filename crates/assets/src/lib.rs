@@ -9,6 +9,8 @@
 pub mod maps;
 pub mod tests;
 
+use std::collections::BTreeSet;
+
 use anyhow::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +45,18 @@ pub fn rider_path(rider: &str) -> String {
 
 /// The drawn maps a room can pick, in the order the lobby offers them; `cargo xtask art` checks
 /// this matches `assets/maps/`.
-pub const MAPS: &[&str] = &["tidewall", "gablewick", "rimewake", "glintvein", "ashspine", "clockrise", "tumblehill", "neonbay", "rootmere"];
+pub const MAPS: &[&str] = &[
+    "tidewall",
+    "gablewick",
+    "rimewake",
+    "glintvein",
+    "ashspine",
+    "clockrise",
+    "tumblehill",
+    "neonbay",
+    "rootmere",
+    "starmote",
+];
 
 /// The synthetic map the server builds in, for testing: one flat field. Not drawn, so not one of
 /// `MAPS`; the lobby offers it after them.
@@ -182,6 +195,24 @@ pub struct MobileRig {
     pub second_barrel: Option<Cannon>,
     /// Where the rider sits.
     pub rider_socket: Socket,
+    /// The source SVG of the mobile's own satellite (Lensowl's, Needlemouse's), next to the rig:
+    /// drawn hovering over it, apart from the body, where `MobileKind::satellite` puts it, its
+    /// pivot at the point it fires from. Most rigs have none.
+    #[serde(default)]
+    pub satellite: Option<String>,
+    /// Pictures the mobile's shots are drawn with, in place of the plain shell: by `id`, `s1`, `s2`
+    /// and `ss` for each shot's projectiles, and `mine` for what its mines look like on the map.
+    /// Each renders centered on its SVG's origin, like a part. Most rigs have none.
+    #[serde(default)]
+    pub sprites: Vec<ShotSprite>,
+}
+
+/// One picture a mobile's shots are drawn with (`MobileRig::sprites`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ShotSprite {
+    pub id: String,
+    /// The source SVG, next to the rig; the rendered PNG has the same stem.
+    pub file: String,
 }
 
 /// One cutout part.
@@ -273,9 +304,27 @@ impl MobileRig {
         Ok(rig)
     }
 
+    /// Every source SVG it draws from, each once: its parts', its satellite's if it has one, and
+    /// its shots' sprites.
+    #[must_use]
+    pub fn files(&self) -> BTreeSet<&str> {
+        self.parts
+            .iter()
+            .map(|part| part.file.as_str())
+            .chain(self.satellite.as_deref())
+            .chain(self.sprites.iter().map(|sprite| sprite.file.as_str()))
+            .collect()
+    }
+
     /// The cannon, then the second barrel if there is one.
     pub fn barrels(&self) -> impl Iterator<Item = &Cannon> {
         std::iter::once(&self.cannon).chain(&self.second_barrel)
+    }
+
+    /// The sprite named `id`, if the rig draws one.
+    #[must_use]
+    pub fn sprite(&self, id: &str) -> Option<&ShotSprite> {
+        self.sprites.iter().find(|sprite| sprite.id == id)
     }
 }
 
@@ -351,7 +400,39 @@ mod unit {
         let rig = MobileRig::from_ron(source).unwrap();
         assert!(rig.parts[1].aim && !rig.parts[0].spin);
         assert_eq!(rig.second_barrel, None, "a rig without one has no second barrel");
+        assert_eq!(rig.satellite, None, "nor a satellite");
+        assert_eq!(rig.files(), BTreeSet::from(["body.svg", "cannon.svg"]));
         assert!(MobileRig::from_ron(&source.replace(r#"part: "cannon""#, r#"part: "nope""#)).is_err());
+    }
+
+    #[test]
+    fn reads_a_rig_with_a_satellite() {
+        let source = r#"MobileRig(
+            name: "Lensowl",
+            parts: [(id: "body", file: "body.svg", at: (0.0, 0.0), z: 0), (id: "cannon", file: "cannon.svg", at: (14.0, -36.0), z: 3, aim: true)],
+            cannon: (part: "cannon", muzzle: (30.0, 0.0)),
+            rider_socket: (at: (-12.0, -50.0), z: 4),
+            satellite: Some("satellite.svg"),
+        )"#;
+        let rig = MobileRig::from_ron(source).unwrap();
+        assert_eq!(rig.files(), BTreeSet::from(["body.svg", "cannon.svg", "satellite.svg"]));
+        assert_eq!(MobileRig::from_ron(&to_ron(&rig).unwrap()).unwrap(), rig, "round trips");
+    }
+
+    #[test]
+    fn reads_a_rig_with_shot_sprites() {
+        let source = r#"MobileRig(
+            name: "Tinbadger",
+            parts: [(id: "body", file: "body.svg", at: (0.0, 0.0), z: 0), (id: "cannon", file: "cannon.svg", at: (30.0, -38.0), z: 3, aim: true)],
+            cannon: (part: "cannon", muzzle: (24.0, 0.0)),
+            rider_socket: (at: (14.0, -36.0), z: 4),
+            sprites: [(id: "s2", file: "mine.svg"), (id: "mine", file: "mine.svg"), (id: "ss", file: "beetle.svg")],
+        )"#;
+        let rig = MobileRig::from_ron(source).unwrap();
+        assert_eq!(rig.files(), BTreeSet::from(["beetle.svg", "body.svg", "cannon.svg", "mine.svg"]), "each file once");
+        assert_eq!(rig.sprite("mine").map(|sprite| sprite.file.as_str()), Some("mine.svg"));
+        assert_eq!(rig.sprite("s1"), None);
+        assert_eq!(MobileRig::from_ron(&to_ron(&rig).unwrap()).unwrap(), rig, "round trips");
     }
 
     #[test]

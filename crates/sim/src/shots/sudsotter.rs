@@ -1,7 +1,8 @@
 //! Sudsotter (J.Frog): sponges that fly through mobiles, stick where they land and walk the edge of
 //! the ground (`crawl`), S1 left and S2 right, going off three seconds later wherever they are; and
 //! an SS blob of suds that walks the way it was moving, hurting every mobile it passes near, but
-//! pops at once, weakly, on a direct hit. The weather leaves their damage alone (`WEATHER_PROOF`).
+//! pops at once, weakly, on a direct hit. The weather leaves their damage alone (`WEATHER_PROOF`),
+//! and a floating mobile is out of their reach on the ground (`MobileKind::floats`, SW-mob).
 
 use super::{
     Gun,
@@ -86,7 +87,7 @@ fn felt(marks: Marks) -> Marks {
 }
 
 /// The walk of a shot that landed on the ground at the end of `track`, for `fuse` seconds; `None`
-/// if it didn't land there.
+/// if it didn't land there. It passes under a floating mobile, neither slowing nor going off in it.
 fn walk_on(game: &Game, track: &Track, sense: Sense, fuse: f64) -> Option<Walked> {
     if track.impact.contact != Contact::Terrain {
         return None;
@@ -99,7 +100,7 @@ fn walk_on(game: &Game, track: &Track, sense: Sense, fuse: f64) -> Option<Walked
     };
     // Where it was a tick before it touched: in the open.
     let open = track.last.flight.at(track.last_tick.saturating_sub(1).max(track.last.from));
-    Some(crawl::walk(game.terrain(), open, track.impact.at, track.impact.tick, sense, &rules, &game.hit_frames()))
+    Some(crawl::walk(game.terrain(), open, track.impact.at, track.impact.tick, sense, &rules, &game.grounded_frames()))
 }
 
 /// One stretch of the suds' walk within reach of a mobile: its first and last ticks.
@@ -111,11 +112,11 @@ struct Touch {
 
 /// Hurts each mobile the suds came within `SUDS_REACH` of, for as long as they stayed: each
 /// stretch deals `SUDS_TOUCH_PER_SECOND` while it lasts, up to `SUDS_DAMAGE`'s touch share for the
-/// whole walk, as it ends.
+/// whole walk, as it ends. A floating mobile is never touched.
 fn touch(game: &mut Game, gun: &Gun, walked: &Walked, marks: Marks, effects: &mut Vec<Effect>) {
     let targets: Vec<(u8, Pose, Rect)> = (0_u8..)
         .zip(game.players())
-        .filter(|(_, player)| player.alive)
+        .filter(|(_, player)| player.alive && !player.mobile.floats())
         .map(|(seat, player)| (seat, player.pose(), player.tuning().hitbox.value))
         .collect();
     let mut touches: Vec<Touch> = Vec::new();
@@ -179,7 +180,7 @@ pub(super) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
     };
     let near = (0_u8..)
         .zip(game.players())
-        .filter(|(_, player)| player.alive)
+        .filter(|(_, player)| player.alive && !player.mobile.floats())
         .map(|(seat, player)| (player.pose().gap(player.tuning().hitbox.value, nearest.at), seat))
         .filter(|&(gap, _)| gap <= SUDS_REACH.value)
         .min_by(|a, b| a.0.total_cmp(&b.0));
@@ -338,6 +339,34 @@ mod unit {
         assert!(!effects.iter().any(|e| matches!(e, Effect::Pierced { .. })), "{effects:?}");
         let dealt = damage_to(&effects, 1);
         assert!((70..=100).contains(&dealt), "{dealt}");
+    }
+
+    #[test]
+    fn a_sponge_walks_under_a_floating_mobile_and_goes_off_on_the_ground() {
+        // A sponge landed short walks into a Coilback and goes off inside it; a Kitewyrm in the same
+        // spot floats over it, so it walks on underneath, unslowed, and its blast on the ground only
+        // grazes it (SW-mob, WP06).
+        let grounded = duel(800);
+        let power = work_power(&grounded, Shot::S2, 45);
+        let into = damage_to(&shoot(&mut grounded.clone(), 0, Shot::S2, 45, power), 1);
+        let mut floating = duel_of(MobileKind::Sudsotter, MobileKind::Kitewyrm, 800);
+        let effects = shoot(&mut floating, 0, Shot::S2, 45, power);
+        let (landed, _) = stuck(&effects);
+        let (went_off, _) = blast(&effects);
+        let walked = went_off.x - landed.x;
+        // 3 s at the walking speed, give or take a pixel a step: nothing slowed it.
+        assert!((100.0..=110.0).contains(&walked), "{walked} px");
+        let under = damage_to(&effects, 1);
+        assert!(under < into / 2, "{under} against {into}: {effects:?}");
+    }
+
+    #[test]
+    fn ss_suds_pass_under_a_floating_mobile_without_touching_it() {
+        let power = work_power(&duel(800), Shot::Ss, 45);
+        let mut game = duel_of(MobileKind::Sudsotter, MobileKind::Kitewyrm, 800);
+        let effects = shoot(&mut game, 0, Shot::Ss, 45, power);
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Pierced { seat: 1, .. })), "{effects:?}");
+        assert!(stuck(&effects).0.x < game.players()[1].center().x, "it landed short and walked under");
     }
 
     #[test]

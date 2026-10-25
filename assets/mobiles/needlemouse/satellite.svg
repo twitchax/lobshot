@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34" viewBox="-15 -29 30 34">
+  <!-- Needlemouse's satellite: a floating tomato pincushion, its felt leaves on top, a strawberry
+       emery hanging from its thread, and pins stuck in it, heads out. It hovers over Needlemouse,
+       upright whatever the slope; it never leans or mirrors. Origin = the underside, where its pins
+       leave. Light from upper-left. -->
+  <defs>
+    <filter id="ol" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.62" result="b"/>
+      <feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="14" intercept="-0.25"/></feComponentTransfer>
+      <feFlood flood-color="#2a1a2e"/><feComposite in2="d" operator="in" result="o"/>
+      <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <ellipse id="tomato" cy="-9" rx="11" ry="8.6"/>
+    <clipPath id="tomatoClip"><use href="#tomato"/></clipPath>
+  </defs>
+  <g filter="url(#ol)" stroke-linejoin="round" stroke-linecap="round">
+    <!-- pins stuck in at angles, behind the cushion's front -->
+    <g stroke="#2a1a2e" stroke-width="1.6"><path d="M -4,-14 L -8.6,-23 M 3,-15 L 5.4,-24.6 M 7,-11 L 12.8,-18"/></g>
+    <g stroke="#d8dce6" stroke-width="0.7"><path d="M -4,-14 L -8.6,-23 M 3,-15 L 5.4,-24.6 M 7,-11 L 12.8,-18"/></g>
+    <circle cx="-8.6" cy="-23" r="1.9" fill="#4aa8f0" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="5.4" cy="-24.6" r="1.9" fill="#f2c23c" stroke="#2a1a2e" stroke-width="0.6"/>
+    <circle cx="12.8" cy="-18" r="1.9" fill="#7cd36a" stroke="#2a1a2e" stroke-width="0.6"/>
+    <!-- the tomato, its segments sewn in, shaded away from the light -->
+    <use href="#tomato" fill="#e8434f" stroke="#2a1a2e" stroke-width="0.9"/>
+    <g clip-path="url(#tomatoClip)">
+      <ellipse cx="3" cy="-6" rx="11" ry="8" fill="#c93a44"/>
+      <path d="M -5.6,-17 Q -9,-9 -5.6,-1 M 0,-17.6 V -0.4 M 5.6,-17 Q 9,-9 5.6,-1" stroke="#9e2a36" stroke-width="0.9" fill="none"/>
+      <path d="M -8.4,-12.4 Q -7.4,-15.6 -4,-16.6" stroke="#ff9aa2" stroke-width="1.2" fill="none"/>
+    </g>
+    <!-- felt leaves on top -->
+    <path d="M -6,-16.6 L -2.6,-18.6 L 0,-21.4 L 2.6,-18.6 L 6,-16.6 L 2,-16 L 0,-14.6 L -2,-16 Z" fill="#4f9a40" stroke="#2a1a2e" stroke-width="0.7"/>
+    <path d="M 0,-19.6 V -22.4" stroke="#2a1a2e" stroke-width="1.4"/>
+    <path d="M 0,-19.6 V -22.4" stroke="#7cd36a" stroke-width="0.7"/>
+    <!-- a pin in front, and the underside where the pins leave -->
+    <path d="M -7.4,-6 L -12.6,-1.6" stroke="#2a1a2e" stroke-width="1.6"/>
+    <path d="M -7.4,-6 L -12.6,-1.6" stroke="#d8dce6" stroke-width="0.7"/>
+    <circle cx="-12.6" cy="-1.6" r="1.8" fill="#e98a2c" stroke="#2a1a2e" stroke-width="0.6"/>
+    <path d="M -3,-0.8 Q 0,1 3,-0.8" stroke="#9e2a36" stroke-width="1" fill="none"/>
+    <circle cy="0" r="1.1" fill="#d8dce6" stroke="#2a1a2e" stroke-width="0.5"/>
+  </g>
+</svg>

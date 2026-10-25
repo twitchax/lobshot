@@ -2,20 +2,21 @@
 //! that passes through mobiles, digs in where it strikes the ground and pulls the mobiles near it
 //! in; and an SS pyramid that pushes them away, hurting most those it can't push all the way. A
 //! pulled or pushed mobile slides along the ground by the walking rules (`movement::slide`): walls
-//! stop it, a pull drags it over an edge to fall (off the map, with nothing below), and a push
-//! leaves it on the very edge.
+//! stop it, a pull drags it over edges and into holes (off the map, with nothing below), and a
+//! push leaves it on the very edge. A floating mobile is pushed but not pulled.
 
 use super::{Gun, bolt};
 use crate::{
     ballistics::Flight,
     damage,
     game::{Contact, Effect, Game, Impact, Player, Senses, Shot, Track},
+    mines,
     movement::{self, Edge},
     tuning::{
         Tuned,
         lodestoad::{
-            PIN_DAMAGE, PULL_OVER_EDGES, PULL_REACH, PULL_SHARES, PUSH_OVER_EDGES, PUSH_REACH, PUSH_SHARES, PUSH_TO, S1_BLAST, S1_DAMAGE, S2_BLAST, S2_DAMAGE, SLIDE_SECONDS, SPLASH, SPLASH_REACH,
-            SS_BLAST, SS_DAMAGE, Shares,
+            PIN_DAMAGE, PULL_OVER_EDGES, PULL_REACH, PULL_SHARES, PULLS_FLOATERS, PUSH_OVER_EDGES, PUSH_REACH, PUSH_SHARES, PUSH_TO, PUSHES_FLOATERS, S1_BLAST, S1_DAMAGE, S2_BLAST, S2_DAMAGE,
+            SLIDE_SECONDS, SPLASH, SPLASH_REACH, SS_BLAST, SS_DAMAGE, Shares,
         },
     },
     units::{Facing, ticks},
@@ -37,6 +38,8 @@ struct Field {
     reach: (f64, f64),
     shares: Shares,
     edge: Edge,
+    /// Whether it moves a mobile that floats over the ground (`MobileKind::floats`).
+    floaters: bool,
 }
 
 impl Field {
@@ -46,6 +49,7 @@ impl Field {
             reach: PULL_REACH.value,
             shares: PULL_SHARES.value,
             edge: edge(PULL_OVER_EDGES),
+            floaters: PULLS_FLOATERS.value,
         }
     }
 
@@ -55,6 +59,7 @@ impl Field {
             reach: PUSH_REACH.value,
             shares: PUSH_SHARES.value,
             edge: edge(PUSH_OVER_EDGES),
+            floaters: PUSHES_FLOATERS.value,
         }
     }
 }
@@ -93,7 +98,7 @@ fn orb(game: &mut Game, gun: &mut Gun, flight: Flight, effects: &mut Vec<Effect>
 }
 
 /// S2: the ball flies through mobiles to the ground and bursts there, burning low; then it pulls
-/// the mobiles near it in, and its bolt and beam follow (Thunder, Electricity, Skyeye) onto
+/// the mobiles near it in, and the mines near it, and its bolt and beam follow (Thunder, Electricity, Skyeye) onto
 /// wherever they now stand.
 fn magnet(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Effect>) {
     let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: true });
@@ -104,6 +109,8 @@ fn magnet(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Effect>)
     let blast = gun.blast_on(&track, S2_BLAST.value, S2_DAMAGE.value);
     game.explode_by(&blast, S2_BLAST.value * gun.salvo.crater, track.impact.tick, effects, |_, target| damage::low(&blast, target));
     shove(game, &track.impact, heading(&track), &Field::pull(), effects);
+    // The mines near it are dragged into its hole, under whoever it pulled there.
+    mines::drag(game, track.impact.at, PULL_REACH.value.0, track.impact.tick, effects);
     gun.follow_up(game, blast.center, track.impact.tick, track.marks, effects);
 }
 
@@ -134,15 +141,17 @@ fn heading(track: &Track) -> Facing {
 }
 
 /// Slides every living mobile whose middle is within the field's reach of `impact` along the
-/// ground, all at once from the impact's tick, then drops any it took over an edge. Returns, for
-/// each one a wall or an edge stopped short of its due, how many pixels short.
+/// ground, all at once from the impact's tick (a pull drags them over edges, into holes and on),
+/// then drops any it took off the map. Returns, for each one a wall or an edge stopped short of
+/// its due, how many pixels short.
 fn shove(game: &mut Game, impact: &Impact, heading: Facing, field: &Field, effects: &mut Vec<Effect>) -> Vec<(u8, f64)> {
     let mut short = Vec::new();
     for index in 0..game.players().len() {
         let Ok(seat) = u8::try_from(index) else { continue };
         let player = game.players()[index];
         let (center, foot) = (player.center(), player.footing.world());
-        if !player.alive || (impact.at.x - center.x).abs() > field.reach.0 || (impact.at.y - center.y).abs() > field.reach.1 {
+        let floats = player.mobile.floats() && !field.floaters;
+        if !player.alive || floats || (impact.at.x - center.x).abs() > field.reach.0 || (impact.at.y - center.y).abs() > field.reach.1 {
             continue;
         }
         let across = (impact.at.x - foot.x).abs();
@@ -158,12 +167,16 @@ fn shove(game: &mut Game, impact: &Impact, heading: Facing, field: &Field, effec
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let due = (way * field.shares.of(tuning.armor.value)).round().max(0.0) as u32;
         let path = movement::slide(game.terrain(), player.footing, direction, tuning.climb_px.value, due, field.edge);
-        // Path lengths are a few dozen steps: exact as u32.
-        let moved = u32::try_from(path.len()).unwrap_or(u32::MAX);
+        let Some(&end) = path.last() else {
+            if due > 0 {
+                short.push((seat, f64::from(due)));
+            }
+            continue;
+        };
+        let moved = end.x.abs_diff(player.footing.x);
         if moved < due {
             short.push((seat, f64::from(due - moved)));
         }
-        let Some(&end) = path.last() else { continue };
         game.place(seat, end);
         effects.push(Effect::Slid {
             seat,
@@ -234,16 +247,16 @@ mod unit {
         assert_eq!(slides(&effects), [], "S1 moves no one");
     }
 
-    /// Drops an orb straight down onto the ground at `x`, once for each salvo in `salvos` (a Dual's
+    /// Drops `shot` straight down onto the ground at `x`, once for each salvo in `salvos` (a Dual's
     /// two), and returns the effects.
-    fn drop_orbs(game: &mut Game, x: f64, salvos: usize) -> Vec<Effect> {
+    fn drop_shots(game: &mut Game, shot: Shot, x: f64, salvos: usize) -> Vec<Effect> {
         let mut salvo = super::super::Salvo::new(0, None, None);
         let mut effects = Vec::new();
         for _ in 0..salvos {
             let mut gun = Gun {
                 salvo: &mut salvo,
                 seat: 0,
-                shot: Shot::S1,
+                shot,
                 aim: 30,
                 bars: 2.0,
                 tuning: game.players()[0].tuning(),
@@ -255,9 +268,17 @@ mod unit {
                 velocity: Vec2::ZERO,
                 accel: Vec2::new(0.0, 600.0),
             };
-            orb(game, &mut gun, flight, &mut effects);
+            match shot {
+                Shot::S1 => orb(game, &mut gun, flight, &mut effects),
+                Shot::S2 => magnet(game, &gun, flight, &mut effects),
+                Shot::Ss => pyramid(game, &gun, flight, &mut effects),
+            }
         }
         effects
+    }
+
+    fn drop_orbs(game: &mut Game, x: f64, salvos: usize) -> Vec<Effect> {
+        drop_shots(game, Shot::S1, x, salvos)
     }
 
     #[test]
@@ -360,10 +381,13 @@ mod unit {
     }
 
     #[test]
-    fn a_mobile_dragged_into_a_pit_with_a_floor_falls_to_it() {
+    fn a_mobile_dragged_into_a_pit_with_a_floor_falls_in_and_slides_on() {
         let mut game = by_a_pit(MobileKind::Coilback, 980, true);
         let (effects, _) = land(&mut game, &Field::pull(), Vec2::new(1030.0, 505.0), Facing::Right);
-        assert!(effects.contains(&Effect::Fell { seat: 1, to: Footing { x: 1000, y: 580 } }), "{effects:?}");
+        let (_, path) = &slides(&effects)[0];
+        let edge = path.iter().position(|footing| *footing == Footing { x: 1000, y: 500 }).expect("over the edge");
+        assert_eq!(path[edge + 1], Footing { x: 1000, y: 580 }, "down to the floor");
+        assert_eq!(game.players()[1].footing, Footing { x: 1030, y: 580 }, "and on to where it struck");
         assert!(game.players()[1].alive);
     }
 
@@ -448,6 +472,32 @@ mod unit {
     }
 
     #[test]
+    fn the_magnet_drags_mines_into_its_hole_under_whoever_it_pulled_there() {
+        let mut game = flat(MobileKind::Coilback);
+        // A beetle 50 px past the ball's landing: past its blast, in its reach.
+        let mut laid = Vec::new();
+        crate::mines::lay(&mut game, 1, Vec2::new(1010.5, 499.5), Facing::Left, 0, &mut laid);
+        let mine = game.mines()[0].id;
+        let effects = drop_shots(&mut game, Shot::S2, 960.5, 1);
+        let slid = effects.iter().position(|e| matches!(e, Effect::Slid { seat: 1, .. })).expect("pulled");
+        let dragged = effects.iter().position(|e| matches!(e, Effect::MineFell { mine: m, .. } if *m == mine)).expect("dragged in");
+        let gone = effects.iter().position(|e| matches!(e, Effect::MineGone { mine: m, tick: Some(_) } if *m == mine)).expect("set off");
+        assert!(slid < dragged && dragged < gone, "{effects:?}");
+        assert_eq!(game.players()[1].footing.x, 960, "pulled to the bottom of the hole");
+        assert_eq!(game.mines(), [], "it went off under the Coilback");
+    }
+
+    #[test]
+    fn a_floating_mobile_is_pushed_but_not_pulled() {
+        for (field, moves) in [(Field::pull(), false), (Field::push(), true)] {
+            let mut game = flat(MobileKind::Kitewyrm);
+            assert!(game.players()[1].mobile.floats());
+            let (effects, _) = land(&mut game, &field, before(30.0), Facing::Right);
+            assert_eq!(!slides(&effects).is_empty(), moves, "{effects:?}");
+        }
+    }
+
+    #[test]
     fn a_slide_starts_at_the_blast_and_lasts_a_quarter_second() {
         let mut game = flat(MobileKind::Coilback);
         let (effects, _) = land(&mut game, &Field::pull(), before(40.0), Facing::Right);
@@ -482,8 +532,7 @@ mod unit {
         let effects = played.apply(event).unwrap();
         let blast = effects.iter().position(|e| matches!(e, Effect::Exploded { .. })).unwrap();
         let slid = effects.iter().position(|e| matches!(e, Effect::Slid { seat: 1, .. })).expect("pulled");
-        let fell = effects.iter().position(|e| matches!(e, Effect::Fell { seat: 1, .. })).expect("into the hole");
-        assert!(blast < slid && slid < fell, "{effects:?}");
+        assert!(blast < slid, "{effects:?}");
         let pulled = played.players()[1].footing;
         assert!(pulled.x < 1100 && pulled.y > 500, "toward it, and down: {pulled:?}");
         let mut again = game;

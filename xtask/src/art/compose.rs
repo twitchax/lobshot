@@ -5,7 +5,11 @@
 use std::{collections::BTreeMap, path::Path};
 
 use lobshot_assets::{MobileRig, mobile_slug};
-use lobshot_sim::{base::Res, body::Pose, game::MobileKind};
+use lobshot_sim::{
+    base::Res,
+    body::Pose,
+    game::{MobileKind, Shot},
+};
 use resvg::tiny_skia::{FilterQuality, Pixmap, PixmapPaint, Transform};
 
 use super::raster::Svg;
@@ -37,8 +41,9 @@ impl Sprite {
     }
 }
 
-/// A mobile's parts and a rider, ready to pose.
+/// A mobile's parts and a rider, ready to pose, and its satellite if it has one.
 pub struct Mobile {
+    kind: MobileKind,
     rig: MobileRig,
     parts: BTreeMap<String, Sprite>,
     rider: Sprite,
@@ -48,13 +53,16 @@ impl Mobile {
     pub fn render(sources: &Path, mobile: MobileKind, rig: &MobileRig, rider: &str, scale: f32) -> Res<Self> {
         let dir = sources.join("mobiles").join(mobile_slug(mobile));
         let mut parts = BTreeMap::new();
-        for part in &rig.parts {
-            if !parts.contains_key(&part.file) {
-                parts.insert(part.file.clone(), Sprite::render(&dir.join(&part.file), scale)?);
-            }
+        for file in rig.files() {
+            parts.insert(file.to_owned(), Sprite::render(&dir.join(file), scale)?);
         }
         let rider = Sprite::render(&sources.join("riders").join(format!("{rider}.svg")), scale)?;
-        Ok(Self { rig: rig.clone(), parts, rider })
+        Ok(Self {
+            kind: mobile,
+            rig: rig.clone(),
+            parts,
+            rider,
+        })
     }
 
     /// Draws the mobile standing at `pose` with its cannon at `aim` degrees, through `view` (world
@@ -63,8 +71,14 @@ impl Mobile {
         self.draw_only(canvas, view, pose, aim, |_| true);
     }
 
-    /// Draws only the parts whose ids `keep` accepts; the rider's id is `rider`.
+    /// Draws only the parts whose ids `keep` accepts; the rider's id is `rider`, and the satellite's
+    /// `satellite`. The satellite hovers where the sim puts it for S1, upright whatever the pose.
     pub fn draw_only(&self, canvas: &mut Pixmap, view: Transform, pose: &Pose, aim: f64, keep: impl Fn(&str) -> bool) {
+        let satellite = self.rig.satellite.as_ref().and_then(|file| Some((self.parts.get(file)?, self.kind.satellite(pose.foot, Shot::S1)?)));
+        if let Some((sprite, at)) = satellite.filter(|_| keep("satellite")) {
+            #[allow(clippy::cast_possible_truncation)] // Preview geometry: f32 is plenty.
+            sprite.draw(canvas, view.pre_translate(at.x as f32, at.y as f32));
+        }
         let (sin, cos) = (libm::sin(pose.tilt), libm::cos(pose.tilt));
         #[allow(clippy::cast_possible_truncation)] // Preview geometry: f32 is plenty.
         let body = view
@@ -122,7 +136,8 @@ mod unit {
 
     /// The spike's cannon covered the snail's antennae at aim 0. Past its ball joint, a barrel (the
     /// cannon, or a second barrel) may not cross anything else on the mobile, the other barrel
-    /// included, from 0 up to the highest aim any shot allows.
+    /// included, from level (0) up to the highest aim any shot allows; over the back, from the
+    /// lowest aim down to level behind (180).
     #[test]
     fn the_barrels_clear_the_body_at_every_aim() {
         // The ball joint and the turret cup it sits in overlap the barrel by design.
@@ -131,7 +146,12 @@ mod unit {
             let rig = load_rig(&sources(), kind).unwrap();
             let mobile = Mobile::render(&sources(), kind, &rig, "pip", 2.0).unwrap();
             let tuning = kind.tuning();
-            let top = [tuning.s1.aim, tuning.s2.aim, tuning.ss.aim].iter().map(|aim| aim.value.max).max().unwrap();
+            let ranges = [tuning.s1.aim, tuning.s2.aim, tuning.ss.aim].map(|aim| aim.value);
+            let (bottom, top) = if ranges.iter().all(|range| range.backward()) {
+                (ranges.iter().map(|range| range.min).min().unwrap(), 180)
+            } else {
+                (0, ranges.iter().map(|range| range.max).max().unwrap())
+            };
             let pose = Pose {
                 foot: Vec2::new(100.0, 140.0),
                 facing: Facing::Right,
@@ -142,7 +162,7 @@ mod unit {
                 // `load_rig` checked each barrel's part pivots where sim::tuning aims it from.
                 let (px, py) = rig.parts.iter().find(|part| part.id == barrel.part).unwrap().at;
                 let pivot = pose.to_world(Vec2::new(px, py));
-                for aim in (0..=top).step_by(5) {
+                for aim in (bottom..=top).step_by(5) {
                     let aim = f64::from(aim);
                     let mut drawn = Pixmap::new(400, 300).unwrap();
                     mobile.draw_only(&mut drawn, view, &pose, aim, |id| id == barrel.part);

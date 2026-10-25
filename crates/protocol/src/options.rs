@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use lobshot_sim::{
     base::Res,
     game::{SuddenDeath, SuddenDeathKind},
+    mode::Mode,
     tuning::SUDDEN_DEATH_TURNS,
 };
 
@@ -35,6 +36,9 @@ pub struct RoomOptions {
     pub random_teams: bool,
     /// What sudden death does and when it starts (one of `SUDDEN_DEATH_TURNS`), or `None`.
     pub sudden_death: Option<SuddenDeath>,
+    /// What the game is played for: one of `modes()`. A client from before modes sends none: Solo.
+    #[serde(default)]
+    pub mode: Mode,
 }
 
 impl Default for RoomOptions {
@@ -50,8 +54,15 @@ impl Default for RoomOptions {
                 kind: SuddenDeathKind::Double,
                 turn: SUDDEN_DEATH_TURNS.value[0],
             }),
+            mode: Mode::Solo,
         }
     }
+}
+
+/// The modes a room may play: those this build plays (`Mode::built`), in `Mode::ALL`'s order.
+#[must_use]
+pub fn modes() -> Vec<Mode> {
+    Mode::ALL.into_iter().filter(|mode| mode.built()).collect()
 }
 
 impl RoomOptions {
@@ -70,6 +81,9 @@ impl RoomOptions {
             let turns = SUDDEN_DEATH_TURNS.value;
             ensure!(turns.contains(&turn), "sudden death starts at turn {turns:?}, not {turn}");
         }
+        let modes = modes();
+        let names: Vec<&str> = modes.iter().map(|mode| mode.name()).collect();
+        ensure!(modes.contains(&self.mode), "{} mode isn't built yet: rooms play {}", self.mode.name(), one_of(&names));
         Ok(())
     }
 
@@ -110,6 +124,15 @@ impl RoomOptions {
         }
     }
 
+    /// These options with the next mode a room may play (`modes`), wrapping around.
+    #[must_use]
+    pub fn next_mode(&self) -> Self {
+        Self {
+            mode: next_of(&modes(), self.mode),
+            ..self.clone()
+        }
+    }
+
     /// These options with the next sudden death: off, then each kind, then off again, keeping its
     /// turn (the first of `SUDDEN_DEATH_TURNS` coming from off).
     #[must_use]
@@ -144,10 +167,10 @@ fn next_of<T: PartialEq + Copy>(values: &[T], current: T) -> T {
 }
 
 /// Values as a player reads a choice: "5, 10 or 20".
-fn one_of(values: &[u8]) -> String {
+fn one_of<T: ToString>(values: &[T]) -> String {
     match values.split_last() {
         Some((last, [])) => last.to_string(),
-        Some((last, rest)) => format!("{} or {last}", rest.iter().map(u8::to_string).collect::<Vec<_>>().join(", ")),
+        Some((last, rest)) => format!("{} or {}", rest.iter().map(T::to_string).collect::<Vec<_>>().join(", "), last.to_string()),
         None => String::new(),
     }
 }
@@ -197,12 +220,13 @@ mod unit {
     /// The steps and `validate` share their lists: wherever the lobby steps, the room accepts.
     #[test]
     fn every_step_lands_on_a_valid_option() {
-        let steps: [fn(&RoomOptions) -> RoomOptions; 5] = [
+        let steps: [fn(&RoomOptions) -> RoomOptions; 6] = [
             RoomOptions::next_team_size,
             RoomOptions::next_max_wind,
             RoomOptions::next_turn_seconds,
             RoomOptions::next_sudden_death,
             RoomOptions::next_sudden_death_turn,
+            RoomOptions::next_mode,
         ];
         let mut options = RoomOptions::default();
         for round in 0..12 {
@@ -219,7 +243,26 @@ mod unit {
         let options = RoomOptions::default();
         assert_eq!(refusal(RoomOptions { team_size: 5, ..options.clone() }), "teams are 1 to 4 players, not 5");
         assert_eq!(refusal(RoomOptions { max_wind: 13, ..options.clone() }), "max wind is 0, 12 or 26, not 13");
-        assert_eq!(refusal(RoomOptions { turn_seconds: 7, ..options }), "turns are 5, 10 or 20 seconds, not 7");
+        assert_eq!(refusal(RoomOptions { turn_seconds: 7, ..options.clone() }), "turns are 5, 10 or 20 seconds, not 7");
+        assert_eq!(refusal(RoomOptions { mode: Mode::Tag, ..options }), "Tag mode isn't built yet: rooms play Solo or Score");
         assert_eq!(one_of(&[3]), "3");
+    }
+
+    #[test]
+    fn modes_step_through_those_built_and_default_to_solo() {
+        let options = RoomOptions::default();
+        assert_eq!(options.mode, Mode::Solo);
+        assert_eq!(modes(), [Mode::Solo, Mode::Score]);
+        assert_eq!(options.next_mode().mode, Mode::Score);
+        assert_eq!(options.next_mode().next_mode().mode, Mode::Solo, "wrapping around");
+        let unbuilt = RoomOptions { mode: Mode::Jewel, ..options };
+        assert_eq!(unbuilt.next_mode().mode, Mode::Solo, "an unbuilt mode starts over");
+    }
+
+    #[test]
+    fn options_from_before_modes_play_solo() {
+        let mut json: serde_json::Value = serde_json::to_value(RoomOptions::default()).unwrap();
+        json.as_object_mut().unwrap().remove("mode");
+        assert_eq!(serde_json::from_value::<RoomOptions>(json).unwrap().mode, Mode::Solo);
     }
 }

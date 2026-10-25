@@ -18,6 +18,7 @@ use lobshot_sim::{
     game::{Death, Effect, Event, Game, MobileKind, Phase, Player, Shot, SsState, Team},
     items::Item,
     map::MapRef,
+    mode::Mode,
     referee::{self, Entrant, XorShift},
     tuning,
     units::{Facing, Power},
@@ -47,6 +48,8 @@ pub struct NewGame {
     pub map: Option<String>,
     /// Players a team, 1 to 4 (1 when left out). Your teammates are bots too.
     pub team_size: Option<u8>,
+    /// What the game is played for: solo or score (solo when left out).
+    pub mode: Option<String>,
     /// How well the bots play: easy, normal or hard (normal when left out).
     pub level: Option<String>,
     /// Where the game's rolls start; a fresh one when left out (every view reports it).
@@ -79,8 +82,8 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Fails on a name that isn't a mobile, map or level, a team size outside 1 to 4, or a map
-    /// that can't seat everyone.
+    /// Fails on a name that isn't a mobile, map, level or built mode, a team size outside 1 to 4,
+    /// or a map that can't seat everyone.
     pub fn new(new: &NewGame, maps: &Maps) -> Res<Self> {
         let size = new.team_size.unwrap_or(1);
         ensure!((1..=4).contains(&size), "teams are 1 to 4 players, not {size}");
@@ -89,8 +92,10 @@ impl Session {
         let seed = new.seed.unwrap_or_else(fresh_seed);
         let options = RoomOptions {
             team_size: size,
+            mode: new.mode.as_deref().map(mode).transpose()?.unwrap_or_default(),
             ..RoomOptions::default()
         };
+        options.validate()?;
         let map = new.map.clone().unwrap_or_else(|| options.map.clone());
         let mut dice = XorShift::new(seed);
         let arena = referee::arena(maps.arenas(&map)?, &mut dice)?;
@@ -208,10 +213,10 @@ impl Session {
         Ok(trace(self.game(), you, &effects))
     }
 
-    /// Plays every bot turn up to the agent's next one. A dead agent's slot machine is SearchBot's
-    /// to spin from then on.
+    /// Plays every bot turn up to the agent's next one, or until, dead in Score, it may pick where
+    /// to drop back in. A dead agent's slot machine is SearchBot's to spin from then on.
     fn play_bots(&mut self) -> Res<()> {
-        if !self.game().players()[usize::from(self.you)].alive {
+        if !self.game().players()[usize::from(self.you)].alive && self.game().mode().slot_machine() {
             self.host.hand_to_bot(self.you, self.level);
         }
         self.host.run(TURN_CAP, &mut Vec::new())
@@ -230,6 +235,14 @@ impl Session {
         }
         Ok(happened)
     }
+}
+
+/// A mode by name, any case.
+fn mode(name: &str) -> Res<Mode> {
+    Mode::ALL
+        .into_iter()
+        .find(|mode| mode.name().eq_ignore_ascii_case(name.trim()))
+        .with_context(|| format!("{name:?} isn't a mode: solo or score"))
 }
 
 /// A seed from the clock: an agent's game needn't be reproducible unless it asks for a seed.
@@ -282,7 +295,10 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
     let enemy = |seat: u8| players.get(usize::from(seat)).is_some_and(|p| p.team != me.team);
     let mut damage: Vec<Hurt> = Vec::new();
     let (mut ends, mut blasts, mut deaths) = (Vec::new(), Vec::new(), Vec::new());
-    for effect in effects.iter().take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. })) {
+    for effect in effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } | Effect::Respawned { .. }))
+    {
         match effect {
             Effect::Fired { legs, .. } | Effect::Beacon { legs, .. } | Effect::Helix { legs, .. } | Effect::Guide { legs, .. } | Effect::Orbit { legs, .. } => {
                 if let Some(leg) = legs.last() {
@@ -333,6 +349,14 @@ fn trace(game: &Game, you: u8, effects: &[Effect]) -> Trace {
             let _ = write!(summary, " Comes down at x={x}, y={y}, {:.0} px from seat {seat}.", gap(nearest, p));
         }
     }
+    let laid = effects
+        .iter()
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } | Effect::Respawned { .. }))
+        .filter(|e| matches!(e, Effect::MineLaid { .. }))
+        .count();
+    if laid > 0 {
+        let _ = write!(summary, " Lays {laid} mine{} that stay on the map.", if laid == 1 { "" } else { "s" });
+    }
     if to_friends > 0 {
         let _ = write!(summary, " Costs your side {to_friends}.");
     }
@@ -376,6 +400,17 @@ pub struct View {
     pub players: Vec<PlayerView>,
     /// Slot-machine drops still falling.
     pub drops: Vec<DropView>,
+    /// Mines on the map (Tinbadger's S2): each crawls toward an enemy near it as its layer's turn
+    /// comes up, and goes off on touching a mobile.
+    pub mines: Vec<MineView>,
+    /// What the game is played for: `Solo` (the last team standing wins) or `Score` (team lives).
+    pub mode: Mode,
+    /// Each team's points, in a mode that counts them: Score's lives left. Empty in Solo.
+    pub points: Vec<TeamPoints>,
+    /// The dead who may drop back in (Score), with where and when each lands once picked.
+    pub respawns: Vec<RespawnView>,
+    /// You're dead and may pick where to drop back in now, with `{"Respawn": {"x": 600}}`.
+    pub can_respawn: bool,
     /// What you may do, on your turn.
     pub options: Option<Options>,
     /// What happened since you last looked, in order.
@@ -486,6 +521,31 @@ pub struct DropView {
     pub lands_at_turn: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct MineView {
+    /// The seat that laid it: it crawls as that seat's turn comes up.
+    pub seat: u8,
+    pub yours: bool,
+    /// Where it sits: the ground under it.
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct TeamPoints {
+    pub team: Team,
+    pub points: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct RespawnView {
+    pub seat: u8,
+    /// The column it drops down, once picked; `None` while its player hasn't picked.
+    pub x: Option<i32>,
+    /// It lands when the turn count reaches this.
+    pub lands_at_turn: Option<i64>,
+}
+
 /// What the agent may do this turn.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Options {
@@ -522,12 +582,14 @@ fn view(session: &Session, happened: &[Happened]) -> View {
         Phase::Turn { .. } => (false, None),
     };
     let your_turn = game.phase() == (Phase::Turn { seat: you }) && game.pending_roll().is_none();
+    let can_respawn = game.can_respawn(you);
     let my_team = game.players()[usize::from(you)].team;
     let status = match game.phase() {
         Phase::Over { winner: Some(team) } if team == my_team => "Game over: your team won.".to_owned(),
         Phase::Over { winner: Some(_) } => "Game over: your team lost.".to_owned(),
         Phase::Over { winner: None } => "Game over: a draw.".to_owned(),
         Phase::Turn { .. } if game.turns() >= TURN_CAP => format!("Stopped at the {TURN_CAP}-turn cap."),
+        Phase::Turn { .. } if can_respawn => "You're dead: pick where to drop back in.".to_owned(),
         Phase::Turn { seat } if seat == you => "Your turn.".to_owned(),
         Phase::Turn { seat } => format!("Seat {seat}'s turn."),
     };
@@ -578,6 +640,28 @@ fn view(session: &Session, happened: &[Happened]) -> View {
                 lands_at_turn: f.lands,
             })
             .collect(),
+        mines: game
+            .mines()
+            .iter()
+            .map(|mine| MineView {
+                seat: mine.seat,
+                yours: mine.seat == you,
+                x: mine.at.x,
+                y: mine.at.y,
+            })
+            .collect(),
+        mode: game.mode(),
+        points: [Team::A, Team::B].into_iter().filter_map(|team| game.points(team).map(|points| TeamPoints { team, points })).collect(),
+        respawns: game
+            .respawns()
+            .iter()
+            .map(|respawn| RespawnView {
+                seat: respawn.seat,
+                x: respawn.pick.map(|pick| pick.x),
+                lands_at_turn: respawn.pick.map(|pick| pick.lands),
+            })
+            .collect(),
+        can_respawn,
         options: your_turn.then(|| options(game, you)),
         happened: narrate(game, you, happened),
     }
@@ -785,7 +869,7 @@ fn shot_line(names: &Names<'_>, h: &Happened) -> String {
     let mut blasts: Vec<String> = h
         .effects
         .iter()
-        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. }))
+        .take_while(|e| !matches!(e, Effect::TurnStarted { .. } | Effect::Dropped { .. } | Effect::MineCrawled { .. } | Effect::Respawned { .. }))
         .filter_map(|e| match e {
             Effect::Exploded { at, .. } => {
                 let [x, y] = point(*at);
@@ -848,10 +932,20 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         #[allow(clippy::cast_possible_truncation)]
         Effect::Beam { to, .. } => format!(" Skyeye's beam struck at x={}, y={}.", to.x.round() as i32, to.y.round() as i32),
         Effect::SkyeyeLevel { level } => format!(" Skyeye reached level {level}."),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::Laser { seat, to, .. } => format!(" {} satellite's laser struck at x={}, y={}.", names.whose(*seat), to.x.round() as i32, to.y.round() as i32),
         Effect::Spun { seat } => format!(" {} spun the slot machine.", names.who(*seat)),
         Effect::DropRolled { drop, .. } => format!(" It stopped on {}, to fall at x={}.", drop.kind.name(), drop.x),
         Effect::Dropped { drop, .. } => format!(" {} fell at x={}.", drop.kind.name(), drop.x),
+        Effect::Points { team, points } => format!(" Team {team:?} has {points} {} left.", if *points == 1 { "life" } else { "lives" }),
+        Effect::RespawnPicked { seat, x, lands } => format!(" {} will drop back in at x={x} as turn {lands} ends.", names.who(*seat)),
+        Effect::Respawned { seat, to: Some(to), .. } => format!(" {} dropped back in at x={}.", names.who(*seat), to.x),
+        Effect::Respawned { seat, to: None, .. } => format!(" {} fell through the map dropping back in: no life lost, but it picks again.", names.who(*seat)),
         Effect::SuddenDeath { kind } => format!(" Sudden death: {}. No more items.", kind.name()),
+        Effect::MineLaid { mine, .. } => format!(" {} mine landed at x={}.", names.whose(mine.seat), mine.at.x),
+        #[allow(clippy::cast_possible_truncation)]
+        Effect::MineCrawled { legs, .. } => legs.last().map_or_else(String::new, |leg| format!(" A mine crawled to x={}.", leg.flight.at(leg.to).x.round() as i32)),
+        Effect::MineGone { tick: Some(_), .. } => " A mine went off.".to_owned(),
         Effect::GameOver { winner } => match winner {
             Some(team) => format!(" Game over: team {team:?} won."),
             None => " Game over: a draw.".to_owned(),
@@ -865,7 +959,8 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
 pub fn rules() -> String {
     let mut text = RULES
         .replace("{PASS}", &tuning::PASS_DELAY.value.to_string())
-        .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string());
+        .replace("{BALM}", &tuning::BALM_HEAL_PERCENT.value.to_string())
+        .replace("{RESPAWN}", &tuning::modes::SCORE_RESPAWN_TURNS.value.to_string());
     text.push_str("\n## Mobiles\n");
     for mobile in MobileKind::ALL {
         let t = mobile.tuning();
@@ -960,9 +1055,19 @@ game. The view lists what is coming.
 
 SS is each mobile's special shot: after you fire it, it locks for a few of your turns. Sudden death
 starts at a set turn: Double fires every S1 and S2 twice, Big Bomb makes bigger craters, SS Death
-lets everyone fire SS every turn; items are off from then on. A dead player's slot machine drops
-things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dying or turning
-around); if you die, it is spun for you.
+lets everyone fire SS every turn; items are off from then on. In Solo, a dead player's slot machine
+drops things onto the map (Dynamite, a Hammer, a Bolt, a healing Chest, or the wind dying or
+turning around); if you die, it is spun for you.
+
+## Modes
+
+`mode` says what the game is played for. In Solo you have one life and the last team standing
+wins. In Score each team has lives (`points`): one a player, and one more. Every death costs its
+team one, and a team loses when its lives run out, or when no one of it is standing. A dead player
+picks where to drop back in, whenever they like, with `{\"Respawn\": {\"x\": 600}}` (`can_respawn`
+says when you may): they fall from the sky down that column {RESPAWN} turns later, the wind nudging
+them a little, with full HP and their turn soon after. A drop that misses the ground costs no life,
+but you pick again. There is no slot machine in Score.
 ";
 
 fn about(mobile: MobileKind) -> String {
@@ -1003,8 +1108,41 @@ fn about(mobile: MobileKind) -> String {
         MobileKind::Thistleback => {
             "Heavy shots. S1 is one cabbage; S2 a cabbage with two sprouts circling it clockwise, each its own hit (a tornado stops their circling); SS a pumpkin that bursts nine times in a spinning ring where it lands, digging a deep hole, and hurts most when it lands at a target's feet.".to_owned()
         }
+        MobileKind::Kitewyrm => format!(
+            "A kite dragon that floats {:.0} px over the ground: what rolls or walks along the ground (marbles, sponges, suds) passes under it, and a blast on the ground beneath only grazes it. Light shots. S1 is one fireball; S2 four, leaving one after another in two streams that spread apart with range, so all four land only up close; SS a red orb that calls five mini-dragons from a fan above where it lands, each flying straight into that spot, gravity and wind aside, and going off on the first thing in its way: land over a target shields it. It moves far and climbs almost anything.",
+            tuning::kitewyrm::HOVER.value
+        ),
+        MobileKind::Flarecrow => format!(
+            "Fires over its back: its aims run past 90 (170 is 10 degrees above level behind it), so turn your back to the target. S1 is an electric ball with a small blast and a flat {} aftershock on every mobile near where it lands, which runs on ({} each) to any mobile beside one it hit, and on down the line, once a turn. S2 fires three flares down one path, one after another: Skyeye's beam strikes wherever each lands, its weather up or not, so a short shot digs its way on toward the target; all its damage is the beams', which grow as Skyeye levels up. SS flies through land and mobiles alike and never goes off: each enemy it passes into takes a beam {}x as strong.",
+            tuning::flarecrow::S1_AFTERSHOCK.value,
+            tuning::flarecrow::S1_CHAIN.value,
+            tuning::flarecrow::SS_BEAM_BOOST.value
+        ),
+        MobileKind::Augerdillo => {
+            "Fires over its back: its aims run past 90, so 150 is 30 degrees above level on the side it faces away from; turn your back to the target. Heavy shots that the wind moves less. S1 is one round; S2 a drill that flies through mobiles, digs into the first ground it strikes, bores a mirror of its arc through it (the faster it struck, the deeper and farther) and goes off where it comes up, or is lost out of the map's bottom: drop it at a target's feet close by; SS an armadillo that rolls through the ground and goes off only in a mobile, any mobile, as a direct hit, worth most near its center. It walks little but climbs well.".to_owned()
+        }
+        MobileKind::Lensowl => format!(
+            "Every shot is a tracer that hurts nothing; once it lands, the satellite hovering over you fires lasers at it from where it hovers, and the first mobile or ground in a laser's way takes it, you included. S1 is one laser from {} px over your feet, aimed a little high when it fires leftward on screen, so it can sail over a target's head; S2 three from three times as high, which clears ground in the way, raining down left to right onto the tracer and spreading wider the farther off; SS sends the satellite over the landing to sweep five lasers straight down, left to right. Has a shield.",
+            tuning::lensowl::SATELLITE_HEIGHT.value
+        ),
+        MobileKind::Needlemouse => format!(
+            "A mouse knight on a wind-up toy horse, with the widest true angle range: every angle it can aim is true. Every shot is a tracer that hurts nothing; once it lands, the pincushion hovering over you fires pins at it, each flying straight at the tracer from where it leaves the cushion and striking the first mobile or ground in its way, you included. S1 is three pins from {} px over your feet, aimed a little high when they fly leftward on screen; S2 five from twice as high, which clears ground in the way; SS sends the cushion over the landing, where it sweeps back and forth as seven pins rain down onto the tracer. Its pins dig little.",
+            tuning::needlemouse::SATELLITE_HEIGHT.value
+        ),
+        MobileKind::Tinbadger => {
+            use tuning::tinbadger::{MINE_CAP, MINE_CRAWL_STEPS, MINE_DAMAGE, MINE_SENSE, SS_FUSE_SECONDS};
+            format!(
+                "A badger with a cart of wind-up tin beetles. S1 is three spinning cogs winding about one path, each its own hit, that dig a lot of land. S2 is two beetle shells that fly through mobiles and land as mines (`mines` in the view), which stay on the map. A mine goes off, {}-{} damage, at the middle of any mobile: one landing there goes off at once, and so does one a mobile walks onto. As your turn comes up, before you act, each of your mines with a mobile within about {} px crawls up to {} px toward the nearest one's middle, whoever's it is, yours and you included (a Mechanical mobile draws them from farther, a Bionic one only from nearer). Any blast, beam or bolt in reach sets a mine off, a tornado takes it, you keep at most {} (your oldest goes), and yours go when you die; a mobile that floats passes over them. SS is a big beetle that lands and walks on the way it was flying (turning round at walls it can't climb), and goes off when it walks into a mobile or a mine, or {} s after landing.",
+                MINE_DAMAGE.value.min,
+                MINE_DAMAGE.value.max,
+                MINE_SENSE.value,
+                MINE_CRAWL_STEPS.value,
+                MINE_CAP.value,
+                SS_FUSE_SECONDS.value
+            )
+        }
         MobileKind::Lodestoad => format!(
-            "A toad on a magnet tractor, with a shield. S1 is an electric orb whose discharge deals a flat {} to every mobile within {:.0} px of its blast, once a turn even with Dual. S2 is a magnet ball that flies through mobiles to the ground, digs a hole and pulls every mobile whose middle is within {:.0} px across and {:.0} px up or down of it (yours and you too) toward that spot along the ground: Mechanical ones all the way, Shield ones half, Bionic ones a quarter. It drags them over edges, into its hole, and off the map if nothing is below, and hurts most bursting at a mobile's feet. SS is a pyramid that pushes every mobile whose middle is within {:.0} px across away along the ground to {:.0} px from where it struck (Bionic ones a quarter as far), hurting most at its center and more each one a wall or a cliff's edge stops short; it never pushes anyone over an edge. Walls stop both.",
+            "A toad on a magnet tractor, with a shield. S1 is an electric orb whose discharge deals a flat {} to every mobile within {:.0} px of its blast, once a turn even with Dual. S2 is a magnet ball that flies through mobiles to the ground, digs a hole and pulls every mobile whose middle is within {:.0} px across and {:.0} px up or down of it (yours and you too) toward that spot along the ground: Mechanical ones all the way, Shield ones half, Bionic ones a quarter. It drags them over edges and into its hole (two pulled in meet at its bottom), and off the map if nothing is below, and pulls in mines too; a floating mobile isn't pulled. It hurts most bursting at a mobile's feet. SS is a pyramid that pushes every mobile whose middle is within {:.0} px across away along the ground to {:.0} px from where it struck (Bionic ones a quarter as far), hurting most at its center and more each one a wall or a cliff's edge stops short; it never pushes anyone over an edge. Walls stop both.",
             tuning::lodestoad::SPLASH.value,
             tuning::lodestoad::SPLASH_REACH.value,
             tuning::lodestoad::PULL_REACH.value.0,
@@ -1226,6 +1364,62 @@ mod unit {
     }
 
     #[test]
+    fn in_score_the_view_counts_lives_and_a_dead_agent_picks_where_to_drop_back_in() {
+        // Ground from y = 700, with a shaft off the map just right of each spawn.
+        let spawns = [200, 900, 1500, 2200];
+        let pits = lobshot_sim::terrain::Terrain::from_fn(2400, 900, |x, y| y >= 700 && !spawns.iter().any(|&s| (s + 10..s + 14).contains(&i32::try_from(x).unwrap()))).unwrap();
+        let root = tempfile::TempDir::new().unwrap();
+        lobshot_assets::tests::write_map_variants(root.path(), "pits", &[("A", &pits, &spawns)]).unwrap();
+        let maps = Maps::new(root.path());
+        let new = NewGame {
+            map: Some("pits".into()),
+            mode: Some("Score".into()),
+            team_size: Some(2),
+            against: Vec::new(),
+            level: Some("easy".into()),
+            ..flat(2)
+        };
+        let mut session = Session::new(&new, &maps).unwrap();
+        let view = session.view(&maps).unwrap();
+        assert_eq!(view.mode, Mode::Score);
+        assert_eq!(view.points, [TeamPoints { team: Team::A, points: 3 }, TeamPoints { team: Team::B, points: 3 }]);
+        assert!(view.your_turn && !view.can_respawn);
+
+        // Into the pit: the bots hand the seat back for its pick before they play on.
+        session.act(Action::Walk { facing: Facing::Right, steps: 30 }).unwrap();
+        let view = session.view(&maps).unwrap();
+        assert!(view.can_respawn, "{}: {:?}", view.status, view.happened);
+        assert_eq!(view.status, "You're dead: pick where to drop back in.");
+        assert!(view.options.is_none() && !view.your_turn);
+        assert!(
+            view.happened.iter().any(|line| line.contains("You died (fell off the map). Team A has 2 lives left.")),
+            "{:?}",
+            view.happened
+        );
+        assert_eq!(view.respawns, [RespawnView { seat: 0, x: None, lands_at_turn: None }]);
+        assert!(session.host.bot(0).is_none(), "the seat stays the agent's");
+        assert!(rules().contains("{\"Respawn\": {\"x\": 600}}"), "the rules say how");
+
+        session.act(Action::Respawn { x: 1200 }).unwrap();
+        let view = session.view(&maps).unwrap();
+        let told = &view.happened;
+        assert!(told.iter().any(|line| line.starts_with("You will drop back in at x=1200 as turn")), "{told:?}");
+        assert!(told.iter().any(|line| line.contains("You dropped back in at x=")), "{}: {told:?}", view.status);
+        assert!(view.your_turn && view.players[0].alive, "{}", view.status);
+        assert_eq!(view.players[0].hp, view.players[0].max_hp);
+    }
+
+    #[test]
+    fn modes_go_by_name_and_only_built_ones_play() {
+        assert_eq!(mode(" score ").unwrap(), Mode::Score);
+        assert_eq!(mode("SOLO").unwrap(), Mode::Solo);
+        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo or score");
+        let tag = NewGame { mode: Some("tag".into()), ..flat(1) };
+        assert_eq!(Session::new(&tag, &maps()).unwrap_err().to_string(), "Tag mode isn't built yet: rooms play Solo or Score");
+        assert_eq!(Session::new(&flat(1), &maps()).unwrap().game().mode(), Mode::Solo, "Solo when left out");
+    }
+
+    #[test]
     fn the_game_refuses_what_a_player_couldnt_do() {
         let mut session = Session::new(&flat(5), &maps()).unwrap();
         let before = session.save();
@@ -1355,6 +1549,36 @@ mod unit {
     }
 
     #[test]
+    fn the_view_and_the_log_show_mines_on_the_map() {
+        let mut new = flat(5);
+        new.mobile = Some("tinbadger".into());
+        new.against = vec!["coilback".into()];
+        let mut session = Session::new(&new, &maps()).unwrap();
+        let facing = face(&session);
+        session.act(Action::Walk { facing, steps: 0 }).unwrap();
+        let request = TraceRequest {
+            shot: Shot::S2,
+            aim: 45,
+            power: Power::nearest(1.3).twentieths(),
+            item: None,
+        };
+        let trace = session.trace(&request).unwrap();
+        assert!(trace.summary.contains("Lays 2 mines that stay on the map."), "{}", trace.summary);
+        // A soft lob: the mines land between the two, far from where the bot's shot comes down.
+        session
+            .act(Action::Shoot {
+                shot: Shot::S2,
+                aim: 45,
+                power: Power::nearest(1.3),
+            })
+            .unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert!(view.happened.iter().any(|line| line.contains("Your mine landed at x=")), "{:?}", view.happened);
+        assert!(!view.mines.is_empty() && view.mines.iter().all(|mine| mine.yours && mine.seat == 0), "{:?}", view.mines);
+        assert!(rules().contains("mines (`mines` in the view)"), "{}", rules());
+    }
+
+    #[test]
     fn a_frosted_mobile_is_brittle_in_the_log_and_the_view() {
         let mut new = flat(3);
         new.against = vec!["frostfin".into()];
@@ -1404,6 +1628,27 @@ mod unit {
         };
         assert_eq!(effect_line(&names, &beam), " Skyeye's beam struck at x=812, y=456.");
         assert!(rules().contains("While Skyeye is up"));
+    }
+
+    #[test]
+    fn the_rules_say_flarecrow_fires_over_its_back() {
+        let rules = rules();
+        assert!(rules.contains("### Flarecrow (`flarecrow`)"), "{rules}");
+        assert!(rules.contains("Fires over its back"), "{rules}");
+        assert!(rules.contains("- S1: delay 250, aim 130 to 170"), "{rules}");
+    }
+
+    #[test]
+    fn the_log_says_where_a_satellites_laser_struck() {
+        let session = Session::new(&flat(1), &maps()).unwrap();
+        let names = Names { game: session.game(), you: 0 };
+        let laser = Effect::Laser {
+            seat: 0,
+            from: lobshot_sim::units::Vec2::new(300.0, 370.0),
+            to: lobshot_sim::units::Vec2::new(700.2, 480.6),
+            tick: 0,
+        };
+        assert_eq!(effect_line(&names, &laser), " Your satellite's laser struck at x=700, y=481.");
     }
 
     #[test]

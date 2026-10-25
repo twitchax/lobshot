@@ -134,6 +134,9 @@ pub const PULL_SHARES: Tuned<Shares> = picked(
 /// A pull drags a mobile over an edge, to fall: off cliffs and through gaps in the floor (CR-all,
 /// GF-tiro), off the map (SW-mob, DB-mob).
 pub const PULL_OVER_EDGES: Tuned<bool> = cited(true, &["CR-all", "GF-tiro", "SW-mob", "DB-mob"]);
+/// A mobile that floats over the ground (Kitewyrm, Dragon's behavior) isn't pulled: Dragon "hovers
+/// above the land, thus being (almost) immune to... the cakebot's weapon 2" (GF-tiro).
+pub const PULLS_FLOATERS: Tuned<bool> = cited(false, &["GF-tiro"]);
 
 /// SS: a pyramid that pushes the mobiles near where it strikes away, hurting most near its center
 /// (SW-mob, DB-mob), and more if they can't be pushed all the way (`PIN_DAMAGE`).
@@ -152,6 +155,11 @@ pub const PUSH_SHARES: Tuned<Shares> = picked(
         bionic: 0.25,
     },
     "Creatures a quarter of the way, as S2 pulls them.",
+);
+/// A floating mobile is pushed like any other.
+pub const PUSHES_FLOATERS: Tuned<bool> = picked(
+    true,
+    "No source exempts Dragon from the push, which no source ties to the ground as GF-tiro ties the pull; it still walks the ground (OB).",
 );
 /// A push leaves a mobile on the very edge of a cliff: GunBound's 2004 patch (GF-tiro, GF-vgg,
 /// CR-fun, WP06-list, CR-pb279). SW-mob and DB-mob say it "can push people off a map"

@@ -24,6 +24,7 @@ use lobshot_sim::units::Vec2 as SimVec2;
 
 use crate::{model::Screen, ui::theme};
 
+pub use input::MapPointer;
 pub use playback::{Timeline, TurnClock};
 
 /// The view: one GunBound screen, 800×600.

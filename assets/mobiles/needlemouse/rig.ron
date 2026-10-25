@@ -1,0 +1,33 @@
+// Needlemouse: a mouse knight in a thimble helmet, perched on the neck of a wind-up toy horse, with
+// a sewing needle for a sword and a pincushion hovering over it. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the ground contact between the wheels, +x =
+// facing, +y = down; facing left mirrors x. Every part SVG puts its pivot at its own origin, so
+// `at` is where that pivot lands in the body frame, and `cargo xtask art` renders each part with
+// its pivot at the image's center (lobshot_assets::ART_SCALE pixels per world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, cannon pivot and barrel length) lives in
+// sim::tuning::needlemouse; `cargo xtask art` refuses a rig whose cannon disagrees with it.
+MobileRig(
+    name: "Needlemouse",
+    parts: [
+        // Drawn in z order, lowest first. spin: rolls as it moves; aim: turns with the cannon.
+        // The wheels sit under the board.
+        (id: "wheel_rear",  file: "wheel.svg",  at: (-20.0, -7.6), z: 1, spin: true),
+        (id: "wheel_front", file: "wheel.svg",  at: (20.0, -7.6),  z: 1, spin: true),
+        (id: "body",        file: "body.svg",   at: (0.0, 0.0),    z: 2),
+        // The needle turns in the mouse's paw.
+        (id: "cannon",      file: "cannon.svg", at: (17.0, -49.0), z: 5, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where shots leave, in the cannon's frame at aim 0 (pointing +x): the needle's point, one
+        // barrel length (sim::tuning) from the pivot.
+        muzzle: (30.0, 0.0),
+    ),
+    // Riders are cosmetic and swappable; a rider's origin is its seat. The rider rides in the
+    // saddle, hands on the wind-up key.
+    rider_socket: (at: (-15.0, -35.0), z: 4),
+    // The pincushion: drawn over the horse where sim::tuning::needlemouse puts it, never leaning.
+    satellite: Some("satellite.svg"),
+)

@@ -10,8 +10,10 @@
 //!   ticks.
 //! - Practice, with items: on its turn the browser arms Power Up with its key, then fires SS, and
 //!   the page shows the item used and SS locked.
+//! - Score, online: the browser plays a seat, walks into a pit and dies, clicks the map where it
+//!   will drop back in, and comes back down there, alive, to play its turn.
 //!
-//! In both, each turn's clock starts only once the shot before it has shown.
+//! In each, each turn's clock starts only once the shot before it has shown.
 //!
 //! Ignored by default: it needs Chrome and a client bundle. `cargo make browser` builds the
 //! release bundle and runs it; `LOBSHOT_BROWSER_DIST` points it at another bundle (the quicker
@@ -31,16 +33,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use headless_chrome::{Browser, LaunchOptions, browser::tab::point::Point};
+use headless_chrome::{
+    Browser, LaunchOptions,
+    browser::tab::{Tab, point::Point},
+    protocol::cdp::Input::{DispatchKeyEvent, DispatchKeyEventTypeOption},
+};
 use serde_json::Value;
 use tempfile::TempDir;
 
-use lobshot_assets::Sound;
+use lobshot_assets::{Sound, maps::Maps};
 use lobshot_protocol::{ClientMsg, RoomOptions, ServerMsg, Stage};
-use lobshot_server::tests::create_room;
-use lobshot_sim::game::Team;
+use lobshot_server::tests::{create_room, write_map};
+use lobshot_sim::{
+    game::{MobileKind, Team},
+    mode::Mode,
+    terrain::Terrain,
+};
 
-use support::{Client, play_out};
+use support::{Client, pass_out, play_out};
 
 /// How long the page may take to load and the game to get going: the wasm is several MB, and
 /// software rendering in a headless browser is slow.
@@ -192,6 +202,7 @@ async fn e2e_browser_spectator_follows_a_game() {
         turn_seconds: 20,
         random_teams: false,
         sudden_death: None,
+        mode: Mode::Solo,
     }))
     .await;
     host.send(&ClientMsg::AddBot { team: Team::B }).await;
@@ -304,6 +315,206 @@ async fn e2e_browser_practice_arms_an_item_and_locks_ss() {
     .await
     .unwrap();
     assert_eq!(state["seat"], 0, "{state}");
+    drop(browser);
+    drop(server);
+}
+
+/// Where the pit field's mobiles spawn: each with a shaft off the map `PIT_GAP` px to its right,
+/// so a mobile that walks right falls to its death.
+const PIT_SPAWNS: [i32; 4] = [200, 600, 1000, 1400];
+const PIT_GAP: i32 = 10;
+const PIT_WIDTH: i32 = 3;
+
+/// How long a passing client (`support::pass_out`) waits on its turn before it passes: long enough
+/// for the page to show a dead player's drop point coming down before it lands.
+const PASS_AFTER: Duration = Duration::from_millis(1500);
+
+/// The pit field: 1600 by 600, ground from y = 400, and a shaft beside each spawn.
+fn pit_field() -> Terrain {
+    let shaft = |x: i32| PIT_SPAWNS.iter().any(|&spawn| (spawn + PIT_GAP..spawn + PIT_GAP + PIT_WIDTH).contains(&x));
+    Terrain::from_fn(1600, 600, |x, y| y >= 400 && !shaft(i32::try_from(x).unwrap())).unwrap()
+}
+
+/// Copies a bundle, so a test can add a map to it without touching the one it came from.
+fn copy_bundle(from: &Path, to: &Path) {
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            std::fs::create_dir_all(&target).unwrap();
+            copy_bundle(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// Holds an arrow key down for `held`: Bevy walks only while it sees the key down, which a press and
+/// release between two of headless Chrome's slow frames never shows.
+fn hold_arrow_right(tab: &Tab, held: Duration) {
+    let event = |kind| DispatchKeyEvent {
+        Type: kind,
+        key: Some("ArrowRight".to_owned()),
+        code: Some("ArrowRight".to_owned()),
+        windows_virtual_key_code: Some(39),
+        native_virtual_key_code: Some(39),
+        modifiers: None,
+        timestamp: None,
+        text: None,
+        unmodified_text: None,
+        key_identifier: None,
+        auto_repeat: None,
+        is_keypad: None,
+        is_system_key: None,
+        location: None,
+        commands: None,
+    };
+    tab.call_method(event(DispatchKeyEventTypeOption::RawKeyDown)).unwrap();
+    std::thread::sleep(held);
+    tab.call_method(event(DispatchKeyEventTypeOption::KeyUp)).unwrap();
+}
+
+/// The map column under a point on the page, once the page reports one.
+fn map_column(tab: &Tab, point: Point) -> Option<i64> {
+    tab.move_mouse_to_point(point).unwrap();
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if let Some(x) = page_state(tab).and_then(|state| state["map_x"].as_i64()) {
+            return Some(x);
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    None
+}
+
+/// Clicks the map at `point` until the page reports the drop point picked, and returns its column.
+/// A click can land on a frame that misses it, as with buttons.
+fn pick(tab: &Tab, point: Point) -> i64 {
+    for _ in 0..10 {
+        tab.click_point(point).unwrap();
+        let started = Instant::now();
+        while started.elapsed() < Duration::from_secs(3) {
+            if let Some(x) = page_state(tab).and_then(|state| state["me"]["drops_at"].as_i64()) {
+                return x;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    panic!("clicking the map never picked a drop point; last state {:?}", page_state(tab));
+}
+
+/// PRD-0007 T-001: a dead player in Score clicks the map to drop back in. Online, not in practice:
+/// practice's hills have no pit to fall into, and its bots take minutes to kill a player that
+/// doesn't fight back, longer than a test may run. Here two protocol clients, one on each team,
+/// pass every turn, and the browser plays the third seat on a field with a shaft beside each
+/// spawn: it walks into its shaft on its first turn, picks a drop point by clicking the map, and
+/// drops back in there (no wind), alive and whole, to play its turn; a drop that falls through a
+/// shaft costs nothing, and it picks again.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs Chrome and a client bundle; run `cargo make browser`"]
+async fn e2e_browser_score_a_dead_player_clicks_the_map_to_drop_back_in() {
+    let dist = TempDir::new().unwrap();
+    copy_bundle(&bundle(), dist.path());
+    write_map(dist.path(), "pits", &pit_field(), &PIT_SPAWNS).unwrap();
+    let cwd = TempDir::new().unwrap();
+    let server = start(dist.path(), cwd.path());
+    let addr = server.addr;
+    let code = tokio::task::spawn_blocking(move || create_room(addr)).await.unwrap().unwrap();
+
+    // The host configures Score on the pit field, in no wind; the browser joins team B, and the
+    // host moves over beside it, leaving team A to a rival.
+    let mut host = Client::connect(addr, &code, false).await;
+    let (host_id, _, _) = host.hello("Host", None).await;
+    host.send(&ClientMsg::Configure(RoomOptions {
+        map: "pits".into(),
+        team_size: 2,
+        max_wind: 0,
+        turn_seconds: 10,
+        random_teams: false,
+        sudden_death: None,
+        mode: Mode::Score,
+    }))
+    .await;
+    let browser = launch();
+    let tab = browser.new_tab().unwrap();
+    let origin = format!("http://{addr}");
+    let room_url = format!("{origin}/r/{code}");
+    let tab = tokio::task::spawn_blocking(move || {
+        tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
+        // Coilback walks into a pit as anything does; a floating mobile might not.
+        tab.evaluate("localStorage.setItem('lobshot.name', 'Diver'); localStorage.setItem('lobshot.mobile', 'Coilback')", false)
+            .unwrap();
+        tab.navigate_to(&room_url).unwrap().wait_until_navigated().unwrap();
+        wait_for(&tab, "the lobby", |state| state["screen"] == "Lobby");
+        click_until(&tab, "Ready(true)", "ready", |state| spot(state, "Ready(false)").is_some());
+        tab
+    })
+    .await
+    .unwrap();
+    host.send(&ClientMsg::Team(Some(Team::B))).await;
+    let mut rival = Client::connect(addr, &code, false).await;
+    let (rival_id, _, _) = rival.hello("Rival", None).await;
+    rival.send(&ClientMsg::Team(Some(Team::A))).await;
+    rival.send(&ClientMsg::Ready(true)).await;
+    host.send(&ClientMsg::Ready(true)).await;
+    host.recv_until(
+        |msg| matches!(msg, ServerMsg::Room(view) if view.members.len() == 3 && view.members.iter().all(|m| m.ready) && view.members.iter().filter(|m| m.team == Some(Team::B)).count() == 2),
+    )
+    .await;
+    host.send(&ClientMsg::Start).await;
+    let maps = || Maps::new(&dist.path().join("assets"));
+    let passing = [tokio::spawn(pass_out(host, host_id, maps(), PASS_AFTER)), tokio::spawn(pass_out(rival, rival_id, maps(), PASS_AFTER))];
+
+    let state = tokio::task::spawn_blocking(move || -> (i64, Value) {
+        // On its turn, into the pit; again on its next, should a walk go unseen.
+        for _ in 0..3 {
+            let now = wait_for(&tab, "the player's turn", |state| {
+                clock_on_time(state);
+                state["screen"] == "Game" && (enabled(state, "Item(0)") == Some(true) || state["me"]["alive"] == false)
+            });
+            if now["me"]["alive"] == false {
+                break;
+            }
+            hold_arrow_right(&tab, Duration::from_millis(1500));
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_secs(5) && page_state(&tab).is_some_and(|state| state["me"]["alive"] == true) {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+        let dead = wait_for(&tab, "the player dead, free to pick a drop point", |state| state["me"]["can_respawn"] == true);
+        assert_eq!(dead["me"]["alive"], false, "{dead}");
+
+        // A click on the map, away from the shafts as the pointer reads it, picks where it drops
+        // back in. The camera glides between turns, so the column picked may still be a shaft's:
+        // then it falls through, at no cost, and picks again.
+        let clear = |x: i64| PIT_SPAWNS.iter().all(|&spawn| (x - i64::from(spawn + PIT_GAP)).abs() > 40);
+        for _ in 0..3 {
+            let point = [Point { x: 512.0, y: 300.0 }, Point { x: 300.0, y: 300.0 }, Point { x: 720.0, y: 300.0 }]
+                .into_iter()
+                .find(|&point| map_column(&tab, point).is_some_and(clear))
+                .expect("a spot on the map clear of the shafts");
+            let x = pick(&tab, point);
+            // It drops in there, alive and whole, and plays its turn; or it fell through.
+            let after = wait_for(&tab, "the player back on its turn, or free to pick again", |state| {
+                clock_on_time(state);
+                (state["me"]["alive"] == true && enabled(state, "Item(0)") == Some(true)) || state["me"]["can_respawn"] == true
+            });
+            if after["me"]["alive"] == true {
+                return (x, after);
+            }
+        }
+        panic!("three drops in a row fell through the map");
+    })
+    .await
+    .unwrap();
+    let (x, back) = state;
+    assert_eq!(back["me"]["x"].as_i64(), Some(x), "straight down where it clicked, in no wind: {back}");
+    assert_eq!(back["me"]["hp"].as_i64(), Some(i64::from(MobileKind::Coilback.tuning().hp.value)), "whole again: {back}");
+    assert_eq!(back["me"]["drops_at"], Value::Null, "{back}");
+    assert_eq!(back["me"]["can_respawn"], false, "{back}");
+    for task in passing {
+        task.abort();
+    }
     drop(browser);
     drop(server);
 }

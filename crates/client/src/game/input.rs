@@ -2,17 +2,23 @@
 //! shot (SS only while it's ready), 4 to 9 use the loadout's items, and holding Space charges
 //! power until you let go (or it maxes out and fires). F8 or P passes, Enter chats. Walks are
 //! predicted: applied at once and sent in 100 ms batches. A dead player's Spin works on anyone's
-//! turn.
+//! turn, and so, in Score, does a click on the map that picks where they drop back in (the arrow
+//! keys look around for a spot).
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    picking::{hover::HoverMap, pointer::PointerId},
+    prelude::*,
+    window::PrimaryWindow,
+};
 use lobshot_protocol::{Action, ClientMsg};
 use lobshot_sim::{
     game::{Event, Player, Shot, SsState},
     items::MAX_ITEMS,
-    units::{Facing, Power},
+    units::{Facing, Power, Vec2 as SimVec2},
 };
 
-use super::playback::TurnClock;
+use super::{Focus, GameCamera, playback::TurnClock};
 use crate::{
     model::{ChatLine, Match, Screen, Session},
     net::Socket,
@@ -62,6 +68,8 @@ const STEPS_PER_SECOND: f32 = 60.0;
 const AIM_REPEAT: f32 = 1.0 / 15.0;
 /// Walks are batched this long before sending.
 const WALK_BATCH: f32 = 0.1;
+/// A dead player looks around the map this fast, in pixels a second: a screen a second.
+const LOOK_SPEED: f64 = 800.0;
 
 /// This player's controls.
 #[derive(Resource)]
@@ -180,10 +188,12 @@ fn pick_shot(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, ss_ready:
     }
 }
 
-/// A degree per press, repeating while held, kept inside the shot's range.
+/// A degree per press, repeating while held, kept inside the shot's range. Up raises the shot,
+/// over the back too (where that lowers the aim).
 fn aim(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, me: &Player, dt: f32) {
     let up = keyboard.any_pressed([KeyCode::ArrowUp, KeyCode::KeyW]);
     let down = keyboard.any_pressed([KeyCode::ArrowDown, KeyCode::KeyS]);
+    let range = controls.shot.tuning(me.tuning()).aim.value;
     if up == down {
         controls.aim_held = 0.0;
     } else {
@@ -191,10 +201,9 @@ fn aim(keyboard: &ButtonInput<KeyCode>, controls: &mut Controls, me: &Player, dt
         controls.aim_held += dt;
         if pressed || controls.aim_held >= AIM_REPEAT {
             controls.aim_held = 0.0;
-            controls.aim += if up { 1 } else { -1 };
+            controls.aim += if up == range.backward() { -1 } else { 1 };
         }
     }
-    let range = controls.shot.tuning(me.tuning()).aim.value;
     controls.aim = controls.aim.clamp(range.min, range.max);
 }
 
@@ -286,6 +295,73 @@ impl Hands<'_, '_> {
     }
 }
 
+/// The column of the map under the mouse, while it points at the map rather than at the HUD.
+#[derive(Resource, Default)]
+pub struct MapPointer(pub Option<i32>);
+
+/// What finds the map under the mouse.
+#[derive(SystemParam)]
+struct Pointing<'w, 's> {
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    cameras: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<GameCamera>>,
+    hover: Res<'w, HoverMap>,
+    nodes: Query<'w, 's, (), With<Node>>,
+}
+
+fn point(pointing: Pointing, game: Option<Res<Match>>, mut pointer: ResMut<MapPointer>) {
+    // The window itself is always under the pointer (bevy_picking's window backend); the HUD is
+    // only where one of its nodes is.
+    let over_hud = pointing.hover.get(&PointerId::Mouse).is_some_and(|hits| hits.keys().any(|&hit| pointing.nodes.contains(hit)));
+    let column = game.filter(|_| !over_hud).and_then(|game| {
+        let cursor = pointing.windows.single().ok()?.cursor_position()?;
+        let (camera, transform) = pointing.cameras.single().ok()?;
+        // Not in the letterbox's bars.
+        camera.logical_viewport_rect().filter(|view| view.contains(cursor))?;
+        let at = camera.viewport_to_world_2d(transform, cursor).ok()?;
+        // The world is sim coordinates turned upright, so x carries straight over; a map is a few
+        // thousand pixels wide, exact in i32.
+        #[allow(clippy::cast_possible_truncation)]
+        let x = at.x.floor() as i32;
+        u32::try_from(x).is_ok_and(|x| x < game.predicted.terrain().width()).then_some(x)
+    });
+    if pointer.0 != column {
+        pointer.0 = column;
+    }
+}
+
+/// Dead in a mode where the dead come back: a click on the map picks where to drop back in, and
+/// the arrow keys look around for a spot.
+fn pick_drop_point(
+    mouse: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    turn: Turn,
+    pointer: Res<MapPointer>,
+    game: Option<Res<Match>>,
+    mut focus: ResMut<Focus>,
+    mut acts: MessageWriter<Act>,
+) {
+    let (Some(game), Some(seat)) = (game, turn.session.my_seat()) else { return };
+    if !game.confirmed.can_respawn(seat) {
+        return;
+    }
+    if let Some(x) = pointer.0
+        && mouse.just_pressed(MouseButton::Left)
+    {
+        acts.write(Act(Action::Respawn { x }));
+    }
+    if turn.typing.is_open() {
+        return;
+    }
+    let left = keyboard.any_pressed([KeyCode::ArrowLeft, KeyCode::KeyA]);
+    let right = keyboard.any_pressed([KeyCode::ArrowRight, KeyCode::KeyD]);
+    if left != right {
+        let width = f64::from(game.predicted.terrain().width());
+        let at = focus.0.unwrap_or(SimVec2::new(width / 2.0, 0.0));
+        let step = LOOK_SPEED * f64::from(turn.time.delta_secs()) * if right { 1.0 } else { -1.0 };
+        focus.0 = Some(SimVec2::new((at.x + step).clamp(0.0, width), at.y));
+    }
+}
+
 /// Buttons on the game screen. The HUD disables SS while it's locked, and items that can't be used
 /// now, so a click here is one the player could make.
 fn buttons(mut clicked: MessageReader<Clicked>, mut controls: ResMut<Controls>, mut acts: MessageWriter<Act>, typing: Res<TextInput>) {
@@ -341,8 +417,9 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Controls>()
+            .init_resource::<MapPointer>()
             .add_message::<Act>()
-            .add_systems(Update, (keys, buttons, chat, send).chain().run_if(in_state(Screen::Game)));
+            .add_systems(Update, (keys, buttons, point, pick_drop_point, chat, send).chain().run_if(in_state(Screen::Game)));
     }
 }
 

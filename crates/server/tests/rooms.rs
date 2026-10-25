@@ -14,11 +14,18 @@ use tokio_tungstenite::{
     tungstenite::{Error, Message},
 };
 
-use lobshot_protocol::{ClientMsg, RoomOptions, RoomView, ServerMsg, Stage};
-use lobshot_server::{rate::TOO_FAST, tests};
+use lobshot_protocol::{Action, ClientMsg, RoomOptions, RoomView, ServerMsg, Stage};
+use lobshot_server::{
+    rate::TOO_FAST,
+    tests::{self, Replica},
+};
 use lobshot_sim::{
-    game::{Phase, Team},
+    game::{MobileKind, Phase, Shot, Team},
     items::{Item, Loadout},
+    log::Log,
+    map::NoAssets,
+    mode::Mode,
+    units::Power,
 };
 
 use support::{Client, play_out};
@@ -46,6 +53,7 @@ fn flat() -> ClientMsg {
         turn_seconds: 20,
         random_teams: false,
         sudden_death: None,
+        mode: Mode::Solo,
     })
 }
 
@@ -129,6 +137,68 @@ async fn a_token_rejoins_its_seat_mid_game() {
     // `Game { log }` comes next; the rejoined player finishes the game from it.
     let (played, _) = play_out(&mut back, me, Some(&view), 1).await;
     assert!(matches!(played.game().unwrap().phase(), Phase::Over { winner: Some(_) }));
+}
+
+#[tokio::test]
+async fn a_player_who_rejoins_mid_game_gets_the_mines_left_on_the_map() {
+    let f = fixture().await;
+    let mut human = Client::connect(f.addr, &f.code, false).await;
+    let (me, token, _) = human.hello("Pip", None).await;
+    for msg in [
+        flat(),
+        ClientMsg::Mobile(Some(MobileKind::Tinbadger)),
+        ClientMsg::AddBot { team: Team::B },
+        ClientMsg::Ready(true),
+        ClientMsg::Start,
+    ] {
+        human.send(&msg).await;
+    }
+    // Lay mines with soft lobs on Pip's turns. The spawns and the wind are rolled, so a lob's
+    // shells may land on the bot (going off at once) or leave the map: lob again until a mine is
+    // down, rather than wait on one lob forever.
+    let mut replica = Replica::default();
+    let mut seat = None;
+    let shot = Action::Shoot {
+        shot: Shot::S2,
+        aim: 45,
+        power: Power::nearest(1.3),
+    };
+    let mut lobs = 0;
+    while replica.game().is_none_or(|game| game.mines().is_empty()) {
+        let msg = human.recv().await;
+        replica.absorb(&msg).unwrap();
+        if let ServerMsg::Room(RoomView { stage: Stage::Playing { seats }, .. }) = &msg {
+            seat = seats.iter().position(|&id| id == me).and_then(|seat| u8::try_from(seat).ok());
+        }
+        let Some(seat) = seat else { continue };
+        if replica
+            .game()
+            .is_some_and(|game| game.phase() == (Phase::Turn { seat }) && game.pending_roll().is_none() && game.mines().is_empty())
+        {
+            assert!(lobs < 8, "no mine down after {lobs} lobs");
+            human.send(&ClientMsg::Act(shot)).await;
+            lobs += 1;
+            // Wait out the lob: until a mine is down or the turn has passed.
+            while replica.game().is_some_and(|game| game.phase() == (Phase::Turn { seat }) && game.mines().is_empty()) {
+                replica.absorb(&human.recv().await).unwrap();
+            }
+        }
+    }
+    let laid = replica.game().unwrap().mines().to_vec();
+    let fired = replica.log().unwrap().events.len();
+    drop(human);
+
+    let mut back = Client::connect(f.addr, &f.code, false).await;
+    back.hello("Pip", Some(token)).await;
+    let ServerMsg::Game { log } = back.recv_until(|msg| matches!(msg, ServerMsg::Game { .. })).await else {
+        unreachable!()
+    };
+    assert!(log.replay(&NoAssets).is_ok(), "the whole game so far replays");
+    let then = Log {
+        setup: log.setup.clone(),
+        events: log.events[..fired].to_vec(),
+    };
+    assert_eq!(then.replay(&NoAssets).unwrap().mines(), laid, "the mines come back with the log");
 }
 
 #[tokio::test]

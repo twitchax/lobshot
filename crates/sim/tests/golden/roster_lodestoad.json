@@ -33,7 +33,8 @@
       "strength": 7,
       "direction": 140
     },
-    "sudden_death": null
+    "sudden_death": null,
+    "mode": "Solo"
   },
   "events": [
     {

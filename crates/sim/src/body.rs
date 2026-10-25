@@ -161,6 +161,17 @@ mod unit {
     }
 
     #[test]
+    fn an_aim_over_the_back_leaves_behind() {
+        // 150 degrees is 30 above the way a right-facing mobile faces away from: up and to the left.
+        let direction = pose(Facing::Right, 0.0).aim_direction(150);
+        assert!(close(direction, Vec2::new(-libm::cos(to_radians(30.0)), -libm::sin(to_radians(30.0)))));
+        // On a slope rising to the right, a left-facing mobile's back points up the slope: 150 is 40
+        // above the world's horizon, to the right.
+        let direction = pose(Facing::Left, 10.0).aim_direction(150);
+        assert!(close(direction, Vec2::new(libm::cos(to_radians(40.0)), -libm::sin(to_radians(40.0)))));
+    }
+
+    #[test]
     fn the_muzzle_clears_the_hitbox_at_every_aim() {
         let pose = pose(Facing::Right, 0.0);
         for kind in MobileKind::ALL {

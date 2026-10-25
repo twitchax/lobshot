@@ -65,7 +65,16 @@ fn hello(code: &lobshot_protocol::RoomCode, name: String) -> ClientMsg {
     }
 }
 
-fn title(mut commands: Commands) {
+/// The title: rebuilt whenever the session changes (the practice mode).
+fn title(mut commands: Commands, session: Res<Session>, roots: Query<Entity, With<ScreenRoot>>) {
+    if !session.is_changed() && !roots.is_empty() {
+        return;
+    }
+    for root in &roots {
+        commands.entity(root).despawn();
+    }
+    let mode = session.practice_mode;
+    let next = RoomOptions { mode, ..RoomOptions::default() }.next_mode().mode;
     commands.spawn((
         ScreenRoot,
         full_screen(),
@@ -84,6 +93,7 @@ fn title(mut commands: Commands) {
                     button("Mobile and items", UiAction::Garage)
                 ]
             ),
+            small_button(format!("Practice mode: {}", mode.name()), UiAction::PracticeMode(next)),
         ],
     ));
 }
@@ -410,6 +420,7 @@ fn spectator_chip(names: &mut ChildSpawnerCommands, member: &Member, master: Mem
 fn describe(options: &RoomOptions) -> String {
     let size = options.team_size;
     let mut parts = vec![
+        options.mode.name().to_owned(),
         options.map.clone(),
         format!("{size}v{size}"),
         format!("wind up to {}", options.max_wind),
@@ -440,6 +451,7 @@ fn options_row(screen: &mut ChildSpawnerCommands, options: &RoomOptions) {
             ..default()
         })
         .with_children(|row| {
+            row.spawn(small_button(format!("Mode: {}", options.mode.name()), configure(options.next_mode())));
             row.spawn(small_button(format!("Map: {}", options.map), configure(options.next_map(&maps))));
             row.spawn(small_button(format!("Team size: {}", options.team_size), configure(options.next_team_size())));
             row.spawn(small_button(format!("Max wind: {}", options.max_wind), configure(options.next_max_wind())));
@@ -479,6 +491,10 @@ fn act(
                 session.practice = true;
                 session.practice_team_size = if *action == UiAction::PracticeTeams { 2 } else { 1 };
                 next.set(Screen::Game);
+                None
+            }
+            UiAction::PracticeMode(mode) => {
+                session.practice_mode = mode;
                 None
             }
             UiAction::Garage => {
@@ -570,7 +586,6 @@ impl Plugin for ScreensPlugin {
         app.init_resource::<WebErrors>()
             .init_resource::<PickingFor>()
             .add_systems(Startup, boot)
-            .add_systems(OnEnter(Screen::Title), title)
             .add_systems(OnEnter(Screen::Name), name_prompt)
             .add_systems(OnEnter(Screen::Joining), joining)
             .add_systems(OnEnter(Screen::Gone), gone)
@@ -584,6 +599,7 @@ impl Plugin for ScreensPlugin {
                 Update,
                 (
                     take_name.run_if(in_state(Screen::Name)),
+                    title.run_if(in_state(Screen::Title)),
                     (garage.run_if(in_state(Screen::Garage)), lobby.run_if(in_state(Screen::Lobby))).after(picks::DrawPortraits),
                     act,
                     show_web_errors,
@@ -609,11 +625,12 @@ mod unit {
             random_teams: true,
             ..RoomOptions::default()
         };
-        assert_eq!(describe(&options), "tidewall, 4v4, wind up to 26, 20 s turns, random teams, sudden death: Double at turn 40");
+        assert_eq!(describe(&options), "Solo, tidewall, 4v4, wind up to 26, 20 s turns, random teams, sudden death: Double at turn 40");
         let options = RoomOptions {
             sudden_death: None,
+            mode: lobshot_sim::mode::Mode::Score,
             ..RoomOptions::default()
         };
-        assert!(describe(&options).ends_with("no sudden death"));
+        assert!(describe(&options).starts_with("Score, ") && describe(&options).ends_with("no sudden death"));
     }
 }

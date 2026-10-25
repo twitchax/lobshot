@@ -75,8 +75,8 @@ from `mechanics.md` (`SW-mob`, `SW-mds`, `CR-mob`, `CR-fixed`, `DB-mob`, `WP06`,
 - **Everyone near, the shooter too.** "Don't shoot so close to yourself that you get bunged from
   the magnetic pull of shot 2 also"; "don't use shot 2 to suck an enemy and a teammate together"
   `[CR-all]`. It "attracts all mobiles/corpses near it" `[GF-max]`, and "jewels and also
-  mini-Raons" `[WP06-list]` (later work: Jewel mode is M6, Raon's mines T-003). A hovering Dragon is
-  "(almost) immune" `[GF-tiro]` (T-007).
+  mini-Raons" `[WP06-list]` (Jewel mode is M6). A hovering Dragon is "(almost) immune"
+  `[GF-tiro]`.
 - **When.** Dual+ with S2 first: "they'd be pulled in to where the shot 2 landed, then hit with
   shot 1" `[GF-vgg]`, `[GF-tiro]`. In `[DBR]`'s client, the crater and blast come first, then the
   damage and the move, then every player falls; the move is a 250 ms slide.
@@ -114,11 +114,13 @@ from `mechanics.md` (`SW-mob`, `SW-mds`, `CR-mob`, `CR-fixed`, `DB-mob`, `WP06`,
 ## How lobshot plays it
 
 `sim::shots::lodestoad`. A pulled or pushed mobile slides along the ground by the walking rules
-(`movement::slide`): it climbs what it could walk up and steps down what it could walk down, a
-wall stops it, and at an edge a pull carries it over (it falls, `Fell`, or off the map, a bunge)
-while a push leaves it on the very edge. Each slide is an `Effect::Slid`: its path, a footing a
-step, which the client plays over a quarter second from the blast, then the falls play as for
-ground blasted away. A field reaches a mobile whose middle (its hitbox's center) is within its
+(`movement::slide`): it climbs what it could walk up and steps down what it could walk down, and
+a wall stops it. At an edge a pull carries it over: it falls to the ground below and slides on,
+so two mobiles pulled into a hole end at its bottom together ("it can pull two enemies together",
+`[CR-all]`), and one with no ground below falls off the map, a bunge. A push leaves it on the very
+edge. Each slide is an `Effect::Slid`: its path, a footing a step with the point in the air over
+each edge before where it lands, which the client plays over a quarter second from the blast;
+anything else that falls, and a bunge, play after it as for ground blasted away. A field reaches a mobile whose middle (its hitbox's center) is within its
 box of the impact, so a hit anywhere on the body counts; `[DBR]` measures from the player's
 position, which is either its feet or its middle.
 
@@ -128,8 +130,13 @@ position, which is either its feet or its middle.
   low (`damage::low`, Thistleback's SS's rule): 200 at or under a mobile's feet, through it, less
   up its body, less again beside it. Its 30 px hole is carved first; then every mobile in reach
   slides toward its column, Mechanical ones all the way, Shield ones half, Bionic ones a quarter,
-  into the hole if it's there; then its bolt and beam follow (Thunder, Electricity, Skyeye) onto
-  where they now stand.
+  into the hole if it's there. The mines near it (Tinbadger's) are dragged into the hole too,
+  going off under whoever it pulled there (`mines::drag`, `[WP06-list]`'s "mini-Raons"); its own
+  blast sets off those it touches. Then its bolt and beam follow (Thunder, Electricity, Skyeye)
+  onto where they now stand.
+- **A floating mobile** (Kitewyrm, Dragon's behavior) isn't pulled: Dragon "hovers above the land,
+  thus being (almost) immune to... the cakebot's weapon 2" `[GF-tiro]`. No source exempts it from
+  the push, so the pyramid pushes it like any other.
 - **The SS** lands as a shell (250-320 by how central the hit), pushes every mobile in reach to
   100 px from its column (Bionic ones a quarter of the way), and each one a wall or an edge stops
   short takes up to 50 more, by the share of those 100 px it didn't go.
@@ -149,7 +156,8 @@ position, which is either its feet or its middle.
 | Pull reach | 59 across, 40 up or down | `[DBR]`'s blast box. |
 | Pull distance | to the impact's column | `[DBR]`; "it can pull two enemies together" `[CR-all]`. |
 | Pull by class | Mechanical 1, Shield 0.5, Bionic 0.25 | A pick: machines most (`[WP06-list]`, `[SW-mob]`), creatures "almost not at all" (`[CR-pb279]`); no source places shields. |
-| Pull over edges | yes | `[CR-all]`, `[GF-tiro]`, `[SW-mob]`, `[DB-mob]`. |
+| Pull over edges | yes, falling and sliding on | `[CR-all]`, `[GF-tiro]`, `[SW-mob]`, `[DB-mob]`; sliding on after the fall is a pick, so a hole's victims meet at its bottom as in `[DBR]`, which snaps them to the impact's column first. |
+| Floating mobiles | not pulled; pushed | `[GF-tiro]`'s "(almost) immune" to the pull; nothing on the push. |
 | Push reach, distance | 63 across, 47 up or down; to 100 px | `[DBR]`. |
 | Push by class | Bionic 0.25, the others 1 | `[WP06-list]`'s "less" and `[GF-lee]`'s "does not affect organics", as the pull. |
 | Push over edges | no | GunBound's 2004 patch: `[GF-tiro]`, `[GF-vgg]`, `[WP06-list]`, `[CR-fun]`, `[CR-pb279]`, over `[SW-mob]` and `[DB-mob]`. |

@@ -11,9 +11,13 @@ use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 
-use lobshot_protocol::{ClientMsg, MemberId, RoomView, ServerMsg, Stage, Token};
+use lobshot_assets::maps::Maps;
+use lobshot_protocol::{Action, ClientMsg, MemberId, RoomView, ServerMsg, Stage, Token};
 use lobshot_server::tests::Replica;
-use lobshot_sim::bot::Level;
+use lobshot_sim::{
+    bot::Level,
+    game::{Game, Phase},
+};
 
 /// How long any one message may take to arrive before the test fails instead of hanging.
 const PATIENCE: Duration = Duration::from_secs(30);
@@ -109,7 +113,8 @@ impl Client {
 }
 
 /// Plays as `me` until the game ends, from the next message on: replays everything the server
-/// sends (the replica checks the hash after every event) and plays `me`'s turns with SearchBot.
+/// sends (the replica checks the hash after every event) and plays `me`'s turns with SearchBot,
+/// and its drop points once dead in Score.
 /// `last_view` is the room as the client last saw it, if a game was already on; a member without a
 /// seat just follows. Returns the replica and the room as it returned to the lobby.
 pub async fn play_out(client: &mut Client, me: MemberId, last_view: Option<&RoomView>, mut seed: u64) -> (Replica, RoomView) {
@@ -134,10 +139,73 @@ pub async fn play_out(client: &mut Client, me: MemberId, last_view: Option<&Room
                 client.send(&ClientMsg::Act(action)).await;
             }
         }
+        // Dead in Score, it drops back in where SearchBot would.
+        if let Some(pick) = seat.and_then(|seat| replica.respawn(seat)) {
+            client.send(&ClientMsg::Act(pick)).await;
+        }
     }
 }
 
 fn seat_of(view: &RoomView, me: MemberId) -> Option<u8> {
     let Stage::Playing { seats } = &view.stage else { return None };
     seats.iter().position(|&id| id == me).map(|seat| u8::try_from(seat).unwrap())
+}
+
+/// A client's copy of a game on a drawn map, rebuilt from what the server sends: the log replayed
+/// on `maps` (the drawn maps the server serves), then each event. `Replica` plays synthetic maps
+/// only, and checks hashes besides.
+pub struct Follower {
+    me: MemberId,
+    maps: Maps,
+    pub game: Option<Game>,
+    /// `me`'s seat, once the game is on.
+    pub seat: Option<u8>,
+}
+
+impl Follower {
+    #[must_use]
+    pub fn new(me: MemberId, maps: Maps) -> Self {
+        Self { me, maps, game: None, seat: None }
+    }
+
+    /// Takes in one server message.
+    pub fn absorb(&mut self, msg: ServerMsg) {
+        match msg {
+            ServerMsg::Room(view) => {
+                if let Stage::Playing { seats } = view.stage {
+                    self.seat = seats.iter().position(|&id| id == self.me).and_then(|seat| u8::try_from(seat).ok());
+                }
+            }
+            ServerMsg::Game { log } => self.game = Some(log.replay(&self.maps).unwrap()),
+            ServerMsg::Event { event, .. } => {
+                if let Some(game) = self.game.as_mut() {
+                    game.apply(event).unwrap();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The game and `me`'s seat, once it is `me`'s turn to act (no roll owed).
+    #[must_use]
+    pub fn my_turn(&self) -> Option<(&Game, u8)> {
+        let (game, seat) = (self.game.as_ref()?, self.seat?);
+        (game.phase() == (Phase::Turn { seat }) && game.pending_roll().is_none()).then_some((game, seat))
+    }
+}
+
+/// Plays `client` (`me`, on a game on `maps`) by passing each of its turns `after` it comes up,
+/// until the socket closes or goes quiet.
+pub async fn pass_out(mut client: Client, me: MemberId, maps: Maps, after: Duration) {
+    let mut follower = Follower::new(me, maps);
+    let mut passed = None;
+    loop {
+        follower.absorb(client.recv().await);
+        let Some((game, _)) = follower.my_turn() else { continue };
+        if passed != Some(game.turns()) {
+            passed = Some(game.turns());
+            tokio::time::sleep(after).await;
+            client.send(&ClientMsg::Act(Action::Pass)).await;
+        }
+    }
 }

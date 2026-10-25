@@ -13,6 +13,8 @@ pub mod hash;
 pub mod items;
 pub mod log;
 pub mod map;
+pub mod mines;
+pub mod mode;
 pub mod movement;
 pub mod referee;
 pub mod score;

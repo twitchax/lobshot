@@ -63,6 +63,31 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Score mode (M6): each team has its players + 1 lives; the dead pick a drop point on the map
+  and drop back in 4 turns later, nudged by the wind. Rooms, practice and the lab all play it, and
+  bots pick their drop points. Modes are a room option (Solo by default).
+- Tinbadger (M5), a badger tinker with a crate-cart of wind-up tin beetles: S1 three cogs that wind
+  around one path, S2 two shells that lay mines (they crawl at the nearest mobile on its turn and
+  go off under a mobile's middle, or in any blast nearby), SS a big beetle that walks until it
+  meets a mobile or a mine. Mines stay on the map between turns and come back to a rejoining player.
+- Lensowl (M5), an owl astronomer on a telescope rover: every shot is a tracer, and its clockwork
+  moon fires lasers down at where it lands (S1 one, S2 three from higher up, SS five swept across
+  the spot), stopped by the first thing in their way.
+- Needlemouse (M5), a mouse knight on a wind-up toy horse: the same tracer, with its pincushion
+  firing pins that converge on it (S1 three, S2 five from twice as high, SS seven swept across).
+- Augerdillo (M5), an armadillo on a tracked drill rig that fires over its back: S1 a plain round,
+  S2 a drill that flies through mobiles, bores into the ground on a mirror of its arc and goes off
+  where it comes up, SS a curled armadillo that rolls through land and stops only in a mobile.
+- Flarecrow (M5), a crow signalman whose mortar fires over its back: S1 an electric ball whose
+  aftershock runs on down a line of mobiles, S2 three flares that each call Skyeye's beam where
+  they land, SS a cart that flies through land and mobiles and beams down on every enemy it
+  passes. Rear-firing mobiles read their angle as degrees above level behind them.
+- Kitewyrm (M5), a gecko flying a paper festival-dragon kite: it floats, so rolling shots and
+  walking blobs pass under it; S1 a fireball, S2 four that ripple out, SS an orb that calls five
+  mini paper dragons down on the spot it lands.
+- Starmote (M5), motes of moon-rock and crystal in a violet starfield on the sparse-starfield
+  archetype: A a loose ring of small motes around a crystal cluster, B larger motes beside a
+  crystal spire, with stepping stones that catch a fall off the high shoals.
 - Thistleback (M5), a hedgehog gardener with a wheelbarrow catapult: S1 a heavy cabbage, S2 a
   cabbage with two sprouts circling it, SS a pumpkin that bursts nine times in a ring and hurts
   most when it lands at a target's feet.
@@ -75,7 +100,8 @@ why the version moved the way it did.
 
 ### Changed
 
-- Protocol and log wire versions are 3: logs from M2 and M3 builds don't load.
+- Protocol and log wire versions are 4 (the room's mode and the drop-in pick): logs from earlier
+  builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
   practice now rolls its wind up to the room's max.
 - SearchBot walks: when it has no good shot from where it stands, it tries a few spots within its
@@ -84,5 +110,6 @@ why the version moved the way it did.
 ### Fixed
 
 - A shot's power above four bars no longer decodes, so a client can't fire one.
+- Walking off the map no longer starts the next turn's clock twice on the walker's own screen.
 - A shot fired from inside a weather column is caught by it: a Mirror sends it back, Force boosts
   it, a Tornado flings it up. It used to pass through.

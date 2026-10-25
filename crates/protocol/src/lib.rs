@@ -24,7 +24,7 @@ use lobshot_sim::{
 };
 
 /// Bumped whenever a message from an older build would decode differently.
-pub const PROTOCOL_VERSION: u8 = 3;
+pub const PROTOCOL_VERSION: u8 = 4;
 
 /// The longest a player name may be, in characters.
 pub const MAX_NAME: usize = 16;
@@ -120,8 +120,8 @@ pub struct RoomView {
     pub stage: Stage,
 }
 
-/// A move in the game, from the player whose turn it is (or, for `Spin`, a dead player). The
-/// server turns it into a sim `Event` (stamping a shot's turn time itself).
+/// A move in the game, from the player whose turn it is (or, for `Spin` and `Respawn`, a dead
+/// player). The server turns it into a sim `Event` (stamping a shot's turn time itself).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
     Walk {
@@ -140,6 +140,11 @@ pub enum Action {
     },
     /// A dead player spins their slot machine; it works on anyone's turn.
     Spin,
+    /// A dead player picks where to drop back in (Score): down column `x`, some turns later. It
+    /// works on anyone's turn.
+    Respawn {
+        x: i32,
+    },
 }
 
 impl Action {
@@ -153,6 +158,7 @@ impl Action {
             Self::Pass => Event::Pass { seat, time },
             Self::Item { slot } => Event::UseItem { seat, slot, time },
             Self::Spin => Event::Spin { seat },
+            Self::Respawn { x } => Event::Respawn { seat, x },
         }
     }
 }
@@ -392,5 +398,6 @@ mod unit {
         assert_eq!(Action::Pass.event(0, time), Event::Pass { seat: 0, time });
         assert_eq!(Action::Item { slot: 4 }.event(2, time), Event::UseItem { seat: 2, slot: 4, time });
         assert_eq!(Action::Spin.event(5, time), Event::Spin { seat: 5 });
+        assert_eq!(Action::Respawn { x: 640 }.event(5, time), Event::Respawn { seat: 5, x: 640 });
     }
 }

@@ -1,0 +1,21 @@
+// Starmote: motes of moon rock and crystal adrift in a violet starfield. Hand-written;
+// `cargo xtask art` copies it to assets/gen with each variant's size and mask hash filled in.
+//
+// Spawns are columns, mirrored about the middle (x = 1000) so neither side starts with the better
+// mote. Below the motes is only the void, so a mobile that walks off a mote, or has it dug out from
+// under it, is lost. `cargo xtask art` refuses any spawn that leaves a mobile hanging off an edge
+// or under an overhang.
+MapInfo(
+    name: "starmote",
+    title: "Starmote",
+    variants: [
+        // A loose ring around a crystal adrift in the middle: one spawn on each of eight small
+        // motes, from the ring's ends down to its bottom beside the middle; crystal clusters out of
+        // reach close its top.
+        (id: "A", spawns: [150, 400, 620, 830, 1170, 1380, 1600, 1850]),
+        // A few larger motes: two spawns on each Spire Mote at the edges and on each High Shoal
+        // beside the middle, either side of a crystal; between the shoals, the Geode's spire below
+        // and the Lodestar above.
+        (id: "B", spawns: [130, 370, 700, 880, 1120, 1300, 1630, 1870]),
+    ],
+)

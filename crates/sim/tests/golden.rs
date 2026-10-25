@@ -16,84 +16,134 @@ use lobshot_sim::{
     items::{Item, Loadout, MAX_ITEMS},
     log::Log,
     map::{MapRef, NoAssets},
+    mode::Mode,
     units::{Centis, Facing, Power, Wind},
     weather::{Forecast, WeatherKind},
 };
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x8fcc_ce26_c171_0a72),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6692_3498_df91_7f62),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0xda74_aba2_ec7f_b4c6,
+        0x719f_bf71_eaa6_6416,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xc819_eb26_3258_611c),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0xe58c_5c04_105d_a1ed),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xa6d0_0503_e825_473c),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x60cd_ece7_e933_5bc5),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0xfaa6_4f74_91a0_96ed,
+        0x6f3a_abc8_1f99_e8c5,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0xb543_930f_5ae5_ef4d,
+        0x3de5_e0c3_a4c4_d625,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0xc504_6940_80e8_0724,
+        0x03a6_f123_3613_6f04,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0x5bce_095d_f719_1bd5,
+        0x07eb_440a_d4a2_f06d,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0xfc6b_b7ec_055b_d900,
+        0x3d17_f50e_8449_5100,
     ),
     (
         "roster_frostfin",
         include_str!("golden/roster_frostfin.json"),
         include_bytes!("golden/roster_frostfin.bin"),
         54,
-        0x4659_5909_07ca_6682,
+        0x5037_52de_21bb_5ef2,
     ),
     (
         "roster_herdhound",
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         54,
-        0x327a_2cb0_ffd4_2c06,
+        0x7764_0df2_0ff0_7156,
     ),
     (
         "roster_thistleback",
         include_str!("golden/roster_thistleback.json"),
         include_bytes!("golden/roster_thistleback.bin"),
         63,
-        0xc8a1_51a2_4657_e6be,
+        0x1493_9203_c4e7_544e,
+    ),
+    (
+        "roster_kitewyrm",
+        include_str!("golden/roster_kitewyrm.json"),
+        include_bytes!("golden/roster_kitewyrm.bin"),
+        32,
+        0x512f_d4b1_5782_cb51,
+    ),
+    (
+        "roster_flarecrow",
+        include_str!("golden/roster_flarecrow.json"),
+        include_bytes!("golden/roster_flarecrow.bin"),
+        74,
+        0xee41_541a_6f0c_4cef,
+    ),
+    (
+        "roster_augerdillo",
+        include_str!("golden/roster_augerdillo.json"),
+        include_bytes!("golden/roster_augerdillo.bin"),
+        99,
+        0x50f7_e4eb_9f95_b8a2,
+    ),
+    (
+        "roster_lensowl",
+        include_str!("golden/roster_lensowl.json"),
+        include_bytes!("golden/roster_lensowl.bin"),
+        65,
+        0xc549_4139_49ea_7c13,
+    ),
+    (
+        "roster_needlemouse",
+        include_str!("golden/roster_needlemouse.json"),
+        include_bytes!("golden/roster_needlemouse.bin"),
+        32,
+        0x0808_e269_8203_f323,
+    ),
+    (
+        "roster_tinbadger",
+        include_str!("golden/roster_tinbadger.json"),
+        include_bytes!("golden/roster_tinbadger.bin"),
+        52,
+        0xc20e_4b28_4594_ef5c,
+    ),
+    (
+        "mode_score",
+        include_str!("golden/mode_score.json"),
+        include_bytes!("golden/mode_score.bin"),
+        153,
+        0xf1cc_9be1_fabf_854f,
     ),
     (
         "roster_lodestoad",
         include_str!("golden/roster_lodestoad.json"),
         include_bytes!("golden/roster_lodestoad.bin"),
         80,
-        0x2089_8a0c_7a0c_23a5,
+        0xa89c_4f43_fcf1_aa7f,
     ),
 ];
 
@@ -169,6 +219,71 @@ fn roster_frostfin_frosts_its_target() {
     assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
     assert!(frosts.len() >= 2 && frosts.iter().all(|&(seat, _)| seat == 1), "{frosts:?}");
     assert_eq!(game.players()[1].brittle, frosts.last().unwrap().1);
+}
+
+#[test]
+fn roster_flarecrow_calls_skyeye_down() {
+    // Flarecrow fires all three shots, and its flares or its SS call Skyeye's beam.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_flarecrow").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut beams) = (Vec::new(), 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::Beam { .. } => beams += 1,
+                _ => {}
+            }
+        }
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(beams >= 3, "{beams} beams");
+}
+
+#[test]
+fn roster_augerdillo_bores_and_rolls_through_the_hills() {
+    // Augerdillo fires all three shots over its back: an S2 bores through the ground and comes up
+    // to blow, and its SS rolls through the hills into the Coilback.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_augerdillo").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut bored, mut rolled) = (Vec::new(), false, false);
+    for event in &log.events {
+        let effects = game.apply(*event).unwrap();
+        let Event::Shoot { seat: 0, shot, .. } = *event else { continue };
+        shots.push(shot);
+        let blasts = effects.iter().filter(|e| matches!(e, Effect::Exploded { .. })).count();
+        let legs = effects.iter().find_map(|e| if let Effect::Fired { legs, .. } = e { Some(legs.len()) } else { None }).unwrap_or(0);
+        bored |= shot == Shot::S2 && legs >= 2 && blasts > 0;
+        rolled |= shot == Shot::Ss && effects.iter().any(|e| matches!(e, Effect::Damaged { seat: 1, .. }));
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(bored && rolled, "bored: {bored}; rolled into the target: {rolled}");
+}
+
+#[test]
+fn roster_tinbadger_lays_mines_that_outlive_their_turn() {
+    // Tinbadger fires all three shots; its S2's mines stay on the map past the turn that laid
+    // them, and crawl as its turn comes up.
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "roster_tinbadger").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut shots, mut laid, mut crawled, mut outlived) = (Vec::new(), 0, 0, false);
+    for event in &log.events {
+        let before = game.mines().to_vec();
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Volley { seat: 0, shot } => shots.push(shot),
+                Effect::MineLaid { .. } => laid += 1,
+                Effect::MineCrawled { .. } => crawled += 1,
+                _ => {}
+            }
+        }
+        outlived |= matches!(event, Event::Pass { .. } | Event::Shoot { seat: 1, .. }) && !before.is_empty();
+    }
+    assert!([Shot::S1, Shot::S2, Shot::Ss].iter().all(|shot| shots.contains(shot)), "{shots:?}");
+    assert!(laid >= 2 && crawled >= 1 && outlived, "laid {laid}, crawled {crawled}, outlived a turn: {outlived}");
 }
 
 #[test]
@@ -258,6 +373,13 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_frostfin", play(roster_frostfin(), &winds)),
         ("roster_herdhound", play(roster_herdhound(), &winds)),
         ("roster_thistleback", play(roster_thistleback(), &winds)),
+        ("roster_kitewyrm", play(roster_kitewyrm(), &winds)),
+        ("roster_flarecrow", play(roster_flarecrow(), &winds)),
+        ("roster_augerdillo", play(roster_augerdillo(), &winds)),
+        ("roster_lensowl", play(roster_lensowl(), &winds)),
+        ("roster_needlemouse", play(roster_needlemouse(), &winds)),
+        ("roster_tinbadger", play(roster_tinbadger(), &winds)),
+        ("mode_score", play(mode_score(), &winds)),
         ("roster_lodestoad", play(roster_lodestoad(), &winds)),
     ]
 }
@@ -269,6 +391,7 @@ fn duel_flat() -> Setup {
         order: vec![0, 1],
         wind: Wind::default(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -285,6 +408,7 @@ fn duel_hills_wind() -> Setup {
         order: vec![1, 0],
         wind: Wind::new(9, 160).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -306,6 +430,7 @@ fn brawl_2v2() -> Setup {
         order: vec![0, 1, 2, 3],
         wind: Wind::new(4, 0).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -341,6 +466,7 @@ fn brawl_4v4() -> Setup {
         wind: Wind::new(8, 20).unwrap(),
         // Earlier than a room offers (SUDDEN_DEATH_TURNS), so the brawl reaches it.
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::Double, turn: 16 }),
+        mode: Mode::Solo,
     }
 }
 
@@ -354,6 +480,7 @@ fn duel_big_bomb() -> Setup {
         order: vec![1, 0],
         wind: Wind::new(5, 300).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::BigBomb, turn: 8 }),
+        mode: Mode::Solo,
     }
 }
 
@@ -373,6 +500,7 @@ fn duel_ss_death() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(11, 170).unwrap(),
         sudden_death: Some(SuddenDeath { kind: SuddenDeathKind::SsDeath, turn: 8 }),
+        mode: Mode::Solo,
     }
 }
 
@@ -390,6 +518,7 @@ fn roster_spoutpot() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(10, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -407,6 +536,7 @@ fn roster_tuskrack() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(12, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -427,6 +557,7 @@ fn roster_sudsotter() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -445,6 +576,7 @@ fn roster_frostfin() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -465,6 +597,7 @@ fn roster_herdhound() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(8, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -482,6 +615,141 @@ fn roster_thistleback() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// A Score 2v2 on hills in wind: deaths cost lives, the dead drop back in, and a team runs out.
+fn mode_score() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2400,
+            height: 900,
+            ground: 780,
+            amplitude: 90,
+            period: 700,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Coilback, 350, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Lanternwing, 2050, Facing::Left, &[]),
+            armed(Team::A, MobileKind::Hookclaw, 900, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Sparkhorn, 1500, Facing::Left, &[]),
+        ],
+        order: vec![0, 1, 2, 3],
+        wind: Wind::new(5, 60).unwrap(),
+        sudden_death: None,
+        mode: Mode::Score,
+    }
+}
+
+/// Kitewyrm against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_kitewyrm() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Kitewyrm, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(9, 150).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Flarecrow (Aduka's behavior) against Coilback on hills in wind, its back to the target: its S1,
+/// S2 and SS each fire, and its flares call Skyeye.
+fn roster_flarecrow() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Flarecrow, 400, Facing::Left, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Augerdillo (Nak's behavior) against Coilback on hills in wind: its S1, its burrowing S2 and its
+/// SS through the hills. The ground runs deep, so a bore can come up.
+fn roster_augerdillo() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 1100,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Augerdillo, 650, Facing::Left, &[]), seat(Team::B, 1350, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Lensowl (A.Sate's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_lensowl() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Lensowl, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Needlemouse (Knight's behavior) against Coilback on hills in wind: its S1, S2 and SS each fire.
+fn roster_needlemouse() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 120,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Needlemouse, 400, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
+    }
+}
+
+/// Tinbadger against Coilback on hills in wind: its S1, S2 and SS each fire, and its mines stay on
+/// the map from turn to turn.
+fn roster_tinbadger() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2000,
+            height: 900,
+            ground: 760,
+            amplitude: 80,
+            period: 560,
+        },
+        seats: vec![armed(Team::A, MobileKind::Tinbadger, 420, Facing::Right, &[]), seat(Team::B, 1400, Facing::Left)],
+        order: vec![0, 1],
+        wind: Wind::new(7, 140).unwrap(),
+        sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
@@ -501,11 +769,12 @@ fn roster_lodestoad() -> Setup {
         order: vec![0, 1],
         wind: Wind::new(7, 140).unwrap(),
         sudden_death: None,
+        mode: Mode::Solo,
     }
 }
 
 /// Plays a game with a simple scripted player and returns its log. The dead spin their slot
-/// machines whenever they may. Every third turn the wind changes (if `winds` has any); every
+/// machines whenever they may, or drop back in where they spawned. Every third turn the wind changes (if `winds` has any); every
 /// fourth, the player walks toward the nearest enemy; every seventh, it times out. Every turn it
 /// first uses the first item it can. Otherwise it cycles S1, S2, SS (S1 when SS is locked or off) at the
 /// middle of the shot's true range, with the power step that lands closest to the enemy.
@@ -525,6 +794,10 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         loop {
             if let Some(dead) = (0..MAX_SEATS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_spin(s)) {
                 apply(&mut game, Event::Spin { seat: dead });
+            }
+            if let Some(dead) = (0..MAX_SEATS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_respawn(s)) {
+                let x = setup.seats[usize::from(dead)].spawn_x;
+                apply(&mut game, Event::Respawn { seat: dead, x });
             }
             let Some(roll) = game.pending_roll() else { break };
             rolls += 1;
@@ -560,6 +833,10 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
             continue;
         }
+        // A mobile that fires over its back turns it to the enemy.
+        if me.tuning().s1.aim.value.backward() {
+            apply(&mut game, Event::Walk { seat, facing: toward.flip(), steps: 0 });
+        }
         if let Some(slot) = (0..MAX_ITEMS).filter_map(|s| u8::try_from(s).ok()).find(|&s| game.can_use_item(seat, s)) {
             apply(&mut game, Event::UseItem { seat, slot, time: Centis(0) });
             if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
@@ -590,4 +867,27 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         apply(&mut game, Event::Shoot { seat, shot, aim, power, time });
     }
     Log { setup, events }
+}
+
+#[test]
+fn mode_score_spends_lives_and_drops_the_dead_back_in() {
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "mode_score").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut points, mut picked, mut landed) = (Vec::new(), 0, 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::Points { team, points: left } => points.push((team, left)),
+                Effect::RespawnPicked { .. } => picked += 1,
+                Effect::Respawned { to: Some(_), .. } => landed += 1,
+                _ => {}
+            }
+        }
+    }
+    assert!(landed >= 1, "{picked} picks, {landed} landed");
+    let Phase::Over { winner: Some(winner) } = game.phase() else { panic!("{:?}", game.phase()) };
+    let loser = if winner == Team::A { Team::B } else { Team::A };
+    assert_eq!(game.points(loser), Some(0), "{points:?}");
+    assert!(game.points(winner).unwrap() > 0);
 }
