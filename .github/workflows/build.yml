@@ -19,8 +19,9 @@ env:
 
 jobs:
   ci:
-    # Literally the local gate: `cargo make ci` (fmt-check, clippy -D warnings, nextest, the client's
-    # tests, determinism).
+    # With `balance` below, literally the local gate, `cargo make ci`: this job runs its `checks`
+    # (fmt-check, clippy -D warnings, nextest, the client's tests, determinism), `balance` its
+    # balance gate.
     name: CI gate
     runs-on: ubuntu-latest
     steps:
@@ -47,7 +48,44 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: cargo make ci
+      - run: cargo make checks
+
+  balance:
+    # The balance gate (`cargo make balance-gate`, Makefile.toml says what it measures and why), in
+    # twelve parts side by side: the whole run is about an hour on one 4-vCPU runner, a part at
+    # most about 6 minutes of play (measured on two cores with their hyperthreads, as the runner
+    # has). Each part plays every twelfth pair of mobiles and fails on its own matchups.
+    name: Balance gate (${{ matrix.part }}/12)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
+          rustflags: ""
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-bin: "false"
+      - run: cargo binstall cargo-make --no-confirm --force
+      # The maps the games play on come from `cargo make art`, about 2 minutes here. Its output is
+      # a pure function of the art sources and the code that writes it (the sim only through the
+      # mask format in terrain.rs; spawns are checked against the rest, not shaped by it), so it is
+      # cached on those.
+      - id: art
+        uses: actions/cache@v4
+        with:
+          path: assets/gen
+          key: art-${{ hashFiles('assets/**', 'xtask/**', 'crates/assets/**', 'crates/sim/src/terrain.rs', 'Cargo.lock', 'rust-toolchain.toml') }}
+      - if: steps.art.outputs.cache-hit != 'true'
+        run: cargo make art
+      # The art step above stands in for the gate's own `art` dependency.
+      - run: cargo make --skip-tasks '^art$' balance-gate --shard ${{ matrix.part }}/12
 
   codecov:
     name: Code coverage

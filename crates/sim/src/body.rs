@@ -109,6 +109,26 @@ impl HitFrame {
         let (x, y) = (local.x * self.sign, local.y);
         x >= self.rect.x && x <= self.rect.x + self.rect.w && y >= self.rect.y && y <= self.rect.y + self.rect.h
     }
+
+    /// Whether any point of the box from `low` to `high` may be inside: `false` is certain, `true`
+    /// only possible. The box must come within the reach around the foot, and its corners, turned
+    /// into the hitbox's frame as `contains` turns a point, must span some of the hitbox.
+    #[must_use]
+    pub fn may_touch(&self, low: Vec2, high: Vec2) -> bool {
+        let nearest = Vec2::new(self.foot.x.clamp(low.x, high.x), self.foot.y.clamp(low.y, high.y));
+        let d = nearest - self.foot;
+        if d.x * d.x + d.y * d.y > self.reach_squared {
+            return false;
+        }
+        let local = |world: Vec2| {
+            let d = world - self.foot;
+            Vec2::new((d.x * self.cos + d.y * self.sin) * self.sign, d.y * self.cos - d.x * self.sin)
+        };
+        let corners = [low, Vec2::new(high.x, low.y), Vec2::new(low.x, high.y), high].map(local);
+        let (x0, x1) = (corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min), corners.iter().map(|c| c.x).fold(f64::NEG_INFINITY, f64::max));
+        let (y0, y1) = (corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min), corners.iter().map(|c| c.y).fold(f64::NEG_INFINITY, f64::max));
+        x1 >= self.rect.x && x0 <= self.rect.x + self.rect.w && y1 >= self.rect.y && y0 <= self.rect.y + self.rect.h
+    }
 }
 
 #[cfg(test)]
@@ -169,6 +189,26 @@ mod unit {
         // above the world's horizon, to the right.
         let direction = pose(Facing::Left, 10.0).aim_direction(150);
         assert!(close(direction, Vec2::new(libm::cos(to_radians(40.0)), -libm::sin(to_radians(40.0)))));
+    }
+
+    #[test]
+    fn a_box_that_may_not_touch_has_no_point_inside() {
+        let frame = HitFrame::new(&pose(Facing::Left, 15.0), coilback::MOBILE.hitbox.value);
+        for (low, high) in [
+            ((40.0, 120.0), (60.0, 150.0)),
+            ((101.0, 210.0), (130.0, 260.0)),
+            ((150.0, 120.0), (190.0, 230.0)),
+            ((0.0, 0.0), (20.0, 300.0)),
+        ] {
+            let (low, high) = (Vec2::new(low.0, low.1), Vec2::new(high.0, high.1));
+            let inside = (0..=40).flat_map(|i| (0..=40).map(move |j| (i, j))).any(|(i, j)| {
+                let (fx, fy) = (f64::from(i) / 40.0, f64::from(j) / 40.0);
+                frame.contains(Vec2::new(low.x + (high.x - low.x) * fx, low.y + (high.y - low.y) * fy))
+            });
+            assert!(!inside || frame.may_touch(low, high), "{low:?}..{high:?}");
+        }
+        assert!(!frame.may_touch(Vec2::new(400.0, 400.0), Vec2::new(420.0, 420.0)), "far off");
+        assert!(frame.may_touch(Vec2::new(95.0, 170.0), Vec2::new(105.0, 190.0)), "over the body");
     }
 
     #[test]

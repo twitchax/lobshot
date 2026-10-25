@@ -84,14 +84,14 @@ back), and clients draw them from their legs.
 | What | Value | Why |
 |---|---|---|
 | Weapon type | Explosion | `[SW-mob]`, `[DB-mob]` over `[AK]` and `[KAL-snx]`'s Electric: StrategyWiki is the primary GunBound source, and DragonBound agrees. Electric is one line to change. |
-| Base delay, SS delay | 515, 800 | `[SW-mob]` and `[CR-bot]` disagree (515/800 vs 510/880), so DragonBound's `[DB-mob]`, which matches `[SW-mob]`. |
+| Base delay, SS delay | 515, 880 | `[SW-mob]` and `[CR-bot]` disagree (515/800 vs 510/880). The base is DragonBound's `[DB-mob]`, which matches `[SW-mob]`; the SS was too, at 800, until balance (PRD-0006 T-010) took `[CR-bot]`'s 880. |
 | Item surcharge | 0 | `[CR-kal]`'s "average" dual delay; `[KAL-dlh]`'s -20 is a single unconfirmed claim. |
 | Aim | 10-50, true 15-45; SS all true | Nak's GunBound range `[CR-mob]`, which `[CR-kal]` likens Kalsiddon's to. |
 | Gravity | 748.5 px/s² | Fitted so 60 degrees lands one screen at 2.675 bars, midway between `[CR-kal]`'s 2.65 and `[CR-kal30]`'s 2.7; both hold within 0.05 (`tests/formula.rs`). |
 | Wind sensitivity | 1.0 | No source sets it apart. |
 | Loop | 1 s, two turns | `[SW-mob]`, `[CR-kal]`; two turns `[KAL-gbomb]` (search snippet only). |
-| Missile speed | 360 px/s | Loops about 57 px across, so close, flat shots crash; a missile crosses a screen in about two seconds. |
-| Homing turn | 6 rad/s | A missile comes about in half a second after its loops and dives onto the guide at an angle (`[CR-pb218]`). |
+| Missile speed | 450 px/s | Loops about 72 px across, so close, flat shots crash; a missile crosses a screen in under two seconds. 360 until balance (PRD-0006 T-010). |
+| Homing turn | 3 rad/s | "Partial homing towards the tracer" (`[KAL-dlh]`): a missile comes about in a second after its loops and comes in on the guide at an angle (`[CR-pb218]`), scattering about a guide that lands beside its target. 6 until balance (PRD-0006 T-010), when missiles landed on the guide every time and Herdhound led at both levels. |
 | Missile lifetime | 6 s | A guard: a missile that has hit nothing goes off where it is. |
 | Missile damage | S1 75-110, S2 63-100, SS 38-81 each | `[SW-mob]`'s totals split evenly. |
 | Dud | 40-60, 28 px crater | "Puny damage" `[CR-kal]`, but it carves terrain `[KAL-snx]`. |

@@ -1,7 +1,9 @@
 # lobshot: cargo-make tasks. cargo-make is the one entry point for dev commands, and CI runs
 # the same tasks, so "green locally" and "green in CI" mean the same thing.
 #
-#   cargo make ci        fmt-check + clippy (native and wasm, -D warnings) + nextest + client tests + determinism: the gate
+#   cargo make ci        checks + the balance gate: the gate
+#   cargo make checks    fmt-check + clippy (native and wasm, -D warnings) + nextest + client tests + determinism
+#   cargo make balance-gate  every matchup within 35-65% (art first)
 #   cargo make test-client  the client's unit tests, on wasm32 in node
 #   cargo make uat       ci + the #[ignore]d slow suites
 #   cargo make codecov   coverage.lcov via llvm-cov
@@ -148,9 +150,14 @@ args = ["llvm-cov", "nextest", "--workspace", "--exclude", "xtask", "--exclude",
 
 # ── Gates ────────────────────────────────────────────────────────────────────
 
-[tasks.ci]
-# The gate, run verbatim by CI.
+[tasks.checks]
+# Everything in the gate but the balance run: CI's `ci` job.
 dependencies = ["fmt-check", "clippy", "clippy-wasm", "test", "test-client", "determinism"]
+
+[tasks.ci]
+# The gate. CI runs it as jobs side by side (build.yml): `ci` runs `checks`, and `balance` runs the
+# balance gate in parts, so between them they run exactly this.
+dependencies = ["checks", "balance-gate"]
 
 [tasks.uat]
 # The acceptance gate PRD UATs point at: ci plus everything too slow for every push. The ignored
@@ -217,9 +224,30 @@ args = ["run", "--release", "--package", "lobshot-lab", "--", "balance", "${@}"]
 
 [tasks.balance-gate]
 # The balance gate (`DESIGN.md`, "Bots and the lab"): fails when a matchup's win rate leaves
-# 35-65%. Not in `ci` until the roster passes about five mobiles (M5); with fewer it flaps.
+# 35-65%. Part of `ci`; CI plays it in parts (`--shard I/N` passes through), and renders the art
+# only when its cached copy is stale.
+#
+# What it measures: every pair of mobiles on every map variant, at Normal and at Hard, the two
+# pooled. Each level alone measures one end of how people play: Hard is exact, so it rewards raw
+# damage per delay and the shots that need precision (Hookclaw's wind-bent SS); Normal misreads the
+# wind, so it rewards forgiving shots (Herdhound's homing missiles) and punishes the wind-sensitive.
+# The band is about players, who sit between, so a matchup must be fair over both: Hookclaw at 30%
+# against the field at Normal and 71% at Hard is a mobile for practiced hands, as Boomer was, not
+# an imbalance. The report gives each level's rate beside the pooled one.
+#
+# How many games: 100 a level, so 200 a matchup. Runs are seeded, so a commit's result never
+# flaps, but a rate is still a sample: at 200 games its 95% interval is about ±7 points. The gate
+# holds the point estimate to the band, not the interval: a matchup at a true 50% then never fails
+# (the band is 4 standard errors away), one at 40% fails about 1 run in 13, and one at 30% fails
+# 19 in 20. Holding the interval instead would pass an observed 29%, so a pass would mean little.
+# Fewer games make an even matchup fail for noise; more would need more than CI's twelve parts.
+#
+# The matchups the tuning couldn't bring into the band within the mobiles' sources are listed, with
+# their measured rates and why, in `lobshot_lab::gate::KNOWN`: each must stay no worse than
+# measured (within its 95% margin), every run names them, and one back inside is flagged to drop.
+dependencies = ["art"]
 command = "cargo"
-args = ["run", "--release", "--package", "lobshot-lab", "--", "balance", "--gate", "${@}"]
+args = ["run", "--release", "--package", "lobshot-lab", "--", "balance", "--gate", "--level", "normal,hard", "--games", "100", "${@}"]
 
 [tasks.run]
 # Serves whatever `dist/` holds; `cargo make dev` rebuilds it first.

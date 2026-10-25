@@ -14,9 +14,10 @@ pub const MOBILE: MobileTuning = MobileTuning {
     armor: cited(ArmorClass::Bionic, &["SW-mob", "DB-mob", "SNX-frog"]),
     // WP06 counts J.Frog among the Hit (Physical) types (CONTRADICTION).
     weapon: cited(WeaponType::Laser, &["SW-mob", "DB-mob", "SNX-frog"]),
-    // CR-bot gives 430 (and CR-frog "super low... like 670" for a shot); StrategyWiki and
-    // DragonBound agree on 500 (CONTRADICTION; the fidelity rule takes DragonBound's side).
-    base_delay: cited(500, &["SW-mob", "DB-mob"]),
+    // StrategyWiki and DragonBound agree on 500 (CONTRADICTION). Balance (PRD-0006 T-010) takes
+    // Creedo's: CR-bot's 430, and CR-frog's "super low... like 670" for a shot (430 + 250).
+    // Sudsotter won 27% at Normal and 33% at Hard on 500.
+    base_delay: cited(430, &["CR-bot", "CR-frog"]),
     delay_per_second: super::DELAY_PER_SECOND,
     item_surcharge: picked(0, "Only Armor pays extra for items (SW-mds)."),
     // DBR gives J.Frog Grub's coefficient (ax 61, clone, unverified), which would make it as heavy
@@ -118,7 +119,11 @@ pub const SUDS_REACH: Tuned<f64> = picked(20.0, "WP06's 1/2 to 1 cm is 13 to 27 
 /// Touch damage per second: a pass under a mobile on flat ground deals about 300 (GBM-frog, a later
 /// version, has 300-350), and a speck of land it circles the whole time about 500 (CR-frog's
 /// "typical SS damage: ~400-500").
-pub const SUDS_TOUCH_PER_SECOND: Tuned<f64> = picked(60.0, "About 300 for a pass under a mobile and 500 for the whole walk against one.");
+pub const SUDS_TOUCH_PER_SECOND: Tuned<f64> = picked(
+    70.0,
+    "About 350 for a pass under a mobile, the top of GBM-frog's 300-350, and 500 for the whole walk against one. \
+     Balance (PRD-0006 T-010): from 60, the middle.",
+);
 /// From landing to going off: it "just keeps walking for a long time" (CR-frog), long enough to
 /// circle "a floating speck of land" and pass through its target "several times".
 pub const SUDS_FUSE_SECONDS: Tuned<f64> = picked(8.0, "Long enough to circle a small island a couple of times at the walking speed.");

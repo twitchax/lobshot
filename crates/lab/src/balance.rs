@@ -183,6 +183,58 @@ pub fn specs(mobiles: &[MobileKind], arenas: &[(String, String)], games: u32, le
     specs
 }
 
+/// One of `count` parts of a run, for running a big one on several machines at once: part `index`
+/// (from 0) plays every `count`-th pair of mobiles, mirrors included, in `specs` order. A game plays
+/// the same in a part as in the whole run, so the parts' games together are the whole run's.
+/// Written `3/8` (from 1) on the command line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shard {
+    index: u32,
+    count: u32,
+}
+
+impl Shard {
+    /// The whole run.
+    pub const ALL: Self = Self { index: 0, count: 1 };
+
+    /// Whether this part plays the `pair`-th pair (in `specs` order, from 0).
+    #[must_use]
+    pub fn takes(self, pair: usize) -> bool {
+        u32::try_from(pair).is_ok_and(|pair| pair % self.count == self.index)
+    }
+
+    /// The games of `specs`, played between `mobiles`, that this part plays.
+    #[must_use]
+    pub fn of(self, specs: Vec<Spec>, mobiles: &[MobileKind]) -> Vec<Spec> {
+        let position = |mobile| mobiles.iter().position(|&m| m == mobile);
+        // Pairs run row by row, (i, j) for j from i on, so row i starts after the n, n - 1, ...
+        // pairs of the i rows above it.
+        let pair = |spec: &Spec| {
+            let (a, b) = (position(spec.mobiles[0])?, position(spec.mobiles[1])?);
+            let (i, j) = (a.min(b), a.max(b));
+            Some(i * mobiles.len() - i * i.saturating_sub(1) / 2 + (j - i))
+        };
+        specs.into_iter().filter(|spec| pair(spec).is_some_and(|pair| self.takes(pair))).collect()
+    }
+}
+
+impl fmt::Display for Shard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.index + 1, self.count)
+    }
+}
+
+impl FromStr for Shard {
+    type Err = anyhow::Error;
+
+    fn from_str(text: &str) -> Res<Self> {
+        let (index, count) = text.split_once('/').with_context(|| format!("{text:?} isn't a part: I/N, e.g. 3/8"))?;
+        let (index, count): (u32, u32) = (index.parse().context("the part")?, count.parse().context("the parts")?);
+        anyhow::ensure!((1..=count).contains(&index), "{text:?} isn't a part: I/N with I from 1 to N");
+        Ok(Self { index: index - 1, count })
+    }
+}
+
 /// splitmix64 over a seed and some numbers: unrelated seeds for neighboring games.
 fn mix(seed: u64, parts: &[u64]) -> u64 {
     parts.iter().fold(seed, |state, &part| {
@@ -377,6 +429,38 @@ mod unit {
         let mut distinct = mirror.clone();
         distinct.dedup();
         assert_eq!(distinct.len(), 6, "a mirror never replays a seed");
+    }
+
+    #[test]
+    fn shards_split_a_run_by_pair_and_together_are_the_whole_of_it() {
+        let arenas = vec![("a".to_owned(), "A".to_owned())];
+        let mobiles = [MobileKind::Coilback, MobileKind::Hookclaw, MobileKind::Sparkhorn, MobileKind::Frostfin];
+        let all = specs(&mobiles, &arenas, 4, Level::Normal, 1);
+        let parts: Vec<Vec<Spec>> = (1..=3).map(|i| format!("{i}/3").parse::<Shard>().unwrap().of(all.clone(), &mobiles)).collect();
+        // Ten pairs (four mirrors, six others), four games each: 4, 3 and 3 pairs.
+        assert_eq!(parts.iter().map(Vec::len).collect::<Vec<_>>(), [16, 12, 12]);
+        let mut joined: Vec<Spec> = parts.concat();
+        let mut whole = all.clone();
+        let key = |s: &Spec| (s.mobiles.map(mobile_slug), s.seed);
+        joined.sort_by_key(key);
+        whole.sort_by_key(key);
+        assert_eq!(joined, whole, "the parts are the whole run's games");
+        for part in &parts {
+            let mut pairs: Vec<[MobileKind; 2]> = part
+                .iter()
+                .map(|s| if s.mobiles[0] as u8 <= s.mobiles[1] as u8 { s.mobiles } else { [s.mobiles[1], s.mobiles[0]] })
+                .collect();
+            pairs.dedup();
+            assert!(
+                pairs.iter().all(|pair| part.iter().filter(|s| s.mobiles == *pair || s.mobiles == [pair[1], pair[0]]).count() == 4),
+                "a pair stays whole"
+            );
+        }
+        assert_eq!(Shard::ALL.of(all.clone(), &mobiles), all);
+        assert_eq!("2/8".parse::<Shard>().unwrap().to_string(), "2/8");
+        for bad in ["0/8", "9/8", "3", "a/b", "1/0"] {
+            assert!(bad.parse::<Shard>().is_err(), "{bad:?}");
+        }
     }
 
     #[test]

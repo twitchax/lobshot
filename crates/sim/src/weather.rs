@@ -153,6 +153,21 @@ impl Column {
         (f64::from(self.x) - half..f64::from(self.x) + half).contains(&x)
     }
 
+    /// Whether every world x from `low` to `high` lies inside the column (`Some(true)`), none does
+    /// (`Some(false)`), or some do (`None`): `contains` over a span at once.
+    #[must_use]
+    pub fn spans(&self, low: f64, high: f64) -> Option<bool> {
+        let half = column_width(self.kind) / 2.0;
+        let (left, right) = (f64::from(self.x) - half, f64::from(self.x) + half);
+        if high < left || low >= right {
+            Some(false)
+        } else if low >= left && high < right {
+            Some(true)
+        } else {
+            None
+        }
+    }
+
     /// What it does to a shot: a Random column acts as what it hides.
     #[must_use]
     pub fn acts_as(&self) -> WeatherKind {
@@ -406,5 +421,21 @@ mod unit {
     fn columns_have_width() {
         let column = Column::new(WeatherKind::Tornado, 500);
         assert!(column.contains(500.0) && column.contains(466.0) && !column.contains(536.0));
+    }
+
+    #[test]
+    fn a_span_is_inside_outside_or_across_a_column_as_contains_says_of_each_point() {
+        let column = Column::new(WeatherKind::Tornado, 500);
+        for (low, high) in [(470.0, 520.0), (465.0, 534.9), (400.0, 464.9), (535.0, 600.0), (460.0, 470.0), (530.0, 540.0), (300.0, 700.0)] {
+            let points: Vec<bool> = (0..=100).map(|i| column.contains(low + (high - low) * f64::from(i) / 100.0)).collect();
+            let expected = if points.iter().all(|&p| p) {
+                Some(true)
+            } else if points.iter().all(|&p| !p) {
+                Some(false)
+            } else {
+                None
+            };
+            assert_eq!(column.spans(low, high), expected, "{low}..{high}");
+        }
     }
 }

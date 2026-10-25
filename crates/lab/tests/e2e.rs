@@ -69,6 +69,19 @@ fn e2e_the_balance_gate_fails_a_matchup_outside_its_band() {
 }
 
 #[test]
+fn e2e_balance_pools_levels_and_plays_one_part_of_a_run() {
+    let args: Vec<&str> = "balance --games 2 --maps flat --mobiles coilback,hookclaw --level normal,hard --shard 2/3 --json".split(' ').collect();
+    let report: serde_json::Value = serde_json::from_str(&stdout(&run(&args))).unwrap();
+    // Three pairs (two mirrors and Coilback against Hookclaw); part 2 is the middle one.
+    assert_eq!(report["games"], 4, "two games at each level");
+    assert_eq!(report["levels"], serde_json::json!(["Normal", "Hard"]));
+    let matchups = report["matchups"].as_array().unwrap();
+    assert_eq!(matchups.len(), 1);
+    assert_eq!(matchups[0]["by_level"].as_array().unwrap().len(), 2);
+    assert!(!run(&["balance", "--shard", "4/3"]).status.success(), "no part 4 of 3");
+}
+
+#[test]
 fn e2e_any_logged_game_replays_by_its_id() {
     let dir = TempDir::new().unwrap();
     let mut args = QUICK.to_vec();

@@ -4,7 +4,8 @@
 
 use super::{Gun, barrage};
 use crate::{
-    game::{Effect, Game, Shot},
+    ballistics::Flight,
+    game::{Effect, Game, Impact, Shot},
     tuning::hookclaw::{HOOK_DAMAGE, S1_BLAST, S1_DAMAGE, S2_BOOMERANG_BLAST, S2_BOOMERANG_DAMAGE, S2_SPREAD, SS_BLAST, SS_DAMAGE, SS_EARLY_DAMAGE, SS_TRANSFORM_SECONDS},
     units::ticks,
 };
@@ -43,6 +44,12 @@ pub(super) fn fire(game: &mut Game, gun: &mut Gun, shot: Shot, effects: &mut Vec
             gun.land(game, &blast, blast.radius, &track.impact, track.marks, effects);
         }
     }
+}
+
+/// Where a shot on `flight` does its work, for SearchBot's aim pass: the SS hits hard only once it
+/// has turned golden, so one that lands sooner is no SS at all (`super::ripe`).
+pub(super) fn aim_point(game: &Game, shot: Shot, flight: Flight) -> Option<Impact> {
+    (shot == Shot::Ss).then(|| super::ripe(game.track(flight, 0, 0).impact, SS_TRANSFORM_SECONDS.value)).flatten()
 }
 
 #[cfg(test)]

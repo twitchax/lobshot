@@ -20,6 +20,8 @@ in `mechanics.md` (`SW-mob`, `DB-mob`, `WP06`, `CR-bot`, `DBR`), `weather.md` (`
 
 - Creedo finds the delay "super low, the lowest in the game... like 670 or something" for a shot,
   but saw a display bug and "can't say for sure" `[CR-frog]`. 430 + 250 = 680 is `[CR-bot]`'s.
+  lobshot first took StrategyWiki's and DragonBound's 500; balance (PRD-0006 T-010) takes Creedo's
+  430, the source that balances, when the lab had Sudsotter winning 30% of its games on 500.
 - StrategyWiki and DragonBound agree on every number, as they do across the roster (DB's guide copies
   StrategyWiki's text, `mechanics.md`).
 

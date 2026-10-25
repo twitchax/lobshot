@@ -133,6 +133,12 @@ pub(crate) fn sweet_spot(game: &Game, at: Vec2) -> Option<u8> {
 /// CONTRADICTION).
 #[must_use]
 pub fn quarry(game: &Game, mine: &Mine) -> Option<u8> {
+    stalked(game, mine).map(|(seat, _)| seat)
+}
+
+/// `quarry`, with how far into its sense the quarry is: 0 touching the mine, 1 at the edge.
+#[must_use]
+pub fn stalked(game: &Game, mine: &Mine) -> Option<(u8, f64)> {
     let at = mine.middle();
     (0_u8..)
         .zip(game.players())
@@ -140,7 +146,7 @@ pub fn quarry(game: &Game, mine: &Mine) -> Option<u8> {
         .map(|(seat, player)| (player.pose().gap(player.tuning().hitbox.value, at) / sense_range(player.tuning().armor.value), seat))
         .filter(|&(near, _)| near <= 1.0)
         .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
-        .map(|(_, seat)| seat)
+        .map(|(near, seat)| (seat, near))
 }
 
 /// Whether `mine` has a mobile in sense: it would crawl as its layer's turn comes up ("its antenna

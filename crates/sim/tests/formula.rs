@@ -725,6 +725,49 @@ fn bisect(mut low: f64, mut high: f64, too_low: &dyn Fn(f64) -> bool) -> f64 {
     f64::midpoint(low, high)
 }
 
+/// The power each mobile's gravity is fitted to (60 degrees, one screen, zero wind) other than
+/// Coilback's, which is set by hand: the chart's, the inferred mobiles', and the twins'.
+fn chart_powers() -> Vec<(MobileKind, f64)> {
+    let inferred = INFERRED.map(|(mobile, weight)| (mobile, inferred_cbchui(weight)));
+    let twinned = WEIGHS_AS.map(|(mobile, twin)| (mobile, twin_power(twin)));
+    CBCHUI.into_iter().skip(1).chain(inferred).chain(twinned).collect()
+}
+
+/// Herdhound's fit: midway between CR-kal's and CR-kal30's one-screen powers.
+fn kal_power() -> f64 {
+    f64::midpoint(KAL_ONE_SCREEN[0], KAL_ONE_SCREEN[1])
+}
+
+/// Flarecrow's fit: midway between CR-fixed's and GN-aduka's.
+fn aduka_power() -> f64 {
+    f64::midpoint(ADUKA_ONE_SCREEN[0], ADUKA_ONE_SCREEN[1])
+}
+
+/// Augerdillo's fit: midway between the chart's 2.70 and the community Nak formula's.
+fn nak_power() -> f64 {
+    let [chart, formula] = nak_one_screen();
+    f64::midpoint(chart, formula)
+}
+
+/// Every gravity `tool_fit` fits, with the power it fits it to.
+fn fitted_gravities() -> Vec<(MobileKind, f64)> {
+    let mut all = chart_powers();
+    all.extend([(MobileKind::Augerdillo, nak_power()), (MobileKind::Herdhound, kal_power()), (MobileKind::Flarecrow, aduka_power())]);
+    all
+}
+
+/// Each fitted gravity is what `tool_fit` writes for the mobile as it is drawn now: a geometry
+/// change after a fit (where the barrel sits, where the target stands) leaves the chart test within
+/// its tolerance, so only a refit catches it. Tinbadger's 654.6 was one, committed stale: refitted
+/// it is 659.0.
+#[test]
+fn fitted_gravities_are_what_tool_fit_writes() {
+    for (mobile, bars) in fitted_gravities() {
+        let (fitted, tuned) = (format!("{:.1}", fit_gravity(mobile, bars)), format!("{:.1}", mobile.tuning().gravity.value));
+        assert_eq!(fitted, tuned, "{mobile:?}: refit with tool_fit");
+    }
+}
+
 /// The gravity that lands 60 degrees one screen away at `bars` for `mobile`, in zero wind. Heavier
 /// gravity needs more power.
 fn fit_gravity(mobile: MobileKind, bars: f64) -> f64 {
@@ -776,8 +819,7 @@ fn spoutpot_report(gravity: f64, hertz: f64, kept: f64) {
 /// Fits Augerdillo's gravity (CR-fixed and CR-nak) and wind sensitivity (CR-nak's vertical wind
 /// term) into its tuning file, and prints the Nak formula's entries against the fit.
 fn fit_augerdillo() {
-    let [chart, formula] = nak_one_screen();
-    let gravity = fit_gravity(MobileKind::Augerdillo, f64::midpoint(chart, formula));
+    let gravity = fit_gravity(MobileKind::Augerdillo, nak_power());
     rewrite("augerdillo.rs", "GRAVITY", &format!("{gravity:.1}"));
     println!("Augerdillo gravity: {gravity:.1}");
     // More sensitivity saves more power: find the one that saves what CR-nak does at 14 up-wind.
@@ -806,9 +848,7 @@ fn fit_augerdillo() {
 #[test]
 #[ignore = "a tool, not a test: rewrites the fitted constants"]
 fn tool_fit() {
-    let inferred = INFERRED.map(|(mobile, weight)| (mobile, inferred_cbchui(weight)));
-    let twinned = WEIGHS_AS.map(|(mobile, twin)| (mobile, twin_power(twin)));
-    for (mobile, bars) in CBCHUI.into_iter().skip(1).chain(inferred).chain(twinned) {
+    for (mobile, bars) in chart_powers() {
         let gravity = fit_gravity(mobile, bars);
         let file = format!("{}.rs", mobile.tuning().name.to_lowercase());
         rewrite(&file, "GRAVITY", &format!("{gravity:.1}"));
@@ -833,13 +873,11 @@ fn tool_fit() {
 
     fit_augerdillo();
 
-    let kal = f64::midpoint(KAL_ONE_SCREEN[0], KAL_ONE_SCREEN[1]);
-    let gravity = fit_gravity(MobileKind::Herdhound, kal);
+    let gravity = fit_gravity(MobileKind::Herdhound, kal_power());
     rewrite("herdhound.rs", "GRAVITY", &format!("{gravity:.1}"));
     println!("Herdhound gravity: {gravity:.1}");
 
-    let aduka = f64::midpoint(ADUKA_ONE_SCREEN[0], ADUKA_ONE_SCREEN[1]);
-    let gravity = fit_gravity(MobileKind::Flarecrow, aduka);
+    let gravity = fit_gravity(MobileKind::Flarecrow, aduka_power());
     rewrite("flarecrow.rs", "GRAVITY", &format!("{gravity:.1}"));
     println!("Flarecrow gravity: {gravity:.1}");
 

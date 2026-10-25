@@ -90,12 +90,14 @@ pub const S1_CRATER: Tuned<f64> = picked(42.0, "Removes a lot of land (SW-mob): 
 pub const S2_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 150, max: 170 }, &["SW-mob", "DB-mob"]);
 pub const S2_BLAST: Tuned<f64> = picked(20.0, "The ice crumbles where it hits and doesn't do much bunge (GF-lee).");
 
-/// SS: a snowflake from the tusk that "turns into an enormous snowflake on contact" (WP06): S2's
-/// damage (SW-mob, DB-mob) over a much wider blast, so it reaches more and deals "a little more"
-/// (SW-mob, WP06). GF-ice and GF-lee average it at 250 (CONTRADICTION). Every mobile it hurts turns
-/// brittle, as S2 does: WP06 has it frost "anything in the snowflake's radius"; GF-ice (2007), only
-/// a mobile it hits directly (CONTRADICTION).
-pub const SS_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 150, max: 170 }, &["SW-mob", "DB-mob"]);
+/// SS: a snowflake from the tusk that "turns into an enormous snowflake on contact" (WP06) and deals
+/// "a little more" (SW-mob, WP06) over a much wider blast. SW-mob and DB-mob give it S2's 150-170
+/// base damage; GF-ice and GF-lee average it at 250 (CONTRADICTION), which balance (PRD-0006 T-010)
+/// takes: at S2's damage for twice its delay, a 1v1 SS was all cost, and Frostfin, which fired it
+/// 1% of its turns, won 41% at Hard. Every mobile it hurts turns brittle, as S2 does: WP06 has it
+/// frost "anything in the snowflake's radius"; GF-ice (2007), only a mobile it hits directly
+/// (CONTRADICTION).
+pub const SS_DAMAGE: Tuned<DamageRange> = cited(DamageRange { min: 230, max: 270 }, &["GF-ice", "GF-lee"]);
 pub const SS_BLAST: Tuned<f64> = picked(45.0, "An enormous snowflake (WP06): the widest blast so far.");
 pub const SS_CRATER: Tuned<f64> = picked(30.0, "Snow: it spreads wide but digs no more than an ordinary shell.");
 

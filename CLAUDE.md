@@ -26,7 +26,8 @@ A Cargo workspace; shared metadata, dependency versions and lints live once in t
 ## Commands
 
 ```bash
-cargo make ci           # fmt-check + clippy (native and wasm32, -D warnings) + nextest + client tests + determinism: the gate, run verbatim in CI
+cargo make ci           # checks + the balance gate: the gate CI runs, as side-by-side jobs
+cargo make checks       # fmt-check + clippy (native and wasm32, -D warnings) + nextest + client tests + determinism
 cargo make test         # nextest (native crates)
 cargo make test-client  # the client's unit tests: wasm32, in node, under wasm-bindgen's runner
 cargo make determinism  # sim's tests on wasm32 under wasmtime: replays must match native bit for bit
@@ -37,7 +38,7 @@ cargo make browser      # the browser smoke tests: release bundle, headless Chro
 cargo make uat          # ci + the #[ignore]d slow suites: what PRD UATs point at
 cargo make codecov      # coverage.lcov
 cargo make balance      # a balance run in release: every pair of mobiles, 1v1, every map (flags pass through)
-cargo make balance-gate # the same, failing outside 35-65% per matchup (not in ci until M5)
+cargo make balance-gate # Normal and Hard pooled, 200 games a matchup, failing outside 35-65%: part of ci
 ```
 
 ## Conventions

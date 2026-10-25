@@ -48,13 +48,22 @@ impl Rate {
     }
 }
 
+/// A rate over one level's games, in a run that played more than one.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct AtLevel {
+    pub level: Level,
+    pub rate: Rate,
+}
+
 /// Two different mobiles' games against each other.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Matchup {
     pub mobiles: [MobileKind; 2],
     pub draws: u32,
-    /// How often `mobiles[0]` won.
+    /// How often `mobiles[0]` won, over every level's games.
     pub first: Rate,
+    /// The same, level by level.
+    pub by_level: Vec<AtLevel>,
     pub mean_turns: f64,
 }
 
@@ -64,6 +73,8 @@ pub struct MobileReport {
     pub mobile: MobileKind,
     /// Against the other mobiles (mirrors left out).
     pub wins: Rate,
+    /// The same, level by level.
+    pub wins_by_level: Vec<AtLevel>,
     /// HP taken off enemies per 1000 delay its turns cost.
     pub damage_per_1000_delay: f64,
     /// Its own turns to win a game it won.
@@ -94,10 +105,12 @@ pub struct ArenaReport {
     pub draws: u32,
 }
 
-/// A whole balance run.
+/// A whole balance run. A run may play its games at several levels; every number pools them, and
+/// the win rates are given level by level too.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Report {
-    pub level: Level,
+    /// The levels its games were played at, easiest first.
+    pub levels: Vec<Level>,
     pub games: usize,
     pub arenas: Vec<ArenaReport>,
     pub mobiles: Vec<MobileReport>,
@@ -110,15 +123,19 @@ pub struct Report {
 
 impl Report {
     #[must_use]
-    pub fn new(outcomes: &[Outcome], mobiles: &[MobileKind], level: Level) -> Self {
+    pub fn new(outcomes: &[Outcome], mobiles: &[MobileKind]) -> Self {
         let decisive: Vec<&Outcome> = outcomes.iter().filter(|o| o.winner.is_some()).collect();
         let first_wins = decisive.iter().filter(|o| o.winner == Some(o.first)).count();
+        let levels: Vec<Level> = [Level::Easy, Level::Normal, Level::Hard]
+            .into_iter()
+            .filter(|&level| outcomes.iter().any(|o| o.spec.level == level))
+            .collect();
         Self {
-            level,
             games: outcomes.len(),
             arenas: arena_reports(outcomes),
-            mobiles: mobiles.iter().map(|&mobile| mobile_report(outcomes, mobile)).collect(),
-            matchups: matchups(outcomes, mobiles),
+            mobiles: mobiles.iter().map(|&mobile| mobile_report(outcomes, mobile, &levels)).collect(),
+            matchups: matchups(outcomes, mobiles, &levels),
+            levels,
             first_mover: Rate::new(count(first_wins), u32::try_from(decisive.len()).unwrap_or(u32::MAX)),
             draws: u32::try_from(outcomes.len() - decisive.len()).unwrap_or(u32::MAX),
             mean_turns: mean(outcomes.iter().map(|o| float(o.turns))).unwrap_or(0.0),
@@ -144,7 +161,7 @@ impl Report {
         line(&format!(
             "Balance: {}, 1v1, {} bots, on {} ({}).",
             plural(self.games, "game"),
-            capitalized(level_name(self.level)),
+            self.levels.iter().map(|&level| capitalized(level_name(level))).collect::<Vec<_>>().join(" and "),
             plural(self.arenas.len(), "arena"),
             self.arenas.iter().map(|a| a.arena.as_str()).collect::<Vec<_>>().join(", ")
         ));
@@ -166,6 +183,17 @@ impl Report {
             line(&cells);
         }
         line("");
+        if self.levels.len() > 1 {
+            line(&format!(
+                "Every number pools the levels' games; wins by level: {}.",
+                self.mobiles
+                    .iter()
+                    .map(|m| format!("{} {}", m.mobile.tuning().name, by_level(&m.wins_by_level)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+            line("");
+        }
         line("By mobile (win rate leaves mirrors out; damage per 1000 delay counts every turn it cost):");
         line(&format!(
             "{:<12} {:>6} {:>10} {:>14} {:>9}   {}",
@@ -213,7 +241,13 @@ impl Report {
             line(&format!("Outside {:.0}-{:.0}%:", band.low * 100.0, band.high * 100.0));
             for m in outside {
                 let [a, b] = m.mobiles.map(|mobile| mobile.tuning().name);
-                line(&format!("  {a} beats {b} {:.0}% ±{:.0} of {} games", m.first.rate * 100.0, m.first.margin * 100.0, m.first.games));
+                let levels = if m.by_level.len() > 1 { format!(" ({})", by_level(&m.by_level)) } else { String::new() };
+                line(&format!(
+                    "  {a} beats {b} {:.0}% ±{:.0} of {} games{levels}",
+                    m.first.rate * 100.0,
+                    m.first.margin * 100.0,
+                    m.first.games
+                ));
             }
         }
         text
@@ -255,7 +289,32 @@ fn arena_name(outcome: &Outcome) -> String {
     format!("{} {}", outcome.spec.map, outcome.spec.variant)
 }
 
-fn matchups(outcomes: &[Outcome], mobiles: &[MobileKind]) -> Vec<Matchup> {
+/// Rates level by level, as `Normal 61%, Hard 48%`.
+fn by_level(rates: &[AtLevel]) -> String {
+    rates
+        .iter()
+        .map(|at| format!("{} {:.0}%", capitalized(level_name(at.level)), at.rate.rate * 100.0))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// How often `mobile` won `games`, pooled and level by level.
+fn wins(games: &[&Outcome], mobile: MobileKind, levels: &[Level]) -> (Rate, Vec<AtLevel>) {
+    let rate = |games: &mut dyn Iterator<Item = &&Outcome>| {
+        let (wins, n) = games.fold((0.0, 0_u32), |(wins, n), o| (wins + score(o, mobile), n + 1));
+        Rate::new(wins, n)
+    };
+    let by_level = levels
+        .iter()
+        .map(|&level| AtLevel {
+            level,
+            rate: rate(&mut games.iter().filter(|o| o.spec.level == level)),
+        })
+        .collect();
+    (rate(&mut games.iter()), by_level)
+}
+
+fn matchups(outcomes: &[Outcome], mobiles: &[MobileKind], levels: &[Level]) -> Vec<Matchup> {
     let mut all = Vec::new();
     for (i, &a) in mobiles.iter().enumerate() {
         for &b in &mobiles[i + 1..] {
@@ -263,11 +322,12 @@ fn matchups(outcomes: &[Outcome], mobiles: &[MobileKind]) -> Vec<Matchup> {
             if games.is_empty() {
                 continue;
             }
-            let wins: f64 = games.iter().map(|o| score(o, a)).sum();
+            let (first, by_level) = wins(&games, a, levels);
             all.push(Matchup {
                 mobiles: [a, b],
                 draws: u32::try_from(games.iter().filter(|o| o.winner.is_none()).count()).unwrap_or(u32::MAX),
-                first: Rate::new(wins, u32::try_from(games.len()).unwrap_or(u32::MAX)),
+                first,
+                by_level,
                 mean_turns: mean(games.iter().map(|o| float(o.turns))).unwrap_or(0.0),
             });
         }
@@ -275,7 +335,7 @@ fn matchups(outcomes: &[Outcome], mobiles: &[MobileKind]) -> Vec<Matchup> {
     all
 }
 
-fn mobile_report(outcomes: &[Outcome], mobile: MobileKind) -> MobileReport {
+fn mobile_report(outcomes: &[Outcome], mobile: MobileKind, levels: &[Level]) -> MobileReport {
     let sides: Vec<(&Outcome, usize)> = outcomes.iter().flat_map(|o| (0..2).filter(move |&i| o.spec.mobiles[i] == mobile).map(move |i| (o, i))).collect();
     let versus: Vec<&Outcome> = outcomes.iter().filter(|o| o.spec.mobiles.contains(&mobile) && o.spec.mobiles[0] != o.spec.mobiles[1]).collect();
     let total = |f: fn(&Side) -> f64| -> f64 { sides.iter().map(|&(o, i)| f(&o.sides[i])).sum() };
@@ -291,9 +351,11 @@ fn mobile_report(outcomes: &[Outcome], mobile: MobileKind) -> MobileReport {
             damage_per_1000_delay: ratio(damage * 1000.0, delay).filter(|_| uses > 0.0),
         }
     });
+    let (wins, wins_by_level) = wins(&versus, mobile, levels);
     MobileReport {
         mobile,
-        wins: Rate::new(versus.iter().map(|o| score(o, mobile)).sum(), u32::try_from(versus.len()).unwrap_or(u32::MAX)),
+        wins,
+        wins_by_level,
         damage_per_1000_delay: ratio(damage * 1000.0, delay).unwrap_or(0.0),
         turns_to_kill: mean(sides.iter().filter(|&&(o, i)| o.winner == Some(seat(i))).map(|&(o, i)| f64::from(o.sides[i].turns))),
         hit_rate: ratio(hits, shots_fired).unwrap_or(0.0),
@@ -390,7 +452,7 @@ mod unit {
     #[test]
     fn the_matrix_counts_both_seatings_and_draws_half() {
         let outcomes = [game([A, B], Some(0), 0), game([B, A], Some(1), 0), game([A, B], None, 1), game([B, A], Some(0), 1)];
-        let report = Report::new(&outcomes, &[A, B], Level::Normal);
+        let report = Report::new(&outcomes, &[A, B]);
         // A won games 1 and 2, drew game 3 and lost game 4: 2.5 of 4.
         assert_eq!(report.against(A, B).unwrap().rate, 0.625);
         assert_eq!(report.against(B, A).unwrap().rate, 0.375);
@@ -404,7 +466,7 @@ mod unit {
     #[test]
     fn per_mobile_numbers_follow_their_seat() {
         let outcomes = [game([A, B], Some(0), 0), game([B, A], Some(0), 0)];
-        let report = Report::new(&outcomes, &[A, B], Level::Normal);
+        let report = Report::new(&outcomes, &[A, B]);
         let a = &report.mobiles[0];
         // A sat in seat 0 (1000 damage over 4000 delay) and seat 1 (500 over 5000).
         assert_eq!(a.damage_per_1000_delay, 1500.0 * 1000.0 / 9000.0);
@@ -418,7 +480,7 @@ mod unit {
     #[test]
     fn mirrors_feed_their_mobile_but_not_its_win_rate_or_the_gate() {
         let outcomes = [game([A, A], Some(0), 0), game([A, B], Some(1), 0)];
-        let report = Report::new(&outcomes, &[A, B], Level::Normal);
+        let report = Report::new(&outcomes, &[A, B]);
         assert_eq!(report.mobiles[0].wins.games, 1);
         assert_eq!(report.matchups.len(), 1);
         assert_eq!(report.mobiles[0].turns_to_kill, Some(5.0), "the mirror's win counts");
@@ -427,7 +489,7 @@ mod unit {
     #[test]
     fn the_gate_flags_lopsided_matchups_either_way() {
         let lopsided: Vec<Outcome> = (0..10).map(|i| game(if i % 2 == 0 { [A, B] } else { [B, A] }, Some(u8::from(i % 2 == 1)), 0)).collect();
-        let report = Report::new(&lopsided, &[A, B], Level::Normal);
+        let report = Report::new(&lopsided, &[A, B]);
         assert_eq!(report.against(A, B).unwrap().rate, 1.0);
         assert_eq!(report.outside(BAND).len(), 1);
         let text = report.to_text(BAND);
@@ -438,14 +500,14 @@ mod unit {
         assert_eq!(report.outside(lopsided_low).len(), 1, "Hookclaw's 0% is in it, Coilback's 100% isn't");
 
         let even = [game([A, B], Some(0), 0), game([B, A], Some(0), 0)];
-        let report = Report::new(&even, &[A, B], Level::Normal);
+        let report = Report::new(&even, &[A, B]);
         assert_eq!(report.outside(BAND), Vec::<&Matchup>::new());
         assert!(report.to_text(BAND).contains("Every matchup is within 35-65%."));
     }
 
     #[test]
     fn the_text_has_a_row_and_a_column_per_mobile() {
-        let report = Report::new(&[game([A, B], Some(0), 0)], &[A, B], Level::Normal);
+        let report = Report::new(&[game([A, B], Some(0), 0)], &[A, B]);
         let text = report.to_text(BAND);
         assert!(text.starts_with("Balance: 1 game, 1v1, Normal bots, on 1 arena (flat A)."), "{text}");
         let header = text.lines().find(|l| l.trim_start().starts_with("Coilback")).unwrap();
@@ -458,7 +520,7 @@ mod unit {
         let mut elsewhere = game([A, B], None, 0);
         elsewhere.spec.map = "tidewall".into();
         elsewhere.turns = 30;
-        let report = Report::new(&[game([A, B], Some(0), 0), game([B, A], Some(0), 0), elsewhere], &[A, B], Level::Normal);
+        let report = Report::new(&[game([A, B], Some(0), 0), game([B, A], Some(0), 0), elsewhere], &[A, B]);
         let names: Vec<&str> = report.arenas.iter().map(|a| a.arena.as_str()).collect();
         assert_eq!(names, ["flat A", "tidewall A"]);
         let (flat, tidewall) = (&report.arenas[0], &report.arenas[1]);
@@ -466,6 +528,28 @@ mod unit {
         assert_eq!((tidewall.games, tidewall.mean_turns, tidewall.draws), (1, 30.0, 1));
         assert_eq!(flat.hit_rate, 4.0 / 20.0, "one hit a side a game, in five shots each");
         assert!(report.to_text(BAND).contains("\ntidewall A          1    30.0       20%      1\n"), "{}", report.to_text(BAND));
+    }
+
+    #[test]
+    fn a_run_at_two_levels_pools_them_and_gives_each_level_its_rate() {
+        let hard = |mut outcome: Outcome| {
+            outcome.spec.level = Level::Hard;
+            outcome
+        };
+        // Normal: A wins both. Hard: B wins both.
+        let outcomes = [game([A, B], Some(0), 0), game([B, A], Some(1), 0), hard(game([A, B], Some(1), 0)), hard(game([B, A], Some(0), 0))];
+        let report = Report::new(&outcomes, &[A, B]);
+        assert_eq!(report.levels, [Level::Normal, Level::Hard]);
+        let matchup = &report.matchups[0];
+        assert_eq!((matchup.first.rate, matchup.first.games), (0.5, 4), "pooled");
+        let by_level: Vec<(Level, f64)> = matchup.by_level.iter().map(|at| (at.level, at.rate.rate)).collect();
+        assert_eq!(by_level, [(Level::Normal, 1.0), (Level::Hard, 0.0)]);
+        assert_eq!(report.mobiles[1].wins_by_level[1].rate.rate, 1.0, "B wins at Hard");
+
+        let text = report.to_text(Band { low: 0.6, high: 1.0 });
+        assert!(text.starts_with("Balance: 4 games, 1v1, Normal and Hard bots,"), "{text}");
+        assert!(text.contains("wins by level: Coilback Normal 100%, Hard 0%, Hookclaw Normal 0%, Hard 100%."), "{text}");
+        assert!(text.contains("Coilback beats Hookclaw 50% ±49 of 4 games (Normal 100%, Hard 0%)"), "{text}");
     }
 
     #[test]

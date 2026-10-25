@@ -15,14 +15,16 @@
         "mobile": "Frostfin",
         "spawn_x": 380,
         "facing": "Right",
-        "items": []
+        "items": [],
+        "second": null
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1420,
         "facing": "Left",
-        "items": []
+        "items": [],
+        "second": null
       }
     ],
     "order": [
@@ -33,7 +35,8 @@
       "strength": 7,
       "direction": 140
     },
-    "sudden_death": null
+    "sudden_death": null,
+    "mode": "Solo"
   },
   "events": [
     {
@@ -352,100 +355,6 @@
         "aim": 45,
         "power": 72,
         "time": 718
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "S1",
-        "aim": 32,
-        "power": 47,
-        "time": 855
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Tornado",
-        "x": 1057,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "S2",
-        "aim": 32,
-        "power": 16,
-        "time": 992
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 25
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S1",
-        "aim": 45,
-        "power": 42,
-        "time": 1129
-      }
-    },
-    {
-      "Weather": {
-        "kind": "Electricity",
-        "x": 1446,
-        "hides": null
-      }
-    },
-    {
-      "Walk": {
-        "seat": 1,
-        "facing": "Left",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 1,
-        "shot": "S1",
-        "aim": 32,
-        "power": 47,
-        "time": 1266
-      }
-    },
-    {
-      "Walk": {
-        "seat": 0,
-        "facing": "Right",
-        "steps": 0
-      }
-    },
-    {
-      "Shoot": {
-        "seat": 0,
-        "shot": "S2",
-        "aim": 45,
-        "power": 51,
-        "time": 1403
       }
     }
   ]

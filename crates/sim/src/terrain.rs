@@ -22,13 +22,47 @@ pub struct DirtyRect {
     pub h: u32,
 }
 
+/// The side of a block in a terrain's block map (`Terrain::any_solid`), in pixels. A divisor of
+/// 64, so a block's columns sit in one word of a mask row.
+const BLOCK: u32 = 8;
+
 /// A solid/air mask, one bit per pixel, row-major.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "Mask")]
 pub struct Terrain {
     width: u32,
     height: u32,
     words_per_row: u32,
     bits: Vec<u64>,
+    /// One bit per `BLOCK`-px square, row-major, set when any pixel in it is solid, so a flight
+    /// through open sky can be ruled clear a block at a time instead of a pixel at a time. It is
+    /// `bits` summarized, kept exact as they change: left out of the wire form (and so the state
+    /// hash), and rebuilt on reading.
+    #[serde(skip_serializing)]
+    blocks: Vec<u64>,
+}
+
+/// A terrain's wire form: everything but its block map.
+#[derive(Deserialize)]
+struct Mask {
+    width: u32,
+    height: u32,
+    words_per_row: u32,
+    bits: Vec<u64>,
+}
+
+impl From<Mask> for Terrain {
+    fn from(Mask { width, height, words_per_row, bits }: Mask) -> Self {
+        let mut terrain = Self {
+            width,
+            height,
+            words_per_row,
+            bits,
+            blocks: Vec::new(),
+        };
+        terrain.summarize();
+        terrain
+    }
 }
 
 impl Terrain {
@@ -45,6 +79,7 @@ impl Terrain {
             height,
             words_per_row,
             bits: vec![0; (words_per_row * height) as usize],
+            blocks: Vec::new(),
         };
         for y in 0..height {
             for x in 0..width {
@@ -54,6 +89,7 @@ impl Terrain {
                 }
             }
         }
+        terrain.summarize();
         Ok(terrain)
     }
 
@@ -126,6 +162,69 @@ impl Terrain {
         ((y * self.words_per_row + x / 64) as usize, 1 << (x % 64))
     }
 
+    /// Blocks across a row of the block map, and the words that row takes.
+    fn block_layout(&self) -> (u32, u32) {
+        let across = self.width.div_ceil(BLOCK);
+        (across, across.div_ceil(64))
+    }
+
+    /// Builds the block map from the mask.
+    fn summarize(&mut self) {
+        let (across, words) = self.block_layout();
+        self.blocks = vec![0; (words * self.height.div_ceil(BLOCK)) as usize];
+        self.resummarize(0, 0, across.saturating_sub(1), self.height.div_ceil(BLOCK).saturating_sub(1));
+    }
+
+    /// Recomputes blocks `bx0..=bx1` across and `by0..=by1` down from the mask.
+    fn resummarize(&mut self, bx0: u32, by0: u32, bx1: u32, by1: u32) {
+        let (_, words) = self.block_layout();
+        for by in by0..=by1 {
+            for bx in bx0..=bx1 {
+                let shift = (bx * BLOCK) % 64;
+                let rows = by * BLOCK..((by + 1) * BLOCK).min(self.height);
+                let solid = rows.into_iter().any(|y| (self.bits[(y * self.words_per_row + bx * BLOCK / 64) as usize] >> shift) & 0xFF != 0);
+                let (word, bit) = ((by * words + bx / 64) as usize, 1_u64 << (bx % 64));
+                if solid {
+                    self.blocks[word] |= bit;
+                } else {
+                    self.blocks[word] &= !bit;
+                }
+            }
+        }
+    }
+
+    /// Whether any pixel from (x0, y0) to (x1, y1), corners included, is solid. Outside the map is
+    /// air. The block map answers first, so a stretch of open sky costs a few blocks; a small
+    /// rectangle the blocks can't rule out is read pixel by pixel. A large one they can't is
+    /// answered `true` unread: `false` is always certain, `true` only for a small one.
+    #[must_use]
+    pub fn any_solid(&self, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
+        /// The most pixels it reads one by one.
+        const READ: u32 = 256;
+        let (Ok(width), Ok(height)) = (i32::try_from(self.width), i32::try_from(self.height)) else {
+            return true;
+        };
+        if x1 < 0 || y1 < 0 || x0 >= width || y0 >= height || x0 > x1 || y0 > y1 {
+            return false;
+        }
+        let clamp = |v: i32, side: u32| u32::try_from(v.max(0)).unwrap_or(0).min(side - 1);
+        let (x0, x1, y0, y1) = (clamp(x0, self.width), clamp(x1, self.width), clamp(y0, self.height), clamp(y1, self.height));
+        let (_, words) = self.block_layout();
+        let flagged = (y0 / BLOCK..=y1 / BLOCK).any(|by| (x0 / BLOCK..=x1 / BLOCK).any(|bx| self.blocks[(by * words + bx / 64) as usize] & (1 << (bx % 64)) != 0));
+        if !flagged {
+            return false;
+        }
+        if (x1 - x0 + 1) * (y1 - y0 + 1) > READ {
+            return true;
+        }
+        (y0..=y1).any(|y| {
+            (x0..=x1).any(|x| {
+                let (word, bit) = self.index(x, y);
+                self.bits[word] & bit != 0
+            })
+        })
+    }
+
     /// Whether the pixel at (x, y) is solid. Outside the map is air.
     #[must_use]
     pub fn is_solid(&self, x: i32, y: i32) -> bool {
@@ -185,7 +284,9 @@ impl Terrain {
                 }
             }
         }
-        changed.map(|(ax, ay, bx, by)| DirtyRect {
+        let (ax, ay, bx, by) = changed?;
+        self.resummarize(ax / BLOCK, ay / BLOCK, bx / BLOCK, by / BLOCK);
+        Some(DirtyRect {
             x: ax,
             y: ay,
             w: bx - ax + 1,
@@ -246,6 +347,53 @@ mod unit {
         let dirty = terrain.carve(Vec2::new(0.0, 0.0), 5.0).unwrap();
         assert_eq!((dirty.x, dirty.y), (0, 0));
         assert!(!terrain.is_solid(0, 0) && terrain.is_solid(19, 19));
+    }
+
+    /// Whether any pixel of the rectangle is solid, one by one.
+    fn brute_any(terrain: &Terrain, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
+        (y0..=y1).any(|y| (x0..=x1).any(|x| terrain.is_solid(x, y)))
+    }
+
+    #[test]
+    fn the_block_map_never_misses_a_solid_pixel_and_follows_carving() {
+        // Specks, so most blocks are mixed, on a width that isn't a multiple of a block or a word.
+        let mut terrain = Terrain::from_fn(203, 77, |x, y| (x * 31 + y * 17) % 97 == 0 || y >= 70).unwrap();
+        let check = |terrain: &Terrain| {
+            for (x0, y0) in [(-5, -5), (0, 0), (7, 3), (60, 40), (130, 60), (198, 72)] {
+                for (w, h) in [(0, 0), (1, 1), (5, 9), (17, 3), (40, 40)] {
+                    let (x1, y1) = (x0 + w, y0 + h);
+                    let any = brute_any(terrain, x0, y0, x1, y1);
+                    // Small rectangles are read exactly; large ones may only err toward solid.
+                    if any || (w + 1) * (h + 1) <= 256 {
+                        assert_eq!(terrain.any_solid(x0, y0, x1, y1), any, "({x0}, {y0}) to ({x1}, {y1})");
+                    }
+                }
+            }
+        };
+        check(&terrain);
+        assert!(!terrain.any_solid(-20, -20, -1, 50) && !terrain.any_solid(0, -30, 202, -1), "outside is air");
+        assert!(!terrain.any_solid(250, 0, 260, 76) && !terrain.any_solid(0, 77, 202, 90));
+        // Clear a whole block and the map says so; carving keeps it exact, so `Eq` still holds.
+        for y in 0..BLOCK {
+            for x in 0..BLOCK {
+                terrain.carve(Vec2::new(f64::from(x) + 0.5, f64::from(y) + 0.5), 0.5);
+            }
+        }
+        assert!(!terrain.any_solid(0, 0, 7, 7), "a carved-out block is air");
+        check(&terrain);
+        terrain.carve(Vec2::new(100.0, 72.0), 12.0);
+        check(&terrain);
+        assert_eq!(Terrain::decode_mask(&terrain.encode_mask()).unwrap(), terrain);
+    }
+
+    #[test]
+    fn the_wire_form_leaves_the_block_map_out_and_reading_rebuilds_it() {
+        let terrain = Terrain::from_fn(70, 20, |x, y| y >= 12 || x == 40).unwrap();
+        let bytes = postcard::to_allocvec(&terrain).unwrap();
+        let mut bare = postcard::to_allocvec(&(70_u32, 20_u32, 2_u32)).unwrap();
+        bare.extend(postcard::to_allocvec(&terrain.bits).unwrap());
+        assert_eq!(bytes, bare, "the state hash sees what it always did");
+        assert_eq!(postcard::from_bytes::<Terrain>(&bytes).unwrap(), terrain);
     }
 
     #[test]

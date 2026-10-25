@@ -30,7 +30,9 @@ repo; the keys below say where each came from. Quotes are fragments; numbers are
 
 **CONTRADICTION:** the SS's damage. `[SW-mob]` gives it S2's range and says it "does a little more
 damage"; `[WP06]`, "slightly more damage than Shot 2"; `[GF-ice]` and `[GF-lee]` average it at 250
-against S2's 190 to 200.
+against S2's 190 to 200. lobshot first took S2's 150-170; balance (PRD-0006 T-010) takes the guides'
+250, as 230-270: at S2's damage for twice its delay, the SS was all cost in a duel, and the bot fired
+it 1% of its turns.
 
 ## The shots
 
