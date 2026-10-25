@@ -137,6 +137,30 @@ fn pyramid(game: &mut Game, gun: &Gun, flight: Flight, effects: &mut Vec<Effect>
     gun.follow_up(game, blast.center, track.impact.tick, track.marks, effects);
 }
 
+/// Where a shot on `flight` does its work, for SearchBot's aim pass: the magnet ball flies through
+/// mobiles to the ground and pulls in whoever is near where it bursts, so it strikes the mobile it
+/// bursts under (inside it, or below its feet within its blast), not one in its way. The orb and the
+/// pyramid land where they fly.
+pub(super) fn aim_point(game: &Game, shot: Shot, flight: Flight) -> Option<Impact> {
+    if shot != Shot::S2 {
+        return None;
+    }
+    let track = game.track_sensing(flight, 0, 0, Senses { mobiles: false, terrain: true });
+    if !landed(&track) {
+        return Some(track.impact);
+    }
+    let at = track.impact.at;
+    let under = (0_u8..).zip(game.players()).find(|(_, p)| {
+        let hitbox = p.tuning().hitbox.value;
+        let body = p.pose().to_body(at);
+        p.alive && (hitbox.x..=hitbox.x + hitbox.w).contains(&body.x) && (hitbox.y..=S2_BLAST.value).contains(&body.y)
+    });
+    Some(Impact {
+        contact: under.map_or(Contact::Terrain, |(seat, _)| Contact::Mobile(seat)),
+        ..track.impact
+    })
+}
+
 /// Which way a projectile was going as it struck: a push from dead center goes that way.
 fn heading(track: &Track) -> Facing {
     if track.last.flight.velocity_at(track.last_tick).x < 0.0 { Facing::Left } else { Facing::Right }

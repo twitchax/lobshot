@@ -232,28 +232,46 @@ fn weatherproof(game: &Game, seat: u8) -> bool {
 
 /// Where a shot `seat` fires along `flight` does its work, when that is not where the flight lands,
 /// for SearchBot's aim pass (Sudsotter's shots walk on from there, Augerdillo's bore on or pass
-/// through the ground). `target` is where the bot wants it.
+/// through the ground, Lodestoad's magnet passes through mobiles, Spoutpot's SS opens into balls,
+/// and an SS that transforms in flight does its work only once it has). `target` is where the bot
+/// wants it.
 pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Option<Impact> {
     match game.players().get(usize::from(seat))?.mobile {
-        MobileKind::Coilback
-        | MobileKind::Lanternwing
-        | MobileKind::Hookclaw
+        MobileKind::Lanternwing
         | MobileKind::Sparkhorn
         | MobileKind::Marblemole
-        | MobileKind::Spoutpot
         | MobileKind::Tuskrack
         | MobileKind::Frostfin
         | MobileKind::Herdhound
         | MobileKind::Thistleback
         | MobileKind::Kitewyrm
-        | MobileKind::Flarecrow
-        | MobileKind::Lodestoad => None,
+        | MobileKind::Flarecrow => None,
+        MobileKind::Coilback => coilback::aim_point(game, shot, flight),
+        MobileKind::Hookclaw => hookclaw::aim_point(game, shot, flight),
+        MobileKind::Spoutpot => spoutpot::aim_point(game, shot, flight),
+        MobileKind::Lodestoad => lodestoad::aim_point(game, shot, flight),
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
         MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
         MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),
         MobileKind::Needlemouse => Some(needlemouse::aim_point(game, seat, shot, flight)),
         MobileKind::Tinbadger => tinbadger::aim_point(game, seat, shot, flight),
     }
+}
+
+/// How far below its landing the aim pass sees an SS that came down before it transformed (or
+/// opened), in px: on the ground so far off that every SS that does its work ranks before it, and
+/// those that don't still rank among themselves by how near they came.
+const UNRIPE_PX: f64 = 1000.0;
+
+/// The aim pass's landing for an SS whose flight, ending at `impact`, does its work only after
+/// `seconds` aloft (it transforms, or opens): the landing itself when it got that far, else one
+/// `UNRIPE_PX` below it. `None` when the landing stands.
+fn ripe(impact: Impact, seconds: f64) -> Option<Impact> {
+    (impact.tick < ticks(seconds)).then(|| Impact {
+        contact: Contact::Terrain,
+        at: impact.at + Vec2::new(0.0, UNRIPE_PX),
+        ..impact
+    })
 }
 
 /// The Teleport item: the shot is a beacon that hurts and carves nothing, and carries its shooter

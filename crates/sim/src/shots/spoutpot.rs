@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     ballistics::Flight,
-    game::{Course, Effect, Game, Senses, Shot, Track},
+    game::{Course, Effect, Game, Impact, Senses, Shot, Track},
     tuning::spoutpot::{
         S1_BLAST, S1_DAMAGE, S2_AMPLITUDE, S2_HERTZ, S2_MERGE_CROSSING, S2_PHASES, S2_STREAM_BLAST, S2_STREAM_DAMAGE, SS_BALL_BLAST, SS_BALL_DAMAGE, SS_EARLY_BLAST, SS_EARLY_DAMAGE, SS_FAN,
         SS_SPEED_KEPT, SS_SPLIT_CROSSING, crossing_seconds,
@@ -84,6 +84,28 @@ fn open(game: &mut Game, gun: &Gun, blob: &Track, effects: &mut Vec<Effect>) {
     });
     effects.extend(paths.into_iter().map(|legs| Effect::Fired { seat: gun.seat, legs }));
     effects.append(&mut landings);
+}
+
+/// Where a shot on `flight` does its work, for SearchBot's aim pass: the SS's balls fan out about
+/// the way the blob was going when it opened, slower, so they come down where a ball flying that
+/// way from there would, short of where the blob was headed. One that lands before it opens is no
+/// SS at all (`super::ripe`).
+pub(super) fn aim_point(game: &Game, shot: Shot, flight: Flight) -> Option<Impact> {
+    if shot != Shot::Ss {
+        return None;
+    }
+    let opens = crossing_seconds(SS_SPLIT_CROSSING.value);
+    let Course { track: blob, flying } = game.track_until(flight, 0, 0, Senses::ALL, ticks(opens));
+    if !flying {
+        return super::ripe(blob.impact, opens);
+    }
+    let (leg, tick) = (blob.last, blob.last_tick);
+    let middle = Flight {
+        origin: leg.flight.at(tick),
+        velocity: leg.flight.velocity_at(tick) * SS_SPEED_KEPT.value,
+        accel: leg.flight.accel,
+    };
+    Some(game.track(middle, 0, leg.offset + tick).impact)
 }
 
 #[cfg(test)]

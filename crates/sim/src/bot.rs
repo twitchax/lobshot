@@ -962,6 +962,35 @@ mod unit {
     }
 
     #[test]
+    fn it_aims_each_shot_by_where_it_does_its_work() {
+        // A magnet that passes through mobiles and pulls in whoever it bursts under, an SS that
+        // opens into slower balls, and two that hit hard only once they've transformed in flight:
+        // the best trajectory the aim pass finds for each, fired, does that shot's work.
+        // Spoutpot's blob opens only after 1.8 s, and Coilback's SS expands only after 2.5 s, which
+        // its 50-degree top reaches only over two screens, so their targets stand farther off.
+        for (mobile, shot, distance, at_least) in [
+            (MobileKind::Lodestoad, Shot::S2, 700, 100),
+            (MobileKind::Spoutpot, Shot::Ss, 1100, 300),
+            (MobileKind::Coilback, Shot::Ss, 1750, 300),
+            (MobileKind::Hookclaw, Shot::Ss, 700, 300),
+        ] {
+            let mut game = duel_of(mobile, MobileKind::Coilback, distance);
+            let target = game.players()[1];
+            let (aim, power) = Search::new(&game, 0, &Mark::of(&target)).trajectories(shot)[0];
+            let effects = game
+                .apply(Event::Shoot {
+                    seat: 0,
+                    shot,
+                    aim,
+                    power: Power::from_twentieths(power).unwrap(),
+                    time: Centis(0),
+                })
+                .unwrap();
+            assert!(damage_to(&effects, 1) >= at_least, "{mobile:?} {shot:?} at {aim} degrees, {power}/20 bars: {effects:?}");
+        }
+    }
+
+    #[test]
     fn it_lands_a_walking_sponge_short_for_its_walk_to_carry_it_in() {
         // The target stands at the brink of a pit: a sponge aimed at it flies through and falls in,
         // so the bot must land one short, where its walk ends inside the target.
