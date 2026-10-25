@@ -5,7 +5,7 @@
 //! and a floating mobile is out of their reach on the ground (`MobileKind::floats`, SW-mob).
 
 use super::{
-    Gun,
+    Aim, Gun,
     crawl::{self, Sense, Walk, Walked},
 };
 use crate::{
@@ -157,37 +157,45 @@ fn touch(game: &mut Game, gun: &Gun, walked: &Walked, marks: Marks, effects: &mu
 
 /// Where a shot from `seat` on `flight` does its work, for SearchBot's aim pass: where a sponge's
 /// walk takes it before it goes off; for the suds, the point of their walk nearest `target` (on a
-/// mobile, if one is within reach there). A direct hit with the suds counts as a near miss, since
-/// it only pops.
-pub(super) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Impact {
+/// mobile, if one is within reach there), and how long their whole walk keeps within reach of that
+/// mobile, which is what they deal by. A direct hit with the suds counts as a near miss, since it
+/// only pops.
+pub(super) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, target: Vec2) -> Aim {
     if shot != Shot::Ss {
         let track = game.track_sensing(flight, 0, 0, THROUGH_MOBILES);
-        return walk_on(game, &track, sponge_sense(shot), SPONGE_FUSE_SECONDS.value).map_or(track.impact, |walked| walked.end);
+        return Aim::at(walk_on(game, &track, sponge_sense(shot), SPONGE_FUSE_SECONDS.value).map_or(track.impact, |walked| walked.end));
     }
     let track = game.track(flight, 0, 0);
     let facing = game.players().get(usize::from(seat)).map_or(Facing::Right, |player| player.facing);
     let walked = walk_on(game, &track, suds_sense(&track, facing), SUDS_FUSE_SECONDS.value);
-    let Some(nearest) = walked
+    let Some((walked, nearest)) = walked
         .as_ref()
-        .and_then(|walked| walked.stays.iter().min_by(|a, b| a.at.distance(target).total_cmp(&b.at.distance(target))))
+        .and_then(|walked| Some((walked, walked.stays.iter().min_by(|a, b| a.at.distance(target).total_cmp(&b.at.distance(target)))?)))
     else {
         let contact = if matches!(track.impact.contact, Contact::Mobile(_)) {
             Contact::Terrain
         } else {
             track.impact.contact
         };
-        return Impact { contact, ..track.impact };
+        return Aim::at(Impact { contact, ..track.impact });
     };
     let near = (0_u8..)
         .zip(game.players())
         .filter(|(_, player)| player.alive && !player.mobile.floats())
-        .map(|(seat, player)| (player.pose().gap(player.tuning().hitbox.value, nearest.at), seat))
-        .filter(|&(gap, _)| gap <= SUDS_REACH.value)
+        .map(|(seat, player)| (player.pose().gap(player.tuning().hitbox.value, nearest.at), seat, player))
+        .filter(|&(gap, ..)| gap <= SUDS_REACH.value)
         .min_by(|a, b| a.0.total_cmp(&b.0));
-    Impact {
-        tick: nearest.from,
-        at: nearest.at,
-        contact: near.map_or(Contact::Terrain, |(_, seat)| Contact::Mobile(seat)),
+    let dwell = near.map_or(0, |(_, _, player)| {
+        let (pose, hitbox) = (player.pose(), player.tuning().hitbox.value);
+        walked.stays.iter().filter(|stay| pose.gap(hitbox, stay.at) <= SUDS_REACH.value).map(|stay| stay.to - stay.from).sum()
+    });
+    Aim {
+        impact: Impact {
+            tick: nearest.from,
+            at: nearest.at,
+            contact: near.map_or(Contact::Terrain, |(_, seat, _)| Contact::Mobile(seat)),
+        },
+        dwell,
     }
 }
 
@@ -235,7 +243,7 @@ mod unit {
         (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
-                let point = aim_point(game, 0, shot, game.launch(0, shot, aim, power.bars())?, center);
+                let point = aim_point(game, 0, shot, game.launch(0, shot, aim, power.bars())?, center).impact;
                 (point.contact == Contact::Mobile(1)).then(|| (point.at.distance(center), power))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))

@@ -48,7 +48,7 @@ use std::cmp::Reverse;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    game::{Contact, Death, Effect, Event, Game, Impact, Phase, Player, Shot},
+    game::{Contact, Death, Effect, Event, Game, Phase, Player, Shot},
     items::{Item, Loadout},
     jewels::Jewel,
     mines, mode,
@@ -57,7 +57,7 @@ use crate::{
     shots,
     terrain::Terrain,
     tuning::{self, AimRange, Barrel, MobileTuning, bot::Noise},
-    units::{Centis, Facing, Power, Vec2, Wind},
+    units::{Centis, Facing, Power, Vec2, Wind, seconds},
 };
 
 /// The loadout the server gives bots: the items SearchBot knows how to use, filling all six slots.
@@ -73,6 +73,11 @@ const STRONG_SHOT: f64 = 150.0;
 /// In Tag, a bot switches mobiles for a shot worth at least this much more than its own (a kill's
 /// worth, or most of a solid hit).
 const SWITCH_GAIN: f64 = 100.0;
+
+/// How much nearer a hit that keeps at its mobile ranks in the aim pass for each second it stays,
+/// in px (Sudsotter's suds, which deal by touch): more than any two hits differ by in nearness, so
+/// the longer touch ranks first.
+const DWELL_PX_PER_SECOND: f64 = 100.0;
 
 /// A bot looking for a better spot tries walks of each third of its move budget, each way.
 const WALK_PARTS: u16 = 3;
@@ -592,7 +597,7 @@ impl<'g> Search<'g> {
         let Some(flight) = shots.first().and_then(|&shot| self.game.launch(self.seat, shot, aim, f64::from(power) / 20.0)) else {
             return landings;
         };
-        let shared = self.game.track(flight, 0, 0).impact;
+        let shared = shots::Aim::at(self.game.track(flight, 0, 0).impact);
         for (landing, &shot) in landings.iter_mut().zip(shots) {
             *landing = self.classify(shots::aim_point(self.game, self.seat, shot, flight, self.target).unwrap_or(shared));
         }
@@ -604,15 +609,17 @@ impl<'g> Search<'g> {
         let Some(flight) = self.game.launch(self.seat, shot, aim, f64::from(power) / 20.0) else {
             return Landing::Lost;
         };
-        self.classify(shots::aim_point(self.game, self.seat, shot, flight, self.target).unwrap_or_else(|| self.game.track(flight, 0, 0).impact))
+        self.classify(shots::aim_point(self.game, self.seat, shot, flight, self.target).unwrap_or_else(|| shots::Aim::at(self.game.track(flight, 0, 0).impact)))
     }
 
-    fn classify(&self, impact: Impact) -> Landing {
-        let me = self.game.players()[usize::from(self.seat)];
+    /// A hit that keeps at its mobile ranks as if `DWELL_PX_PER_SECOND` nearer for each second it
+    /// stays, since it deals by how long it stays.
+    fn classify(&self, aim: shots::Aim) -> Landing {
+        let (impact, me) = (aim.impact, self.game.players()[usize::from(self.seat)]);
         match impact.contact {
             Contact::Gone | Contact::Column(_) => Landing::Lost,
             Contact::Mobile(hit) if self.game.players()[usize::from(hit)].team == me.team => Landing::Own,
-            Contact::Mobile(_) if self.mobile => Landing::Hit(impact.at.distance(self.target)),
+            Contact::Mobile(_) if self.mobile => Landing::Hit(impact.at.distance(self.target) - DWELL_PX_PER_SECOND * seconds(aim.dwell)),
             Contact::Mobile(_) | Contact::Terrain => Landing::Near(impact.at.distance(self.target)),
         }
     }
@@ -997,6 +1004,42 @@ mod unit {
                 .unwrap();
             assert!(damage_to(&effects, 1) >= at_least, "{mobile:?} {shot:?} at {aim} degrees, {power}/20 bars: {effects:?}");
         }
+    }
+
+    #[test]
+    fn it_aims_the_suds_to_stay_longest_at_their_target() {
+        // Every pass of the suds under a mobile comes about as near it, so the aim pass ranks
+        // them by how long they stay there: the trajectory it picks deals near the most any SS
+        // cell on its grid would.
+        let mut game = duel_of(MobileKind::Sudsotter, MobileKind::Coilback, 700);
+        game.players[1].hp = 5000;
+        let target = game.players()[1];
+        let search = Search::new(&game, 0, &Mark::of(&target));
+        let fired = |aim: i16, power: u8| {
+            let mut game = game.clone();
+            let effects = game
+                .apply(Event::Shoot {
+                    seat: 0,
+                    shot: Shot::Ss,
+                    aim,
+                    power: Power::from_twentieths(power).unwrap(),
+                    time: Centis(0),
+                })
+                .unwrap();
+            damage_to(&effects, 1)
+        };
+        let grid = search.grids.iter().find(|grid| grid.shots.contains(&Shot::Ss)).unwrap();
+        let index = grid.shots.iter().position(|&shot| shot == Shot::Ss).unwrap();
+        let best = grid
+            .cells
+            .iter()
+            .filter(|cell| matches!(cell.2[index], Landing::Hit(_)))
+            .map(|&(aim, power, _)| fired(aim, power))
+            .max()
+            .unwrap();
+        let (aim, power) = search.trajectories(Shot::Ss)[0];
+        let chosen = fired(aim, power);
+        assert!(f64::from(chosen) >= 0.8 * f64::from(best), "{chosen} of the grid's best {best}, at {aim} degrees, {power}/20 bars");
     }
 
     #[test]
