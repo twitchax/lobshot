@@ -128,9 +128,10 @@ own: it is where most of lobshot's distances come from, as no GunBound source gi
 
 Tinbadger's gravity is fitted like the Classic mobiles' (`physics-fit.md`, `tool_fit`), to
 `[CR-fixed]`'s 2.50 bars: 659.0 px/s², between Coilback's 622 (2.45) and Thistleback's 748 (2.65).
-It first shipped as 654.6, stale on arrival: the commit that added it already refits to 659.0, so no
-later change moved it (most likely the fit was taken before its drawn geometry settled). Both land
-2.50 within the chart test's 0.05 bars, so only a refit catches it
+It first shipped as 654.6, stale on arrival: `tool_fit` ran against provisional geometry, which then
+moved to match the rig without a refit (cannon pivot (22, -40) to (30, -38), barrel 26 to 24 px,
+hitbox 68 to 70 px wide, probes [-20, 20] to [-18, 28]; the muzzle's moves are what shift the fit).
+Both land 2.50 within the chart test's 0.05 bars, so only a refit catches it
 (`fitted_gravities_are_what_tool_fit_writes`, now).
 DBR gives Raon Armor's `ax`, 73.5, which would make it 2.45 (**CONTRADICTION**; the chart comes
 first). The full-power angles agree that it is heavy: 79 degrees for one screen and 84 for half
