@@ -119,7 +119,8 @@ why the version moved the way it did.
 - Balance, within the sources: Marblemole's SS rolls through for less and its S2 costs 480;
   Herdhound's missiles home less and its SS costs 880; Frostfin's SS hits harder; Sudsotter's
   base delay is 430 and its suds stronger; Flarecrow's aftershock reaches farther; Tinbadger's
-  gravity is refitted.
+  gravity is refitted and its SS and cogs hit harder; Coilback's SS ripens at 1.8 s (GF-tiro);
+  Herdhound's missiles hit a little softer.
 - Protocol and log wire versions are 4 (the room's mode and the drop-in pick): logs from earlier
   builds don't load.
 - The server, practice mode and the lab roll and seat games through one referee (`sim::referee`):
