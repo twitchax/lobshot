@@ -740,7 +740,7 @@ mod unit {
             let event = match roll {
                 crate::game::Roll::Weather { .. } => Event::Weather(crate::weather::Forecast::new(WeatherKind::Force, 1)),
                 crate::game::Roll::Wind => Event::Wind(crate::units::Wind::default()),
-                crate::game::Roll::Drop { .. } => unreachable!(),
+                crate::game::Roll::Drop { .. } | crate::game::Roll::Jewel { .. } => unreachable!(),
             };
             fresh.apply(event).unwrap();
             events.push(event);

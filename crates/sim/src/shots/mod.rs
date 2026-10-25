@@ -152,7 +152,8 @@ impl Gun<'_> {
     pub fn thunder(&self, game: &mut Game, at: Vec2, tick: u32, marks: Marks, effects: &mut Vec<Effect>) {
         if self.salvo.thunder || marks.charged {
             let strike = bolt::from_sky(game, at.x);
-            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick + ticks(BOLT_DELAY_SECONDS.value), effects);
+            let tick = tick + ticks(BOLT_DELAY_SECONDS.value);
+            bolt::flash(game, &strike, BOLT_CRATER.value * self.salvo.crater, tick, effects);
             let thunder = Blast {
                 center: strike.at,
                 radius: BOLT_REACH.value,
@@ -161,7 +162,7 @@ impl Gun<'_> {
                 false_angle: false,
                 boost: 1.0,
             };
-            bolt::zap(game, &strike, &thunder, effects);
+            bolt::zap(game, &strike, &thunder, tick, effects);
         }
     }
 

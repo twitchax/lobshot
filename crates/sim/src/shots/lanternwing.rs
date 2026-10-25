@@ -52,11 +52,13 @@ pub(super) fn fire(game: &mut Game, gun: &Gun, shot: Shot, effects: &mut Vec<Eff
 /// Strips the shield from every living mobile within reach of `at`, so the blast that follows hits
 /// HP.
 fn strip(game: &mut Game, at: Vec2, tick: u32, effects: &mut Vec<Effect>) {
-    for (seat, player) in (0_u8..).zip(game.players.iter_mut()) {
-        if player.alive && player.shield > 0 && player.pose().gap(player.tuning().hitbox.value, at) <= SS_STRIP_REACH.value {
-            effects.push(Effect::ShieldStripped { seat, amount: player.shield, tick });
-            player.shield = 0;
-        }
+    let near: Vec<u8> = (0_u8..)
+        .zip(game.players())
+        .filter(|(_, player)| player.pose().gap(player.tuning().hitbox.value, at) <= SS_STRIP_REACH.value)
+        .map(|(seat, _)| seat)
+        .collect();
+    for seat in near {
+        game.strip(seat, tick, effects);
     }
 }
 

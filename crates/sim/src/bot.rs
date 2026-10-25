@@ -30,6 +30,11 @@
 //! Dead, it plays the mode's objective (`while_dead`): it spins its slot machine (Solo), or picks
 //! where to drop back in (Score, `respawn`): on firm ground, at a fair range from an enemy, with
 //! shots at one from there.
+//!
+//! In Jewel, where shots hurt no one, it shoots for jewels and digs under enemies (`marks`,
+//! `best_at`): from where it stands it searches a shot at the jewels worth points that take least
+//! and at the nearest dearer one, and takes the best that takes one; when none does, it digs at the
+//! nearest enemy's feet, walking if it must, for the ground it blows from under it, or a bunge.
 
 use std::cmp::Reverse;
 
@@ -38,6 +43,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     game::{Contact, Death, Effect, Event, Game, Impact, Phase, Player, Shot},
     items::{Item, Loadout},
+    jewels::Jewel,
     mines, mode,
     movement::Footing,
     referee::XorShift,
@@ -62,6 +68,15 @@ const WALK_PARTS: u16 = 3;
 
 /// What a kill is worth on top of its damage, in damage.
 const KILL_VALUE: f64 = 300.0;
+
+/// In Jewel, it searches a shot at this many of the nearest jewels worth points.
+const JEWEL_MARKS: usize = 2;
+
+/// What a jewel's point is worth, in damage: a Sapphire's 5 make a strong shot.
+const JEWEL_POINT_VALUE: f64 = 30.0;
+
+/// What each pixel an enemy falls is worth, in damage: ground blown from under it, toward a bunge.
+const DIG_VALUE: f64 = 1.0;
 
 /// A dead bot looks for a drop point every this many pixels across the map.
 const DROP_STEP: usize = 40;
@@ -112,7 +127,7 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
         return None;
     }
     let me = *game.players().get(usize::from(seat))?;
-    let target = *game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs())?;
+    let targets = marks(game, &me);
 
     let mut events = Vec::new();
     let mut scratch = game.as_seen();
@@ -125,14 +140,8 @@ pub fn plan(game: &Game, seat: u8, level: Level, seed: u64) -> Option<Vec<Event>
     let mut rng = XorShift::new(seed);
     scratch.wind = misread(scratch.wind(), noise, &mut rng);
 
-    let Spot { moves, mut best } = Spot::best(&scratch, seat, &target)?;
-    for event in moves {
-        scratch.apply(event).ok()?;
-        events.push(event);
-    }
-    if let Some(boosted) = boost(&scratch, seat, &best) {
-        best = boosted;
-    }
+    let (moves, best) = best_at(&scratch, seat, &targets)?;
+    events.extend(moves);
     if let Some(slot) = best.item {
         events.push(Event::UseItem { seat, slot, time: Centis(0) });
     }
@@ -162,6 +171,101 @@ pub fn while_dead(game: &Game, seat: u8) -> Option<Event> {
     } else {
         None
     }
+}
+
+/// What the bot shoots at, as a point to land on and the column it stands in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Mark {
+    at: Vec2,
+    x: i32,
+    goal: Goal,
+}
+
+/// What a mark is, which says how the bot searches for a shot at it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Goal {
+    /// An enemy mobile: a shot strikes it directly, and the bot walks to find a better spot when
+    /// its shot from here is weak.
+    Enemy,
+    /// A jewel (Jewel): the aim pass scores a shot by how near it lands, wherever it lands, from
+    /// where the bot stands; only a shot that takes it counts.
+    Jewel,
+    /// The ground at an enemy's feet (Jewel), to dig it out from under it, walking as for an
+    /// enemy: the bot's shot when it can take no jewel.
+    Feet,
+}
+
+impl Mark {
+    fn of(player: &Player) -> Self {
+        Self {
+            at: player.center(),
+            x: player.footing.x,
+            goal: Goal::Enemy,
+        }
+    }
+}
+
+/// What `me` may shoot at this turn: the nearest enemy, or in Jewel, the jewels worth points that
+/// take least (`JEWEL_MARKS` of them, nearest first among equals) and the nearest of the dearer
+/// ones (for a turn with SS or Dual), and the ground at the nearest enemy's feet. Empty when
+/// there's nothing.
+fn marks(game: &Game, me: &Player) -> Vec<Mark> {
+    let enemy = game.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs());
+    if !game.mode().jewels() {
+        return enemy.map(Mark::of).into_iter().collect();
+    }
+    let feet = enemy.map(|enemy| Mark {
+        at: enemy.footing.world(),
+        x: enemy.footing.x,
+        goal: Goal::Feet,
+    });
+    let away = |jewel: &Jewel| (jewel.at.x - me.footing.x).abs();
+    let mut jewels: Vec<&Jewel> = game.jewels().iter().filter(|jewel| jewel.kind.points() > 0).collect();
+    jewels.sort_by_key(|jewel| (jewel.kind.needs(), away(jewel), jewel.id));
+    let cheap = jewels.len().min(JEWEL_MARKS);
+    let dear = jewels[cheap..]
+        .iter()
+        .filter(|jewel| jewel.kind.needs() > jewels[0].kind.needs())
+        .min_by_key(|jewel| (away(jewel), jewel.id));
+    jewels[..cheap]
+        .iter()
+        .chain(dear)
+        .map(|jewel| Mark {
+            at: jewel.middle(),
+            x: jewel.at.x,
+            goal: Goal::Jewel,
+        })
+        .chain(feet)
+        .collect()
+}
+
+/// The best spot and shot at the first of `marks` worth one, boosted if an item makes it better:
+/// at each jewel from where the bot stands, the best that takes one; if none does, at the enemy (or
+/// its feet), walking if it must.
+fn best_at(game: &Game, seat: u8, marks: &[Mark]) -> Option<(Vec<Event>, Candidate)> {
+    let boosted = |Spot { moves, best }: Spot| {
+        let mut there = game.clone();
+        for &event in &moves {
+            there.apply(event).ok()?;
+        }
+        let best = boost(&there, seat, &best).unwrap_or(best);
+        Some((moves, best))
+    };
+    let better = |best: (Vec<Event>, Candidate), other: (Vec<Event>, Candidate)| if other.1.beats(&best.1) { other } else { best };
+    let jewels = marks.iter().filter(|mark| mark.goal == Goal::Jewel);
+    let taken = jewels
+        .filter_map(|mark| Spot::here(game, seat, mark))
+        .filter_map(boosted)
+        .filter(|(_, best)| best.value > 0.0)
+        .reduce(better);
+    taken.or_else(|| {
+        marks
+            .iter()
+            .filter(|mark| mark.goal != Goal::Jewel)
+            .filter_map(|mark| Spot::best(game, seat, mark))
+            .filter_map(boosted)
+            .reduce(better)
+    })
 }
 
 /// Where a dead bot drops back in, as `Event::Respawn`: of columns every `DROP_STEP` px, where a
@@ -207,7 +311,7 @@ fn shots_from(game: &Game, seat: u8, footing: Footing) -> usize {
     let Some(target) = scratch.players().iter().filter(|p| p.alive && p.team != me.team).min_by_key(|p| (p.footing.x - me.footing.x).abs()) else {
         return 0;
     };
-    scratch.players[usize::from(seat)].facing = facing_toward(&me, target);
+    scratch.players[usize::from(seat)].facing = facing_toward(&me, &Mark::of(target));
     let range = Shot::S1.tuning(me.tuning()).aim.value;
     let grid = (range.min..=range.max)
         .step_by(DROP_AIM_STEP)
@@ -228,9 +332,15 @@ struct Spot {
 }
 
 impl Spot {
+    /// Where it stands, turned to shoot at `target`.
+    fn here(game: &Game, seat: u8, target: &Mark) -> Option<Self> {
+        let (scratch, moves) = walked(game, seat, None, target)?;
+        Self::searched(&scratch, moves, seat, target)
+    }
+
     /// Where it stands, unless its best shot from there is weak; then the best of a few spots up
     /// to its whole move budget each way. Shorter walks come first, so a tie stays closer.
-    fn best(game: &Game, seat: u8, target: &Player) -> Option<Self> {
+    fn best(game: &Game, seat: u8, target: &Mark) -> Option<Self> {
         let me = game.players().get(usize::from(seat))?;
         let (scratch, moves) = walked(game, seat, None, target)?;
         let mut seen = vec![me.footing];
@@ -260,7 +370,7 @@ impl Spot {
     }
 
     /// The best shot from where `game` has the bot stand, after `moves`.
-    fn searched(game: &Game, moves: Vec<Event>, seat: u8, target: &Player) -> Option<Self> {
+    fn searched(game: &Game, moves: Vec<Event>, seat: u8, target: &Mark) -> Option<Self> {
         Some(Self {
             moves,
             best: best_shot(game, seat, target)?,
@@ -270,7 +380,7 @@ impl Spot {
 
 /// `game` after `walk`, if any, and turning to shoot at the target, with the moves that did it.
 /// `None` when the walk ends the turn (off the map).
-fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -> Option<(Game, Vec<Event>)> {
+fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Mark) -> Option<(Game, Vec<Event>)> {
     let mut scratch = game.clone();
     let mut moves = Vec::new();
     if let Some((facing, steps)) = walk {
@@ -291,21 +401,21 @@ fn walked(game: &Game, seat: u8, walk: Option<(Facing, u16)>, target: &Player) -
     Some((scratch, moves))
 }
 
-fn facing_toward(me: &Player, target: &Player) -> Facing {
-    if target.footing.x >= me.footing.x { Facing::Right } else { Facing::Left }
+fn facing_toward(me: &Player, target: &Mark) -> Facing {
+    if target.x >= me.footing.x { Facing::Right } else { Facing::Left }
 }
 
 /// The way to face to shoot at the target: toward it, or away for a mobile that fires over its
 /// back.
-fn facing_to_shoot(me: &Player, target: &Player) -> Facing {
+fn facing_to_shoot(me: &Player, target: &Mark) -> Facing {
     let toward = facing_toward(me, target);
     if me.tuning().s1.aim.value.backward() { toward.flip() } else { toward }
 }
 
 /// The best shot `seat` can take from where it stands, as it faces.
-fn best_shot(game: &Game, seat: u8, target: &Player) -> Option<Candidate> {
+fn best_shot(game: &Game, seat: u8, target: &Mark) -> Option<Candidate> {
     game.players().get(usize::from(seat))?;
-    let search = Search::new(game, seat, target.center());
+    let search = Search::new(game, seat, target);
     let mut best: Option<Candidate> = None;
     for shot in [Shot::S1, Shot::S2, Shot::Ss] {
         if !game.can_shoot(seat, shot) {
@@ -351,6 +461,8 @@ struct Search<'g> {
     game: &'g Game,
     seat: u8,
     target: Vec2,
+    /// Whether the target is a mobile (`Mark::mobile`).
+    mobile: bool,
     grids: Vec<Grid>,
 }
 
@@ -364,8 +476,14 @@ struct Grid {
 }
 
 impl<'g> Search<'g> {
-    fn new(game: &'g Game, seat: u8, target: Vec2) -> Self {
-        let mut search = Self { game, seat, target, grids: Vec::new() };
+    fn new(game: &'g Game, seat: u8, target: &Mark) -> Self {
+        let mut search = Self {
+            game,
+            seat,
+            target: target.at,
+            mobile: target.goal == Goal::Enemy,
+            grids: Vec::new(),
+        };
         let tuning = game.players()[usize::from(seat)].tuning();
         let mut barrels: Vec<(Barrel, Vec<Shot>)> = Vec::new();
         for shot in [Shot::S1, Shot::S2, Shot::Ss].into_iter().filter(|&shot| game.can_shoot(seat, shot)) {
@@ -416,8 +534,8 @@ impl<'g> Search<'g> {
         match impact.contact {
             Contact::Gone | Contact::Column(_) => Landing::Lost,
             Contact::Mobile(hit) if self.game.players()[usize::from(hit)].team == me.team => Landing::Own,
-            Contact::Mobile(_) => Landing::Hit(impact.at.distance(self.target)),
-            Contact::Terrain => Landing::Near(impact.at.distance(self.target)),
+            Contact::Mobile(_) if self.mobile => Landing::Hit(impact.at.distance(self.target)),
+            Contact::Mobile(_) | Contact::Terrain => Landing::Near(impact.at.distance(self.target)),
         }
     }
 
@@ -531,6 +649,31 @@ fn value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
             }
             _ => 0.0,
         })
+        .sum::<f64>()
+        + if game.mode().jewels() { jewel_value(game, seat, effects) } else { 0.0 }
+}
+
+/// What a shot's effects are worth to `seat` in Jewel, beyond `value`: each jewel's points to the
+/// team that took it (`JEWEL_POINT_VALUE` a point, against it for the other side's), and each
+/// pixel an enemy fell (`DIG_VALUE`), its own side's twice over against it.
+fn jewel_value(game: &Game, seat: u8, effects: &[Effect]) -> f64 {
+    let team = |s: u8| game.players().get(usize::from(s)).map(|p| p.team);
+    let mine = team(seat);
+    effects
+        .iter()
+        .map(|effect| match *effect {
+            Effect::JewelTaken { id, team: taker, .. } => {
+                let points = game.jewels().iter().find(|jewel| jewel.id == id).map_or(0, |jewel| jewel.kind.points());
+                let sign = if Some(taker) == mine { 1.0 } else { -1.0 };
+                sign * f64::from(points) * JEWEL_POINT_VALUE
+            }
+            Effect::Fell { seat: fell, to } => {
+                let drop = game.players().get(usize::from(fell)).map_or(0, |player| to.y - player.footing.y);
+                let drop = f64::from(drop.max(0)) * DIG_VALUE;
+                if team(fell) == mine { -2.0 * drop } else { drop }
+            }
+            _ => 0.0,
+        })
         .sum()
 }
 
@@ -549,7 +692,8 @@ fn heal(game: &Game, seat: u8) -> Option<Event> {
 /// Dual (for S1 or S2) or Power Up on a strong shot, if the bot carries one and it makes the shot
 /// better.
 fn boost(game: &Game, seat: u8, best: &Candidate) -> Option<Candidate> {
-    if best.value < STRONG_SHOT || best.item.is_some() {
+    // In Jewel a shot short of what a jewel needs may take it with Dual: weak isn't hopeless.
+    if (best.value < STRONG_SHOT && !game.mode().jewels()) || best.item.is_some() {
         return None;
     }
     let me = game.players().get(usize::from(seat))?;
@@ -662,14 +806,14 @@ mod unit {
     fn it_aims_each_barrels_shots_by_that_barrels_flight() {
         let game = duel_of(MobileKind::Frostfin, MobileKind::Coilback, 700);
         let target = game.players()[1];
-        let search = Search::new(&game, 0, target.center());
+        let search = Search::new(&game, 0, &Mark::of(&target));
         assert_eq!(search.grids.len(), 2, "Frostfin's cannon and its tusk");
         for shot in [Shot::S1, Shot::S2, Shot::Ss] {
             let (aim, power) = search.trajectories(shot)[0];
             let impact = game.track(game.launch(0, shot, aim, f64::from(power) / 20.0).unwrap(), 0, 0).impact;
             assert_eq!(impact.contact, Contact::Mobile(1), "{shot:?} at {aim} degrees, {power}/20 bars");
         }
-        assert_eq!(Search::new(&duel(700), 0, target.center()).grids.len(), 1, "one barrel, one grid");
+        assert_eq!(Search::new(&duel(700), 0, &Mark::of(&target)).grids.len(), 1, "one barrel, one grid");
     }
 
     #[test]
@@ -944,7 +1088,7 @@ mod walking {
     #[test]
     fn it_walks_out_from_behind_a_wall_it_cannot_shoot_over() {
         let mut game = behind_a_wall(0..0);
-        let target = game.players()[1];
+        let target = Mark::of(&game.players()[1]);
         assert!(best_shot(&game, 0, &target).unwrap().value <= 0.0, "nothing clears the wall from here");
         let events = plan(&game, 0, Level::Hard, 7).unwrap();
         assert!(walks(&events).iter().any(|&(facing, steps)| facing == Facing::Left && steps > 0), "{events:?}");
@@ -962,7 +1106,7 @@ mod walking {
     #[test]
     fn a_walk_into_a_pit_is_no_spot() {
         let game = behind_a_wall(230..260);
-        let target = game.players()[1];
+        let target = Mark::of(&game.players()[1]);
         assert!(walked(&game, 0, Some((Facing::Left, 90)), &target).is_none());
         assert!(walked(&game, 0, Some((Facing::Left, 30)), &target).is_some(), "short of the pit");
     }
@@ -1025,5 +1169,101 @@ mod over_a_hill {
                 .sum();
             assert!(damage > 0, "wind toward {direction}: the bot should reach its target");
         }
+    }
+}
+
+#[cfg(test)]
+mod jewel {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+    use crate::{
+        game::{
+            Setup, Team,
+            testing::{answer_rolls, duel_setup, game_in, seat, start},
+        },
+        jewels::{self, JewelDrop, JewelKind},
+        mode::Mode,
+        terrain::Terrain,
+    };
+
+    fn duel() -> Game {
+        start(&Setup { mode: Mode::Jewel, ..duel_setup(800) })
+    }
+
+    fn drop_at(game: &mut Game, kind: JewelKind, x: i32) {
+        jewels::drop(game, JewelDrop { kind, x }, &mut Vec::new());
+    }
+
+    fn play(game: &mut Game, events: Vec<Event>) -> Vec<Effect> {
+        events.into_iter().flat_map(|event| game.apply(event).unwrap()).collect()
+    }
+
+    #[test]
+    fn it_shoots_the_jewel_in_reach_and_takes_it() {
+        let mut game = duel();
+        drop_at(&mut game, JewelKind::Sapphire, 750);
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let effects = play(&mut game, events);
+        assert!(effects.iter().any(|e| matches!(e, Effect::JewelTaken { team: Team::A, .. })), "{effects:?}");
+        assert_eq!(game.points(Team::A), Some(5));
+    }
+
+    #[test]
+    fn it_leaves_a_black_jewel_alone_and_digs_under_its_enemy_instead() {
+        let mut game = duel();
+        drop_at(&mut game, JewelKind::Onyx, 750);
+        let me = game.players()[0];
+        let feet = Mark {
+            at: game.players()[1].footing.world(),
+            x: game.players()[1].footing.x,
+            goal: Goal::Feet,
+        };
+        assert_eq!(marks(&game, &me), [feet], "no jewel worth a shot");
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let effects = play(&mut game, events);
+        assert!(!effects.iter().any(|e| matches!(e, Effect::JewelTaken { .. })), "{effects:?}");
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::Exploded { at, dirty: Some(_), .. } if at.distance(feet.at) < 45.0)),
+            "it dug at its feet: {effects:?}"
+        );
+    }
+
+    #[test]
+    fn it_takes_the_richer_of_two_jewels_it_can_take_counting_what_this_turn_dealt() {
+        let mut game = duel();
+        drop_at(&mut game, JewelKind::Sapphire, 500);
+        drop_at(&mut game, JewelKind::Topaz, 760);
+        let topaz = *game.jewels().last().unwrap();
+        // One S1 can't take a Topaz's 200, but one that already took 150 this turn (a mine's, say).
+        let mut alone = game.clone();
+        let events = plan(&alone, 0, Level::Hard, 7).unwrap();
+        assert!(play(&mut alone, events).contains(&Effect::Points { team: Team::A, points: 5 }), "the Sapphire, alone");
+        jewels::hit(&mut game, topaz.id, 150, 0, &mut Vec::new());
+        let events = plan(&game, 0, Level::Hard, 7).unwrap();
+        let effects = play(&mut game, events);
+        assert!(effects.iter().any(|e| matches!(e, Effect::JewelTaken { id, .. } if *id == topaz.id)), "{effects:?}");
+        assert_eq!(game.points(Team::A), Some(10));
+    }
+
+    #[test]
+    fn a_dead_bot_picks_where_to_drop_back_in() {
+        let terrain = Terrain::from_fn(2400, 600, |x, y| y >= 500 && !(330..350).contains(&x)).unwrap();
+        let seats = vec![
+            seat(Team::A, crate::game::MobileKind::Coilback, 300, Facing::Right),
+            seat(Team::B, crate::game::MobileKind::Coilback, 1100, Facing::Left),
+            seat(Team::A, crate::game::MobileKind::Coilback, 1700, Facing::Left),
+        ];
+        let mut game = game_in(Mode::Jewel, terrain, seats);
+        game.apply(Event::Walk {
+            seat: 0,
+            facing: Facing::Right,
+            steps: 60,
+        })
+        .unwrap();
+        answer_rolls(&mut game);
+        assert!(!game.players()[0].alive);
+        let Some(Event::Respawn { seat: 0, x }) = while_dead(&game, 0) else { panic!() };
+        assert!(!(320..360).contains(&x), "not down the pit: {x}");
     }
 }

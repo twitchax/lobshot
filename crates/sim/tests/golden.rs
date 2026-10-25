@@ -14,6 +14,7 @@ use lobshot_sim::{
     drops::{Drop, DropKind},
     game::{Contact, Effect, Event, Game, MAX_SEATS, MobileKind, Phase, Roll, Seat, Setup, Shot, SuddenDeath, SuddenDeathKind, Team},
     items::{Item, Loadout, MAX_ITEMS},
+    jewels::{JewelDrop, JewelKind},
     log::Log,
     map::{MapRef, NoAssets},
     mode::Mode,
@@ -23,120 +24,127 @@ use lobshot_sim::{
 
 /// Name, JSON, wire bytes, event count, final state hash.
 const GOLDEN: &[(&str, &str, &[u8], usize, u64)] = &[
-    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0x6692_3498_df91_7f62),
+    ("duel_flat", include_str!("golden/duel_flat.json"), include_bytes!("golden/duel_flat.bin"), 32, 0xf31a_dedd_dd43_ba0f),
     (
         "duel_hills_wind",
         include_str!("golden/duel_hills_wind.json"),
         include_bytes!("golden/duel_hills_wind.bin"),
         44,
-        0x719f_bf71_eaa6_6416,
+        0xe2ca_2f0a_4496_b1f8,
     ),
-    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0xa6d0_0503_e825_473c),
-    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x60cd_ece7_e933_5bc5),
+    ("brawl_2v2", include_str!("golden/brawl_2v2.json"), include_bytes!("golden/brawl_2v2.bin"), 114, 0x7827_acc3_7d70_4244),
+    ("brawl_4v4", include_str!("golden/brawl_4v4.json"), include_bytes!("golden/brawl_4v4.bin"), 167, 0x74d9_0438_f5a4_28a0),
     (
         "duel_big_bomb",
         include_str!("golden/duel_big_bomb.json"),
         include_bytes!("golden/duel_big_bomb.bin"),
         62,
-        0x6f3a_abc8_1f99_e8c5,
+        0x238a_abf2_f8ae_b306,
     ),
     (
         "duel_ss_death",
         include_str!("golden/duel_ss_death.json"),
         include_bytes!("golden/duel_ss_death.bin"),
         33,
-        0x3de5_e0c3_a4c4_d625,
+        0xde1b_6f42_5f32_40d9,
     ),
     (
         "roster_spoutpot",
         include_str!("golden/roster_spoutpot.json"),
         include_bytes!("golden/roster_spoutpot.bin"),
         52,
-        0x03a6_f123_3613_6f04,
+        0xe409_29de_2bba_7802,
     ),
     (
         "roster_tuskrack",
         include_str!("golden/roster_tuskrack.json"),
         include_bytes!("golden/roster_tuskrack.bin"),
         52,
-        0x07eb_440a_d4a2_f06d,
+        0xa751_accb_1d30_38fe,
     ),
     (
         "roster_sudsotter",
         include_str!("golden/roster_sudsotter.json"),
         include_bytes!("golden/roster_sudsotter.bin"),
         54,
-        0x3d17_f50e_8449_5100,
+        0x06ac_1590_82e7_3476,
     ),
     (
         "roster_frostfin",
         include_str!("golden/roster_frostfin.json"),
         include_bytes!("golden/roster_frostfin.bin"),
         54,
-        0x5037_52de_21bb_5ef2,
+        0x8527_7bc1_1776_cebf,
     ),
     (
         "roster_herdhound",
         include_str!("golden/roster_herdhound.json"),
         include_bytes!("golden/roster_herdhound.bin"),
         54,
-        0x7764_0df2_0ff0_7156,
+        0xfb5c_30db_b076_51b8,
     ),
     (
         "roster_thistleback",
         include_str!("golden/roster_thistleback.json"),
         include_bytes!("golden/roster_thistleback.bin"),
         63,
-        0x1493_9203_c4e7_544e,
+        0x5892_2256_0872_c7a0,
     ),
     (
         "roster_kitewyrm",
         include_str!("golden/roster_kitewyrm.json"),
         include_bytes!("golden/roster_kitewyrm.bin"),
         32,
-        0x512f_d4b1_5782_cb51,
+        0xc0ce_55be_4ac0_472a,
     ),
     (
         "roster_flarecrow",
         include_str!("golden/roster_flarecrow.json"),
         include_bytes!("golden/roster_flarecrow.bin"),
         74,
-        0xee41_541a_6f0c_4cef,
+        0xab22_e5c6_7a5a_d4f7,
     ),
     (
         "roster_augerdillo",
         include_str!("golden/roster_augerdillo.json"),
         include_bytes!("golden/roster_augerdillo.bin"),
         99,
-        0x50f7_e4eb_9f95_b8a2,
+        0xadb0_c821_c95a_5dcf,
     ),
     (
         "roster_lensowl",
         include_str!("golden/roster_lensowl.json"),
         include_bytes!("golden/roster_lensowl.bin"),
         65,
-        0xc549_4139_49ea_7c13,
+        0xff7f_0ed2_3de7_f7e3,
     ),
     (
         "roster_needlemouse",
         include_str!("golden/roster_needlemouse.json"),
         include_bytes!("golden/roster_needlemouse.bin"),
         32,
-        0x0808_e269_8203_f323,
+        0xe73e_d251_08fd_a160,
     ),
     (
         "roster_tinbadger",
         include_str!("golden/roster_tinbadger.json"),
         include_bytes!("golden/roster_tinbadger.bin"),
         52,
-        0xc20e_4b28_4594_ef5c,
+        0x4d46_2d50_5d1b_8a0a,
     ),
     (
         "mode_score",
         include_str!("golden/mode_score.json"),
         include_bytes!("golden/mode_score.bin"),
         153,
-        0xf1cc_9be1_fabf_854f,
+        0xf327_465e_fba1_6217,
+    ),
+    (
+        "mode_jewel",
+        include_str!("golden/mode_jewel.json"),
+        include_bytes!("golden/mode_jewel.bin"),
+        323,
+        0x303d_055f_4a66_e2ca,
     ),
 ];
 
@@ -347,6 +355,7 @@ fn scenarios() -> Vec<(&'static str, Log)> {
         ("roster_needlemouse", play(roster_needlemouse(), &winds)),
         ("roster_tinbadger", play(roster_tinbadger(), &winds)),
         ("mode_score", play(mode_score(), &winds)),
+        ("mode_jewel", play(mode_jewel(), &winds)),
     ]
 }
 
@@ -608,6 +617,29 @@ fn mode_score() -> Setup {
     }
 }
 
+/// A Jewel 2v2 on hills in wind: jewels fall and are taken, no one is hurt, and a team reaches 100.
+fn mode_jewel() -> Setup {
+    Setup {
+        map: MapRef::Hills {
+            width: 2400,
+            height: 900,
+            ground: 780,
+            amplitude: 90,
+            period: 700,
+        },
+        seats: vec![
+            armed(Team::A, MobileKind::Coilback, 350, Facing::Right, &[Item::Dual, Item::Sacrifice]),
+            armed(Team::B, MobileKind::Tinbadger, 2050, Facing::Left, &[Item::Dual]),
+            armed(Team::A, MobileKind::Augerdillo, 900, Facing::Right, &[]),
+            armed(Team::B, MobileKind::Flarecrow, 1500, Facing::Left, &[]),
+        ],
+        order: vec![0, 1, 2, 3],
+        wind: Wind::new(5, 60).unwrap(),
+        sudden_death: None,
+        mode: Mode::Jewel,
+    }
+}
+
 /// Kitewyrm against Coilback on hills in wind: its S1, S2 and SS each fire.
 fn roster_kitewyrm() -> Setup {
     Setup {
@@ -761,6 +793,11 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
                     let x = i32::try_from((rolls * 389) % usize::try_from(width).unwrap()).unwrap();
                     Event::Drop(Drop { kind, x })
                 }
+                Roll::Jewel { width } => {
+                    let kind = JewelKind::ALL[rolls % JewelKind::ALL.len()];
+                    let x = i32::try_from((rolls * 389) % usize::try_from(width).unwrap()).unwrap();
+                    Event::Jewel(JewelDrop { kind, x })
+                }
             };
             apply(&mut game, event);
         }
@@ -773,7 +810,15 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
             .min_by(|a, b| (a.footing.x - me.footing.x).abs().cmp(&(b.footing.x - me.footing.x).abs()))
             .copied()
             .unwrap();
-        let toward = if enemy.footing.x > me.footing.x { Facing::Right } else { Facing::Left };
+        // In Jewel it shoots the nearest jewel worth points, while there is one.
+        let jewel = game
+            .jewels()
+            .iter()
+            .filter(|jewel| jewel.kind.points() > 0)
+            .min_by_key(|jewel| (jewel.at.x - me.footing.x).abs())
+            .copied();
+        let target_x = jewel.map_or(enemy.footing.x, |jewel| jewel.at.x);
+        let toward = if target_x > me.footing.x { Facing::Right } else { Facing::Left };
         let steps = if turn % 4 == 1 { 25 } else { 0 };
         apply(&mut game, Event::Walk { seat, facing: toward, steps });
         if !matches!(game.phase(), Phase::Turn { seat: s } if s == seat) {
@@ -801,7 +846,7 @@ fn play(setup: Setup, winds: &[Wind]) -> Log {
         let range = shot.tuning(me.tuning()).aim.value;
         let aim = i16::midpoint(range.true_min, range.true_max);
         let enemy_index = game.players().iter().position(|p| *p == enemy).unwrap();
-        let center = game.players()[enemy_index].center();
+        let center = jewel.map_or_else(|| game.players()[enemy_index].center(), |jewel| jewel.middle());
         let power = (0..=Power::MAX.twentieths())
             .filter_map(|twentieths| {
                 let power = Power::from_twentieths(twentieths).ok()?;
@@ -836,4 +881,26 @@ fn mode_score_spends_lives_and_drops_the_dead_back_in() {
     let loser = if winner == Team::A { Team::B } else { Team::A };
     assert_eq!(game.points(loser), Some(0), "{points:?}");
     assert!(game.points(winner).unwrap() > 0);
+}
+
+#[test]
+fn mode_jewel_takes_jewels_hurts_no_one_and_plays_to_its_points() {
+    let (_, json, ..) = GOLDEN.iter().find(|(name, ..)| *name == "mode_jewel").unwrap();
+    let log = Log::from_json(json).unwrap();
+    let mut game = Game::new(&log.setup, &NoAssets).unwrap();
+    let (mut dropped, mut taken, mut hurt) = (0, 0, 0);
+    for event in &log.events {
+        for effect in game.apply(*event).unwrap() {
+            match effect {
+                Effect::JewelDropped { to: Some(_), .. } => dropped += 1,
+                Effect::JewelTaken { .. } => taken += 1,
+                Effect::Damaged { .. } | Effect::Shielded { .. } | Effect::ShieldStripped { .. } => hurt += 1,
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(hurt, 0, "no one is hurt in Jewel");
+    assert!(dropped > taken && taken >= 5, "{dropped} jewels landed, {taken} taken");
+    let Phase::Over { winner: Some(winner) } = game.phase() else { panic!("{:?}", game.phase()) };
+    assert!(game.points(winner).unwrap() >= lobshot_sim::tuning::jewels::TARGET_POINTS.value, "{:?}", game.points(winner));
 }

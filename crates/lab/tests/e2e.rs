@@ -224,11 +224,26 @@ fn e2e_play_starts_a_score_game_that_counts_lives() {
     assert_eq!(points.iter().map(|p| p["team"].as_str().unwrap()).collect::<Vec<_>>(), ["A", "B"]);
     assert!(points.iter().all(|p| (1..=3).contains(&p["points"].as_i64().unwrap())), "{points:?}");
     assert_eq!(view["can_respawn"], false);
-    let refused = run_in(dir.path(), &["play", "new", "--map", "flat", "--mode", "jewel"]);
+    let refused = run_in(dir.path(), &["play", "new", "--map", "flat", "--mode", "tag"]);
     assert!(!refused.status.success());
     assert!(
-        String::from_utf8_lossy(&refused.stderr).contains("Jewel mode isn't built yet"),
+        String::from_utf8_lossy(&refused.stderr).contains("Tag mode isn't built yet"),
         "{}",
         String::from_utf8_lossy(&refused.stderr)
     );
+}
+
+/// PRD-0007 T-003: `play new --mode jewel` seats a Jewel game, and the view shows the jewels on
+/// the map and each team's points.
+#[test]
+fn e2e_play_starts_a_jewel_game_with_jewels_on_the_map() {
+    let dir = TempDir::new().unwrap();
+    let args = ["play", "new", "--map", "flat", "--mode", "jewel", "--level", "easy", "--seed", "4"];
+    let view: serde_json::Value = serde_json::from_str(&stdout(&run_in(dir.path(), &args))).unwrap();
+    assert_eq!(view["mode"], "Jewel");
+    let points = view["points"].as_array().unwrap();
+    assert_eq!(points.iter().map(|p| p["team"].as_str().unwrap()).collect::<Vec<_>>(), ["A", "B"]);
+    let jewels = view["jewels"].as_array().unwrap();
+    assert!(!jewels.is_empty(), "{view}");
+    assert!(jewels.iter().all(|jewel| jewel["needs"].as_i64().unwrap() >= 100 && jewel["x"].as_i64().is_some()), "{jewels:?}");
 }

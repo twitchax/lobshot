@@ -1,8 +1,10 @@
 //! Game modes (PRD-0007): rules over the same turn order, so replays, bots and the lab play every
 //! mode alike. Solo is GunBound's default: one life each, and the last team standing wins. In Score
 //! each team has lives (its points), every death costs one, and the dead drop back in where they
-//! pick, a few turns later (`docs/research/modes-score.md`). Tag and Jewel are named but not built
-//! yet: a game refuses them (`Mode::built`), and so does a room.
+//! pick, a few turns later (`docs/research/modes-score.md`). In Jewel, jewels fall onto the map
+//! (`sim::jewels`) and a team scores those it deals enough damage to in a turn; shots hurt no one,
+//! so only a bunge kills, and the bunged drop back in as in Score (`docs/research/modes-jewel.md`).
+//! Tag is named but not built yet: a game refuses it (`Mode::built`), and so does a room.
 //!
 //! Each of a mode's rules is decided here, once: whether a team is out of the game (`out`), what a
 //! death costs and whether the dead may come back (`died`), and how they come back (`RespawnRule`,
@@ -16,12 +18,14 @@ use crate::{
     base::Void,
     game::{Death, Effect, Game, Leg, Phase, Seat, Team},
     items::percent_of,
+    jewels::Jewelry,
     mines,
     movement::{self, Footing, Landing},
     referee,
     tuning::{
         MAX_FLIGHT_SECONDS, SKY,
         drops::GRAVITY,
+        jewels,
         modes::{RESPAWN_HP_PERCENT, RESPAWN_TURNS_BEFORE, RESPAWN_WIND, SCORE_DEATH_COST, SCORE_EXTRA_LIVES, SCORE_RESPAWN_TURNS},
     },
     turn::{self, Clock},
@@ -38,7 +42,7 @@ pub enum Mode {
     Score,
     /// Two mobiles each, switching between them. Not built yet.
     Tag,
-    /// Shooting falling jewels for points. Not built yet.
+    /// Shooting falling jewels for points: bullets hurt no one, and only a bunge kills.
     Jewel,
 }
 
@@ -60,11 +64,11 @@ impl Mode {
     /// Whether this build plays it: a game refuses one that isn't, and so does a room.
     #[must_use]
     pub const fn built(self) -> bool {
-        matches!(self, Self::Solo | Self::Score)
+        matches!(self, Self::Solo | Self::Score | Self::Jewel)
     }
 
-    /// Whether the dead spin the slot machine: in Solo and Tag (WP06). In Score they drop back in
-    /// instead, and there is none (GF-kurai, GF-vgg).
+    /// Whether the dead spin the slot machine: in Solo and Tag (WP06). In Score and Jewel they drop
+    /// back in instead, and there is none (GF-kurai, GF-vgg).
     #[must_use]
     pub const fn slot_machine(self) -> bool {
         matches!(self, Self::Solo | Self::Tag)
@@ -78,14 +82,18 @@ impl Mode {
                 turns: SCORE_RESPAWN_TURNS.value,
                 deaths: &[Death::Blasted, Death::Bunged],
             }),
-            Self::Solo | Self::Tag | Self::Jewel => None,
+            Self::Jewel => Some(RespawnRule {
+                turns: jewels::RESPAWN_TURNS.value,
+                deaths: &[Death::Bunged],
+            }),
+            Self::Solo | Self::Tag => None,
         }
     }
 
-    /// Whether each team has points: Score's lives.
+    /// Whether each team has points: Score's lives, or Jewel's points toward the target.
     #[must_use]
     pub const fn counts_points(self) -> bool {
-        matches!(self, Self::Score)
+        matches!(self, Self::Score | Self::Jewel)
     }
 
     /// The points a team of `players` starts with: in Score, a life each and one more.
@@ -102,6 +110,20 @@ impl Mode {
             Self::Score => SCORE_DEATH_COST.value,
             Self::Solo | Self::Tag | Self::Jewel => 0,
         }
+    }
+
+    /// Whether what a shot deals hurts a mobile. In Jewel it doesn't: "bullets don't hurt players;
+    /// only bunge does" (SW-modes, mechanics.md section 7). `Game::hurt` and `Game::strip` ask, so
+    /// the rule holds for every shot, mine, bolt, beam and drop alike.
+    #[must_use]
+    pub const fn harms(self) -> bool {
+        !matches!(self, Self::Jewel)
+    }
+
+    /// Whether jewels fall onto the map (`sim::jewels`).
+    #[must_use]
+    pub const fn jewels(self) -> bool {
+        matches!(self, Self::Jewel)
     }
 }
 
@@ -124,6 +146,8 @@ pub struct ModeState {
     points: [i32; 2],
     /// The dead who may come back, in the order they died, with where each drops in once picked.
     respawns: Vec<Respawn>,
+    /// The jewels on the map, in Jewel.
+    pub(crate) jewelry: Jewelry,
 }
 
 /// A dead seat that may come back, and where it drops in once its player has picked.
@@ -150,6 +174,7 @@ impl ModeState {
             mode,
             points: [starting(Team::A), starting(Team::B)],
             respawns: Vec::new(),
+            jewelry: if mode.jewels() { Jewelry::opening() } else { Jewelry::default() },
         }
     }
 
@@ -188,8 +213,27 @@ pub(crate) fn out(game: &Game, team: Team) -> bool {
     let standing = game.players().iter().any(|player| player.alive && player.team == team);
     match game.mode() {
         Mode::Score => !standing || game.mode_state.points(team).is_some_and(|points| points <= 0),
-        Mode::Solo | Mode::Tag | Mode::Jewel => !standing,
+        Mode::Jewel => jewel_out(game, team, standing),
+        Mode::Solo | Mode::Tag => !standing,
     }
+}
+
+/// Whether `team` is out of a Jewel game: the other team has the points it plays to, or no one of
+/// `team` stands: "If all players are bunged at the same time, the team loses" (SW-modes, WP06,
+/// GF-kurai), so a bunge in 1v1 ends it.
+fn jewel_out(game: &Game, team: Team, standing: bool) -> bool {
+    let other = match team {
+        Team::A => Team::B,
+        Team::B => Team::A,
+    };
+    !standing || game.mode_state.points(other).is_some_and(|points| points >= jewels::TARGET_POINTS.value)
+}
+
+/// `team` scores `points` (a jewel taken; a fake's are negative), never below none.
+pub(crate) fn score(game: &mut Game, team: Team, points: i32, effects: &mut Vec<Effect>) {
+    let total = &mut game.mode_state.points[index(team)];
+    *total = (*total + points).max(0);
+    effects.push(Effect::Points { team, points: *total });
 }
 
 /// What `seat`'s death costs its team (in Score, a life, however it died), and, where the mode
@@ -282,10 +326,16 @@ pub(crate) fn land_due(game: &mut Game, effects: &mut Vec<Effect>) {
 /// don't stop it.
 #[must_use]
 pub fn fall(game: &Game, x: i32) -> (Leg, Option<Footing>) {
+    fall_in_wind(game, x, RESPAWN_WIND.value)
+}
+
+/// `fall` for anything dropped from the sky down column `x`, the wind pushing it `push` times as
+/// hard as a shot (0 for a jewel, `jewels::fall`).
+pub(crate) fn fall_in_wind(game: &Game, x: i32, push: f64) -> (Leg, Option<Footing>) {
     let flight = Flight {
         origin: Vec2::new(f64::from(x) + 0.5, -SKY.value),
         velocity: Vec2::ZERO,
-        accel: ballistics::acceleration(GRAVITY.value, game.wind(), RESPAWN_WIND.value),
+        accel: ballistics::acceleration(GRAVITY.value, game.wind(), push),
     };
     let terrain = game.terrain();
     let (width, height) = (f64::from(terrain.width()), f64::from(terrain.height()));
@@ -416,17 +466,15 @@ mod unit {
     }
 
     #[test]
-    fn modes_have_their_own_names_and_solo_and_score_are_built() {
+    fn modes_have_their_own_names_and_solo_score_and_jewel_are_built() {
         let mut names: Vec<&str> = Mode::ALL.iter().map(|mode| mode.name()).collect();
         names.dedup();
         assert_eq!(names, ["Solo", "Score", "Tag", "Jewel"]);
         assert_eq!(Mode::default(), Mode::Solo);
-        assert_eq!(Mode::ALL.map(Mode::built), [true, true, false, false]);
-        for mode in [Mode::Tag, Mode::Jewel] {
-            let setup = Setup { mode, ..duel_setup(800) };
-            let error = Game::new(&setup, &NoAssets).unwrap_err().to_string();
-            assert_eq!(error, format!("{} mode isn't built yet", mode.name()));
-        }
+        assert_eq!(Mode::ALL.map(Mode::built), [true, true, false, true]);
+        let setup = Setup { mode: Mode::Tag, ..duel_setup(800) };
+        let error = Game::new(&setup, &NoAssets).unwrap_err().to_string();
+        assert_eq!(error, "Tag mode isn't built yet");
     }
 
     #[test]

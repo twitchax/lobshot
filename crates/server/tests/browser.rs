@@ -319,6 +319,39 @@ async fn e2e_browser_practice_arms_an_item_and_locks_ss() {
     drop(server);
 }
 
+/// PRD-0007 T-003: practice offers Jewel. Stepped to it on the title, a practice game has jewels on
+/// the map and each side's points, and as the turns go by (the bot shooting, the player passing)
+/// no one is hurt.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs Chrome and a client bundle; run `cargo make browser`"]
+async fn e2e_browser_practice_plays_jewel_and_no_one_is_hurt() {
+    let dist = bundle();
+    let cwd = TempDir::new().unwrap();
+    let server = start(&dist, cwd.path());
+    let browser = launch();
+    let tab = browser.new_tab().unwrap();
+    let origin = format!("http://{}", server.addr);
+
+    let (first, later) = tokio::task::spawn_blocking(move || {
+        tab.navigate_to(&origin).unwrap().wait_until_navigated().unwrap();
+        // Solo, then Score, then Jewel: the toggle names the mode it steps to.
+        click_until(&tab, "PracticeMode(Score)", "Score picked", |state| spot(state, "PracticeMode(Jewel)").is_some());
+        click_until(&tab, "PracticeMode(Jewel)", "Jewel picked", |state| spot(state, "PracticeMode(Solo)").is_some());
+        click_until(&tab, "Practice", "a practice game", |state| state["screen"] == "Game");
+        let first = wait_for(&tab, "jewels on the map", |state| state["jewels"].as_u64() > Some(0) && state["me"].is_object());
+        // Each side has had a turn: the bot's shot, and the player's pass.
+        let later = click_until(&tab, "Pass", "two turns played", |state| state["turns"].as_i64() >= Some(2));
+        (first, later)
+    })
+    .await
+    .unwrap();
+    assert_eq!(first["points"].as_array().map(Vec::len), Some(2), "each side's points: {first}");
+    assert_eq!(later["me"]["hp"], first["me"]["hp"], "no one is hurt: {later}");
+    assert_eq!(later["me"]["shield"], first["me"]["shield"], "{later}");
+    drop(browser);
+    drop(server);
+}
+
 /// Where the pit field's mobiles spawn: each with a shaft off the map `PIT_GAP` px to its right,
 /// so a mobile that walks right falls to its death.
 const PIT_SPAWNS: [i32; 4] = [200, 600, 1000, 1400];

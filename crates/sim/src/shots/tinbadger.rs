@@ -13,7 +13,7 @@ use super::{
 use crate::{
     ballistics::Flight,
     game::{Contact, Effect, Game, Impact, Senses, Shot, Track},
-    mines,
+    jewels, mines,
     movement::{self, Footing, Landing},
     tuning::tinbadger::{
         MINE_RADIUS, S1_AMPLITUDE, S1_COG_BLAST, S1_COG_CRATER, S1_COG_DAMAGE, S1_COGS, S1_HERTZ, S2_SHELLS, S2_SPREAD_BARS, SS_BLAST, SS_DAMAGE, SS_FUSE_SECONDS, SS_HEIGHT, SS_WALK_SPEED,
@@ -158,12 +158,14 @@ fn march(game: &Game, track: &Track, facing: Facing) -> Option<Walked> {
     let steps = ticks(SS_FUSE_SECONDS.value) / ticks(1.0 / MARCH.speed).max(1);
     // It meets a mine when their shells touch: a mine's size, and the beetle's half height.
     let mine_at = |at: Vec2| game.mines().iter().any(|mine| mine.middle().distance(at) <= MINE_RADIUS.value + SS_HEIGHT.value);
+    // And a jewel when it walks into one (in Jewel mode: Raon's SS goes off on one too).
+    let jewel_at = |at: Vec2| jewels::at(game, at);
     let touch = |at: Vec2| {
         let mobile = (0_u8..)
             .zip(game.players())
             .find(|(_, player)| player.alive && mines::senses(player.mobile) && player.pose().hit(player.tuning().hitbox.value, at))
             .map(|(seat, _)| Contact::Mobile(seat));
-        mobile.or_else(|| mine_at(at).then_some(Contact::Terrain))
+        mobile.or_else(|| (mine_at(at) || jewel_at(at)).then_some(Contact::Terrain))
     };
     let start = Start {
         at: start,

@@ -8,6 +8,7 @@
 mod fx;
 mod hud;
 mod input;
+mod jewels;
 mod playback;
 mod practice;
 mod scoreboard;
@@ -177,6 +178,7 @@ impl Plugin for GamePlugin {
             .add_systems(OnExit(Screen::Game), leave)
             .add_plugins((
                 world::WorldPlugin,
+                jewels::JewelsPlugin,
                 playback::PlaybackPlugin,
                 fx::FxPlugin,
                 scoreboard::ScoreboardPlugin,

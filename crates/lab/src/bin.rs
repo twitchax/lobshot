@@ -91,7 +91,7 @@ enum PlayStep {
         /// Players a team, 1 to 4.
         #[arg(long)]
         team_size: Option<u8>,
-        /// What the game is played for: solo or score.
+        /// What the game is played for: solo, score or jewel.
         #[arg(long)]
         mode: Option<String>,
         /// How well the bots play: easy, normal or hard.
@@ -120,7 +120,7 @@ enum PlayStep {
         item: Option<u8>,
     },
     /// Your move, as the wire's JSON: '{"Shoot":{"shot":"S1","aim":45,"power":48}}',
-    /// '{"Walk":{"facing":"Left","steps":40}}', '{"Item":{"slot":0}}', Pass, or, dead in Score,
+    /// '{"Walk":{"facing":"Left","steps":40}}', '{"Item":{"slot":0}}', Pass, or, dead in Score or Jewel,
     /// '{"Respawn":{"x":600}}'.
     Act { action: String },
 }

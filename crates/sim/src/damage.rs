@@ -48,20 +48,30 @@ impl Target {
 /// - Otherwise: `min` touching the hitbox, falling linearly to 0 at the blast's edge.
 #[must_use]
 pub fn damage(blast: &Blast, target: &Target, direct: bool) -> i32 {
+    let Some(base) = reach(blast, &target.pose, target.hitbox, direct) else { return 0 };
+    scale(base, blast.weapon, target, blast.false_angle, blast.boost)
+}
+
+/// Damage to something with no armor at `pose` (a jewel, `sim::jewels`): `damage`'s by where the
+/// blast went off, scaled for false angle and `boost` alone, since no weapon is strong or weak
+/// against it.
+#[must_use]
+pub fn unarmored(blast: &Blast, pose: &Pose, hitbox: Rect, direct: bool) -> i32 {
+    reach(blast, pose, hitbox, direct).map_or(0, |base| scaled(base, 1.0, blast.false_angle, blast.boost))
+}
+
+/// `damage`'s base, before armor and boosts: `None` past the blast's edge.
+fn reach(blast: &Blast, pose: &Pose, hitbox: Rect, direct: bool) -> Option<f64> {
     let DamageRange { min, max } = blast.damage;
     let (min, max) = (f64::from(min), f64::from(max));
-    let base = if direct {
-        let half_diagonal = (target.hitbox.w * target.hitbox.w + target.hitbox.h * target.hitbox.h).sqrt() / 2.0;
-        let off_center = (blast.center.distance(target.pose.center(target.hitbox)) / half_diagonal).clamp(0.0, 1.0);
-        max - (max - min) * off_center
+    if direct {
+        let half_diagonal = (hitbox.w * hitbox.w + hitbox.h * hitbox.h).sqrt() / 2.0;
+        let off_center = (blast.center.distance(pose.center(hitbox)) / half_diagonal).clamp(0.0, 1.0);
+        Some(max - (max - min) * off_center)
     } else {
-        let gap = target.pose.gap(target.hitbox, blast.center);
-        if gap >= blast.radius {
-            return 0;
-        }
-        min * (1.0 - gap / blast.radius)
-    };
-    scale(base, blast.weapon, target, blast.false_angle, blast.boost)
+        let gap = pose.gap(hitbox, blast.center);
+        (gap < blast.radius).then(|| min * (1.0 - gap / blast.radius))
+    }
 }
 
 /// Damage to `target` from a blast that burns low (Thistleback's SS): `max` going off at or below
@@ -87,8 +97,14 @@ pub fn low(blast: &Blast, target: &Target) -> i32 {
 /// angle and `boost` (weather, items), rounding down.
 #[must_use]
 pub fn scale(base: f64, weapon: WeaponType, target: &Target, false_angle: bool, boost: f64) -> i32 {
+    scaled(base, target.against(weapon), false_angle, boost)
+}
+
+/// `base` times `against` (the weapon against the target's armor), scaled for false angle and
+/// `boost`, rounding down.
+fn scaled(base: f64, against: f64, false_angle: bool, boost: f64) -> i32 {
     let angle = if false_angle { FALSE_ANGLE_DAMAGE.value } else { 1.0 };
-    let damage = (base * target.against(weapon) * angle * boost).floor();
+    let damage = (base * against * angle * boost).floor();
     // Bounded by a few times the shot's max damage, far inside i32.
     #[allow(clippy::cast_possible_truncation)]
     let damage = damage as i32;

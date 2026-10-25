@@ -289,14 +289,14 @@ mod unit {
             })
         };
         assert_eq!(h.room.view().options.mode, Mode::Solo, "a new room plays Solo");
-        h.send(1, with(Mode::Score));
-        assert_eq!(h.rejections(1), Vec::<String>::new());
-        assert_eq!(h.room.view().options.mode, Mode::Score);
-        for mode in [Mode::Tag, Mode::Jewel] {
+        for mode in [Mode::Score, Mode::Jewel] {
             h.send(1, with(mode));
-            assert_eq!(h.rejections(1), [format!("{} mode isn't built yet: rooms play Solo or Score", mode.name())]);
+            assert_eq!(h.rejections(1), Vec::<String>::new());
+            assert_eq!(h.room.view().options.mode, mode);
         }
-        assert_eq!(h.room.view().options.mode, Mode::Score, "a refusal changes nothing");
+        h.send(1, with(Mode::Tag));
+        assert_eq!(h.rejections(1), ["Tag mode isn't built yet: rooms play Solo, Score or Jewel"]);
+        assert_eq!(h.room.view().options.mode, Mode::Jewel, "a refusal changes nothing");
     }
 
     #[test]

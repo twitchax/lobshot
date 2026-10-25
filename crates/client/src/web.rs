@@ -196,6 +196,10 @@ pub struct Published<'a> {
     /// The map column under the pointer, while it points at the map rather than the HUD: where a
     /// click drops a dead player back in (Score).
     pub map_x: Option<i32>,
+    /// The jewels on the map (Jewel).
+    pub jewels: usize,
+    /// Each team's points, A's then B's, in a mode that counts them.
+    pub points: Option<[i32; 2]>,
 }
 
 /// This player in the game.
@@ -220,7 +224,9 @@ pub struct Me<'a> {
 ///   sudden_death: { kind, in, on } | null,
 ///   sounds: { loaded, played: { blast: 2, .. } },
 ///   buttons: [{ action, x, y, enabled }],
-///   map_x: 640 | null }
+///   map_x: 640 | null,
+///   jewels: 4,
+///   points: [35, 20] | null }
 /// ```
 ///
 /// Items, mobiles and sudden-death kinds are named as `Debug` prints them, the same as in button
@@ -312,5 +318,10 @@ pub fn publish(now: &Published) {
     }
     set(&state, "buttons", &buttons);
     set(&state, "map_x", &now.map_x.map_or(JsValue::NULL, JsValue::from));
+    // A handful of jewels, far inside a JS number.
+    #[allow(clippy::cast_precision_loss)]
+    set(&state, "jewels", &JsValue::from_f64(now.jewels as f64));
+    let points = now.points.map_or(JsValue::NULL, |points| points.iter().map(|&p| JsValue::from(p)).collect::<js_sys::Array>().into());
+    set(&state, "points", &points);
     set(&window, "lobshot", &state);
 }
