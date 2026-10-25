@@ -163,6 +163,11 @@ fn keys(keyboard: Res<ButtonInput<KeyCode>>, turn: Turn, game: Option<ResMut<Mat
     if keyboard.any_just_pressed([KeyCode::F8, KeyCode::KeyP]) {
         acts.write(Act(Action::Pass));
     }
+    // Tag: F7 switches in the mobile sitting out, as in GunBound (GF-vgg); T too, since a browser
+    // may keep F7 for itself.
+    if keyboard.any_just_pressed([KeyCode::F7, KeyCode::KeyT]) && game.predicted.can_switch(seat) {
+        acts.write(Act(Action::Switch));
+    }
 }
 
 /// A new turn: start from last turn's aim (or the middle of the true range) and no power.
@@ -376,6 +381,9 @@ fn buttons(mut clicked: MessageReader<Clicked>, mut controls: ResMut<Controls>, 
             }
             UiAction::Pass => {
                 acts.write(Act(Action::Pass));
+            }
+            UiAction::Switch => {
+                acts.write(Act(Action::Switch));
             }
             UiAction::Chat => typing.open("Say something (start with /t for your team)", lobshot_protocol::MAX_CHAT, ""),
             _ => {}

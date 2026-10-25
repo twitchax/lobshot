@@ -202,6 +202,7 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
                     // A mobile that fires over its back turns it to the target.
                     facing: if shooter.tuning().s1.aim.value.backward() { Facing::Left } else { Facing::Right },
                     items: Loadout::default(),
+                    second: None,
                 },
                 Seat {
                     team: Team::B,
@@ -209,6 +210,7 @@ fn duel_of(shooter: MobileKind, distance: i32) -> Game {
                     spawn_x: 300 + distance,
                     facing: Facing::Left,
                     items: Loadout::default(),
+                    second: None,
                 },
             ],
             order: vec![0, 1],

@@ -171,12 +171,20 @@ fn show(game: Option<Res<Match>>, outcome: Res<Outcome>, session: Res<Session>, 
                 row(board, ["Player", "Mobile", "Damage", "Kills", "Bonuses"].map(str::to_owned), (theme::MUTED, theme::MUTED), 12.0);
                 for seat in standings(&teams, &tallies, winner) {
                     let (tally, seat_index) = (&tallies[seat], u8::try_from(seat).unwrap_or(u8::MAX));
-                    let mobile = game.log.setup.seats.get(seat).map_or("", |seat| picks::mobile_name(Some(seat.mobile)));
-                    let cells = [session.seat_name(seat_index), mobile.to_owned(), tally.damage.to_string(), tally.kills.to_string(), bonus_line(tally)];
+                    let mobile = game.log.setup.seats.get(seat).map_or_else(String::new, mobiles);
+                    let cells = [session.seat_name(seat_index), mobile, tally.damage.to_string(), tally.kills.to_string(), bonus_line(tally)];
                     row(board, cells, (team_color(teams[seat]), theme::TEXT), SIZE);
                 }
             });
     });
+}
+
+/// What a seat played: its mobile, and in Tag its second.
+fn mobiles(seat: &lobshot_sim::game::Seat) -> String {
+    match seat.second {
+        Some(second) => picks::pair_name(Some(seat.mobile), Some(second)),
+        None => picks::mobile_name(Some(seat.mobile)).to_owned(),
+    }
 }
 
 pub struct ScoreboardPlugin;

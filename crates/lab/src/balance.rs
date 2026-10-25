@@ -208,6 +208,7 @@ pub fn play(spec: &Spec, maps: &Maps) -> Res<(Outcome, Log)> {
         team,
         mobile: Some(spec.mobiles[usize::from(team == Team::B)]),
         items: bot::LOADOUT,
+        second: None,
     });
     let mut host = Host::seat(&arena, &entrants, &RoomOptions::default(), vec![Some(spec.level); 2], XorShift::new(spec.seed), maps)?;
     let first = host.log().setup.order[0];

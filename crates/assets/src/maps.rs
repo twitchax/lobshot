@@ -163,6 +163,7 @@ mod unit {
                 spawn_x,
                 facing: Facing::Right,
                 items: Loadout::default(),
+                second: None,
             });
             let setup = Setup {
                 map: arena.map.clone(),

@@ -99,6 +99,8 @@ pub struct Member {
     pub bot: bool,
     /// Whether their socket is open (a disconnected player keeps their seat for a while).
     pub connected: bool,
+    /// The second mobile they play in Tag (`None` is Random); other modes leave it out.
+    pub second: Option<MobileKind>,
 }
 
 /// Where the room is.
@@ -145,6 +147,8 @@ pub enum Action {
     Respawn {
         x: i32,
     },
+    /// Switch in the mobile sitting out (Tag), once a turn.
+    Switch,
 }
 
 impl Action {
@@ -159,6 +163,7 @@ impl Action {
             Self::Item { slot } => Event::UseItem { seat, slot, time },
             Self::Spin => Event::Spin { seat },
             Self::Respawn { x } => Event::Respawn { seat, x },
+            Self::Switch => Event::Switch { seat },
         }
     }
 }
@@ -200,6 +205,13 @@ pub enum ClientMsg {
     /// Master only, once everyone seated is ready.
     Start,
     Act(Action),
+    /// The second mobile to play in Tag, or `None` for Random.
+    Second(Option<MobileKind>),
+    /// Master only, in the lobby: a bot's second mobile in Tag, or `None` for Random.
+    BotSecond {
+        bot: MemberId,
+        mobile: Option<MobileKind>,
+    },
 }
 
 /// Server to client.
@@ -399,5 +411,6 @@ mod unit {
         assert_eq!(Action::Item { slot: 4 }.event(2, time), Event::UseItem { seat: 2, slot: 4, time });
         assert_eq!(Action::Spin.event(5, time), Event::Spin { seat: 5 });
         assert_eq!(Action::Respawn { x: 640 }.event(5, time), Event::Respawn { seat: 5, x: 640 });
+        assert_eq!(Action::Switch.event(3, time), Event::Switch { seat: 3 });
     }
 }

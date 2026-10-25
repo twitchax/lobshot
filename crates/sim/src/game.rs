@@ -25,6 +25,7 @@ use crate::{
     mode::{self, Mode, ModeState, Respawn},
     movement::{self, Footing, Landing, Step},
     shots::{self, Salvo},
+    tag::{self, Bench},
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
@@ -209,6 +210,10 @@ pub struct Seat {
     pub spawn_x: i32,
     pub facing: Facing,
     pub items: Loadout,
+    /// In Tag, the other mobile this seat plays: it sits out until its player switches it in
+    /// (`Event::Switch`). `None` in every other mode. Logs from before Tag had none.
+    #[serde(default)]
+    pub second: Option<MobileKind>,
 }
 
 /// What sudden death does once it starts (GunBound's room options: WP06, AK, GF-tiro).
@@ -316,6 +321,8 @@ pub enum Event {
     /// A dead player picks where to drop back in, in a mode where the dead come back (Score): it
     /// drops down column `x` some turns later (`mode::RespawnRule`). It works on anyone's turn.
     Respawn { seat: u8, x: i32 },
+    /// The active player switches in the mobile sitting out (Tag), once a turn (`tag::switch`).
+    Switch { seat: u8 },
 }
 
 /// Something random the server owes the game before anyone may act.
@@ -666,6 +673,15 @@ pub enum Effect {
         legs: Vec<Leg>,
         to: Option<Footing>,
     },
+    /// Tag: `seat` switched in `mobile`, which stands where the other stood with the HP, shield and
+    /// brittleness it kept while it sat out. The other sits out now (`Game::bench`).
+    Switched {
+        seat: u8,
+        mobile: MobileKind,
+        hp: i32,
+        shield: i32,
+        brittle: u8,
+    },
     /// Lodestoad's magnet pulled `seat` toward where it struck, or its pyramid pushed it away:
     /// it slid along the ground from stage tick `from` to `to`, through `path` (a footing a step,
     /// at an even pace), and stands at its last. One dragged over an edge falls on the way (the
@@ -838,6 +854,7 @@ impl Game {
     pub fn new(setup: &Setup, assets: &dyn MapAssets) -> Res<Self> {
         let seats = setup.seats.len();
         ensure!(setup.mode.built(), "{} mode isn't built yet", setup.mode.name());
+        tag::check_seats(setup.mode, &setup.seats)?;
         ensure!((2..=MAX_SEATS).contains(&seats), "a game needs 2 to {MAX_SEATS} seats, not {seats}");
         ensure!(setup.seats.iter().any(|s| s.team == Team::A) && setup.seats.iter().any(|s| s.team == Team::B), "both teams need a seat");
         let mut sorted = setup.order.clone();
@@ -980,6 +997,19 @@ impl Game {
     #[must_use]
     pub fn can_respawn(&self, seat: u8) -> bool {
         mode::check_pick(self, seat).is_ok()
+    }
+
+    /// In Tag, `seat`'s mobile sitting out, with what it kept there.
+    #[must_use]
+    pub fn bench(&self, seat: u8) -> Option<&Bench> {
+        self.mode_state.bench(seat)
+    }
+
+    /// Whether `seat` may switch in its mobile sitting out now (`Event::Switch`): in Tag, on its
+    /// turn, once a turn.
+    #[must_use]
+    pub fn can_switch(&self, seat: u8) -> bool {
+        self.ensure_turn(seat).is_ok() && tag::check_switch(self, seat).is_ok()
     }
 
     /// Whether `seat` may forfeit (`Event::Forfeit`): it is alive, or dead and may still come back.
@@ -1139,6 +1169,13 @@ impl Game {
                 ensure!(self.on_map(x), "drop point x {x} is off the map");
                 mode::pick(self, seat, x, &mut effects);
             }
+            Event::Switch { seat } => {
+                self.ensure_turn(seat)?;
+                tag::check_switch(self, seat)?;
+                tag::switch(self, seat, &mut effects);
+                // A mobile that floated over a mine is a grounded one on it now.
+                self.trip_under(seat, &mut effects);
+            }
         }
         Ok(effects)
     }
@@ -1239,9 +1276,15 @@ impl Game {
             self.end_turn(seat, Ending::Pass, Centis(0), effects);
             return;
         }
+        self.trip_under(seat, effects);
+    }
+
+    /// Sets off the mines at a mobile's sweet spot once `seat`'s mobile has come to stand on its
+    /// turn (a walk, a switch). If that kills it, or ends the game, the turn ends like a pass.
+    fn trip_under(&mut self, seat: u8, effects: &mut Vec<Effect>) {
         if mines::trip(self, 0, effects) {
             self.settle_all(effects);
-            if !self.players[index].alive || self.decided() {
+            if !self.players[usize::from(seat)].alive || self.decided() {
                 // Blown up by a mine: that ends the turn like a pass.
                 self.end_turn(seat, Ending::Pass, Centis(0), effects);
             }
@@ -1759,6 +1802,7 @@ pub(crate) mod testing {
             spawn_x,
             facing,
             items: Loadout::default(),
+            second: None,
         }
     }
 
@@ -2049,6 +2093,7 @@ mod unit {
             spawn_x: 700,
             facing: Facing::Right,
             items: Loadout::default(),
+            second: None,
         });
         setup.order = vec![0, 1, 2];
         let mut game = Game::new(&setup, &NoAssets).unwrap();

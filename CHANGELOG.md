@@ -63,6 +63,9 @@ why the version moved the way it did.
   B the docks, with container stacks and a gantry crane over the slip.
 - Rootmere (M5), a giant tree's roots over a marsh at dusk on the root-tangle archetype: A low
   arches over wide hollows, B a higher lattice on stilts with a bridge that breaks.
+- Tag mode (M6): two mobiles each, the second on half HP; switch once a turn on your own turn (F7 or
+  T, or the HUD's button), and you're out when the mobile in play dies. Bots pick two and switch
+  when it helps.
 - Score mode (M6): each team has its players + 1 lives; the dead pick a drop point on the map
   and drop back in 4 turns later, nudged by the wind. Rooms, practice and the lab all play it, and
   bots pick their drop points. Modes are a room option (Solo by default).

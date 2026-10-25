@@ -214,6 +214,7 @@ mod unit {
             team,
             mobile: Some(MobileKind::Coilback),
             items: bot::LOADOUT,
+            second: None,
         });
         Host::seat(&arena, &entrants, &RoomOptions::default(), bots, XorShift::new(seed), &maps).unwrap()
     }
@@ -295,6 +296,7 @@ mod unit {
                 team: if i % 2 == 0 { Team::A } else { Team::B },
                 mobile: Some(MobileKind::Coilback),
                 items: bot::LOADOUT,
+                second: None,
             })
             .collect();
         for level in [Level::Hard, Level::Normal, Level::Easy] {

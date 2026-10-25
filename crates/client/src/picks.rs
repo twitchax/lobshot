@@ -1,6 +1,7 @@
-//! This player's picks: a mobile (or Random) and a loadout, remembered in `localStorage` like the
-//! name and rider. The lobby and the garage edit them (`mobile_picker`, `loadout_editor`), practice
-//! plays with them, and in a room they go to the server whenever they differ from what it has.
+//! This player's picks: a mobile (or Random), a second one for Tag, and a loadout, remembered in
+//! `localStorage` like the name and rider. The lobby and the garage edit them (`mobile_picker`,
+//! `loadout_editor`), practice plays with them, and in a room they go to the server whenever they
+//! differ from what it has.
 
 use bevy::{prelude::*, ui::InteractionDisabled};
 use lobshot_assets::ART_SCALE;
@@ -20,12 +21,14 @@ use crate::{
     web,
 };
 
-/// This player's mobile and loadout.
+/// This player's mobiles and loadout.
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct Picks {
     /// `None` is Random: the server (or practice) picks when the game starts.
     pub mobile: Option<MobileKind>,
     pub loadout: Loadout,
+    /// The second mobile, played in Tag; `None` is Random too.
+    pub second: Option<MobileKind>,
 }
 
 impl Default for Picks {
@@ -33,6 +36,7 @@ impl Default for Picks {
         Self {
             mobile: Some(MobileKind::Coilback),
             loadout: starter(),
+            second: Some(MobileKind::Lanternwing),
         }
     }
 }
@@ -49,11 +53,13 @@ impl Picks {
         Self {
             mobile: web::load("mobile").and_then(|name| parse_mobile(&name).ok()).unwrap_or(defaults.mobile),
             loadout: web::load("loadout").and_then(|json| lobshot_protocol::from_json(&json).ok()).unwrap_or(defaults.loadout),
+            second: web::load("second").and_then(|name| parse_mobile(&name).ok()).unwrap_or(defaults.second),
         }
     }
 
     fn save(&self) {
         web::save("mobile", mobile_name(self.mobile));
+        web::save("second", mobile_name(self.second));
         if let Ok(json) = lobshot_protocol::to_json(&self.loadout) {
             web::save("loadout", &json);
         }
@@ -61,6 +67,11 @@ impl Picks {
 
     pub fn pick(&mut self, mobile: Option<MobileKind>) {
         self.mobile = mobile;
+        self.save();
+    }
+
+    pub fn pick_second(&mut self, mobile: Option<MobileKind>) {
+        self.second = mobile;
         self.save();
     }
 
@@ -88,6 +99,12 @@ impl Picks {
 #[must_use]
 pub fn mobile_name(mobile: Option<MobileKind>) -> &'static str {
     mobile.map_or("Random", |mobile| mobile.tuning().name)
+}
+
+/// A Tag player's two mobiles: "Coilback + Random".
+#[must_use]
+pub fn pair_name(first: Option<MobileKind>, second: Option<MobileKind>) -> String {
+    format!("{} + {}", mobile_name(first), mobile_name(second))
 }
 
 /// The mobile a remembered name stands for (`None` is Random).
@@ -235,6 +252,31 @@ pub fn mobile_picker(parent: &mut ChildSpawnerCommands, picked: Option<MobileKin
         }
     });
     parent.spawn(text(format!("{}: {}", mobile_name(picked), role(picked)), 14.0, theme::TEXT));
+}
+
+/// Which of a Tag player's two mobiles the picker sets: a toggle for each, naming its pick, the one
+/// being set outlined.
+pub fn slot_picker(parent: &mut ChildSpawnerCommands, first: Option<MobileKind>, second: Option<MobileKind>, picking_second: bool) {
+    parent
+        .spawn(Node {
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(6.0),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn(text("Tag plays two:", 13.0, theme::MUTED));
+            for (is_second, label, mobile) in [(false, "First", first), (true, "Second", second)] {
+                let node = Node {
+                    padding: UiRect::axes(Val::Px(9.0), Val::Px(4.0)),
+                    border: UiRect::all(Val::Px(2.0)),
+                    ..default()
+                };
+                row.spawn((button_node(UiAction::PickSecond(is_second), node), chosen(picking_second == is_second)))
+                    .with_children(|button| {
+                        button.spawn(text(format!("{label}: {}", mobile_name(mobile)), 13.0, theme::TEXT));
+                    });
+            }
+        });
 }
 
 /// One loadout slot's size, in UI pixels.
@@ -392,7 +434,7 @@ fn sync(session: Res<Session>, picks: Res<Picks>, mut socket: NonSendMut<Socket>
     if !matches!(room.stage, Stage::Lobby) {
         return;
     }
-    if mine.mobile == picks.mobile && mine.items == picks.loadout {
+    if mine.mobile == picks.mobile && mine.items == picks.loadout && mine.second == picks.second {
         *sent = None;
         return;
     }
@@ -404,6 +446,9 @@ fn sync(session: Res<Session>, picks: Res<Picks>, mut socket: NonSendMut<Socket>
     }
     if mine.items != picks.loadout {
         socket.send(&ClientMsg::Loadout(picks.loadout));
+    }
+    if mine.second != picks.second {
+        socket.send(&ClientMsg::Second(picks.second));
     }
     *sent = Some(picks.clone());
 }
@@ -438,6 +483,13 @@ mod unit {
     fn a_portrait_aims_over_the_back_of_a_mobile_that_fires_that_way() {
         assert_eq!(portrait_aim(MobileKind::Coilback), PORTRAIT_AIM);
         assert_eq!(portrait_aim(MobileKind::Augerdillo), 180.0 - PORTRAIT_AIM);
+    }
+
+    #[test]
+    fn a_tag_pair_reads_first_then_second() {
+        assert_eq!(pair_name(Some(MobileKind::Coilback), Some(MobileKind::Lanternwing)), "Coilback + Lanternwing");
+        assert_eq!(pair_name(None, Some(MobileKind::Coilback)), "Random + Coilback");
+        assert_eq!(Picks::default().second, Some(MobileKind::Lanternwing), "a new player's second for Tag");
     }
 
     #[test]

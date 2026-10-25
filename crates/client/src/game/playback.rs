@@ -194,6 +194,18 @@ enum Cue {
         color: Color,
     },
     SuddenDeath(SuddenDeathKind),
+    /// Tag: the mobile sitting out comes in.
+    Switch(SwitchIn),
+}
+
+/// A Tag switch: who switched, and the mobile that came in with what it kept on the bench.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SwitchIn {
+    seat: u8,
+    mobile: MobileKind,
+    hp: i32,
+    shield: i32,
+    brittle: u8,
 }
 
 /// What a scene does to a mine on screen, on its own schedule beside the cues (`stage_mine`).
@@ -583,10 +595,7 @@ fn take_off(effect: &Effect, at: f32, props: &Props, shooter: Shooter, commands:
         // Herdhound's whistle: small and bright, where its missiles are headed.
         Effect::Guide { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), dot_sprite(props.dot, Color::srgb_u8(0xff, 0xe2, 0x6b), 7.0)),
         // A mine crawling from where it sat: its own picture walks the path.
-        Effect::MineCrawled { seat, legs, .. } => {
-            let Some(&mobile) = props.mobiles.get(usize::from(*seat)) else { return flyers };
-            fly(legs, None, at + pacing::flight_seconds(legs), mine_sprite(props.rigs, props.server, props.dot, mobile));
-        }
+        Effect::MineCrawled { legs, .. } => fly(legs, None, at + pacing::flight_seconds(legs), mine_sprite(props.rigs, props.server, props.dot)),
         Effect::Dropped { drop, legs, .. } if !legs.is_empty() => {
             let sprite = Sprite {
                 image: props.server.load(lobshot_assets::drop_path(drop.kind)),
@@ -687,6 +696,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
             },
         )),
         Effect::SuddenDeath { kind } => cues.push((at, Cue::SuddenDeath(kind))),
+        Effect::Switched { .. } => switched(&effect, at, cues),
         Effect::TurnStarted { seat } => cues.push((at, Cue::Turn { seat })),
         Effect::GameOver { winner } => cues.push((at, Cue::Over { winner })),
         // Flyers took off above, and mines are staged on their own (`mine_cues`); the HUD shows the
@@ -828,7 +838,13 @@ type MineParts<'w, 's> = Query<'w, 's, (&'static MineView, &'static mut Transfor
 
 fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<(&MobileView, &mut Shown)>, mut transforms: FlyerParts, mut mines: MineParts, mut commands: Commands) {
     let Some(dot) = hands.dot.as_deref().map(|dot| Dot(dot.0.clone())) else { return };
-    let mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
+    // What each seat plays as this scene starts: in Tag, a switch shown before it changed it.
+    let mut mobiles: Vec<MobileKind> = hands.game.as_deref().map_or_default(|game| game.log.setup.seats.iter().map(|seat| seat.mobile).collect());
+    for (view, shown) in &views {
+        if let Some(mobile) = mobiles.get_mut(usize::from(view.seat)) {
+            *mobile = shown.mobile;
+        }
+    }
     if timeline.scene.is_none() {
         let Some(next) = timeline.queue.pop_front() else { return };
         let props = Props {
@@ -855,7 +871,7 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
         if at > now {
             break;
         }
-        if let Some(laid) = stage_mine(cue, &dot, &mobiles, &hands, &mut mines) {
+        if let Some(laid) = stage_mine(cue, &dot, &hands, &mut mines) {
             commands.spawn(laid);
         }
         scene.next_mine += 1;
@@ -873,7 +889,7 @@ fn play(mut timeline: ResMut<Timeline>, mut hands: Stagehands, mut views: Query<
 
 /// Plays a mine's cue on the mines on screen; returns a mine to spawn if one was laid that isn't
 /// there yet.
-fn stage_mine(cue: MineCue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehands, mines: &mut MineParts) -> Option<impl Bundle> {
+fn stage_mine(cue: MineCue, dot: &Dot, hands: &Stagehands, mines: &mut MineParts) -> Option<impl Bundle> {
     let place = |mines: &mut MineParts, id: MineId, at: Option<SimVec2>| {
         for (_, mut transform, mut visibility) in mines.iter_mut().filter(|(view, ..)| view.id == id) {
             if let Some(at) = at {
@@ -890,11 +906,10 @@ fn stage_mine(cue: MineCue, dot: &Dot, mobiles: &[MobileKind], hands: &Stagehand
                 place(mines, mine.id, Some(mine.middle()));
                 return None;
             }
-            let mobile = *mobiles.get(usize::from(mine.seat))?;
             Some((
                 GameRoot,
                 MineView { id: mine.id },
-                mine_sprite(&hands.rigs, &hands.server, dot, mobile),
+                mine_sprite(&hands.rigs, &hands.server, dot),
                 mine_transform(mine.middle(), mine.facing),
             ))
         }
@@ -974,6 +989,26 @@ fn set_moving(cue: &Cue, now: f32, motion: &mut Motion, views: &Query<(&MobileVi
         }),
         _ => {}
     }
+}
+
+/// A switch's cue (`Effect::Switched`).
+fn switched(effect: &Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
+    if let Effect::Switched { seat, mobile, hp, shield, brittle } = *effect {
+        cues.push((at, Cue::Switch(SwitchIn { seat, mobile, hp, shield, brittle })));
+    }
+}
+
+/// A puff where the two mobiles trade places, the name of the one coming in over it, and the view
+/// shows that one now (`world` re-dresses it).
+fn switch_in(switch: SwitchIn, dot: &Dot, views: &mut Query<(&MobileView, &mut Shown)>, commands: &mut Commands) {
+    let SwitchIn { seat, mobile, hp, shield, brittle } = switch;
+    if let Some(foot) = foot_of(views, seat) {
+        commands.spawn(puff(dot, foot + SimVec2::new(0.0, -30.0), 80.0, theme::ACCENT, 0.45));
+        commands.spawn(rising(mobile.tuning().name, theme::ACCENT, 16.0, world(foot) + Vec2::new(0.0, 128.0)));
+    }
+    adjust(views, seat, |shown| {
+        (shown.mobile, shown.hp, shown.shield, shown.brittle) = (mobile, hp, shield, brittle);
+    });
 }
 
 /// Plays one cue at `now`.
@@ -1056,6 +1091,7 @@ fn run(cue: &Cue, now: f32, motion: &mut Motion, dot: &Dot, views: &mut Query<(&
             }
         }
         Cue::SuddenDeath(kind) => hands.herald.0 = Some((kind, hands.time.elapsed_secs_f64())),
+        Cue::Switch(switch) => switch_in(switch, dot, views, commands),
         Cue::Focus { seat } => {
             if let Some(foot) = foot_of(views, seat) {
                 hands.focus.0 = Some(foot);

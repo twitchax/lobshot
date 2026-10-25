@@ -284,6 +284,8 @@ impl Room {
             ClientMsg::Kick(target) => self.kick(id, target, now),
             ClientMsg::Start => self.start(id, now),
             ClientMsg::Act(action) => self.act(id, action, now),
+            ClientMsg::Second(mobile) => self.choose(id, |member| member.second = mobile),
+            ClientMsg::BotSecond { bot, mobile } => self.bot_second(id, bot, mobile),
         }
     }
 
@@ -337,6 +339,7 @@ impl Room {
                 ready: false,
                 bot: false,
                 connected: true,
+                second: None,
             },
             token: Some(token),
             socket: Some(conn),

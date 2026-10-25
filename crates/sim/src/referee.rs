@@ -54,12 +54,14 @@ impl Dice for XorShift {
     }
 }
 
-/// Who sits down to a game: a team, a mobile (`None` is the lobby's Random) and a loadout.
+/// Who sits down to a game: a team, a mobile (`None` is the lobby's Random), a loadout, and, in
+/// Tag, a second mobile (`None` is Random again; other modes leave it out).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entrant {
     pub team: Team,
     pub mobile: Option<MobileKind>,
     pub items: Loadout,
+    pub second: Option<MobileKind>,
 }
 
 /// Which of a map's variants a game plays on: rolled when there is more than one.
@@ -74,8 +76,9 @@ pub fn arena(mut arenas: Vec<Arena>, dice: &mut impl Dice) -> Res<Arena> {
 }
 
 /// Seats `entrants` on `arena` as a host does, to play `mode`: on its spawn columns, shuffled, each
-/// mobile facing the middle; Random picks rolled, so the setup holds what each seat really plays; a
-/// turn order with the teams alternating (`turn_order`); and the opening wind.
+/// mobile facing the middle; Random picks rolled (`mobile`, and in Tag `second`), so the setup holds
+/// what each seat really plays; a turn order with the teams alternating (`turn_order`); and the
+/// opening wind.
 ///
 /// # Errors
 ///
@@ -89,17 +92,20 @@ pub fn setup(arena: &Arena, entrants: &[Entrant], max_wind: u8, sudden_death: Op
     );
     let mut spawns = arena.spawns.clone();
     shuffle(&mut spawns, dice);
-    let mobiles: Vec<MobileKind> = entrants.iter().map(|e| e.mobile.unwrap_or_else(|| MobileKind::ALL[roll_index(MobileKind::ALL.len(), dice)])).collect();
+    let mobiles: Vec<MobileKind> = entrants.iter().map(|e| mobile(e.mobile, dice)).collect();
+    // Every first pick rolls before any second, so a game of any other mode rolls as it always has.
+    let seconds: Vec<Option<MobileKind>> = entrants.iter().map(|e| second(mode, e.second, dice)).collect();
     let seats = entrants
         .iter()
         .zip(spawns)
-        .zip(mobiles)
-        .map(|((entrant, spawn_x), mobile)| Seat {
+        .zip(mobiles.into_iter().zip(seconds))
+        .map(|((entrant, spawn_x), (mobile, second))| Seat {
             team: entrant.team,
             mobile,
             spawn_x,
             facing: facing(spawn_x, arena.width),
             items: entrant.items,
+            second,
         })
         .collect();
     let teams: Vec<Team> = entrants.iter().map(|e| e.team).collect();
@@ -112,6 +118,17 @@ pub fn setup(arena: &Arena, entrants: &[Entrant], max_wind: u8, sudden_death: Op
         sudden_death,
         mode,
     })
+}
+
+/// The mobile a pick plays: itself, or for Random (`None`) any of them.
+pub fn mobile(pick: Option<MobileKind>, dice: &mut impl Dice) -> MobileKind {
+    pick.unwrap_or_else(|| MobileKind::ALL[roll_index(MobileKind::ALL.len(), dice)])
+}
+
+/// The second mobile a pick plays in `mode`: in Tag, itself or for Random any mobile (`mobile`);
+/// in every other mode none, and no roll.
+pub fn second(mode: Mode, pick: Option<MobileKind>, dice: &mut impl Dice) -> Option<MobileKind> {
+    (mode == Mode::Tag).then(|| mobile(pick, dice))
 }
 
 /// The way a mobile spawning at `spawn_x` faces: toward the middle, where the enemy most likely is.
@@ -221,6 +238,7 @@ mod unit {
                 team,
                 mobile: None,
                 items: Loadout::default(),
+                second: None,
             })
             .collect()
     }
@@ -265,6 +283,43 @@ mod unit {
             rolled.insert(format!("{:?}", setup.seats[1].mobile));
         }
         assert_eq!(rolled.len(), MobileKind::ALL.len());
+    }
+
+    #[test]
+    fn in_tag_each_seat_plays_a_second_pick_and_random_ones_roll_every_mobile() {
+        let arena = field();
+        let mut chosen = entrants(&[Team::A, Team::B]);
+        chosen[0].mobile = Some(MobileKind::Hookclaw);
+        chosen[0].second = Some(MobileKind::Hookclaw);
+        let mut rolled = BTreeSet::new();
+        for seed in 0..200 {
+            let setup = setup(&arena, &chosen, 0, None, Mode::Tag, &mut XorShift::new(seed)).unwrap();
+            assert_eq!(
+                (setup.seats[0].mobile, setup.seats[0].second),
+                (MobileKind::Hookclaw, Some(MobileKind::Hookclaw)),
+                "the same twice is a pair"
+            );
+            rolled.insert(format!("{:?}", setup.seats[1].second.unwrap()));
+            Game::new(&setup, &NoAssets).unwrap();
+        }
+        assert_eq!(rolled.len(), MobileKind::ALL.len());
+    }
+
+    #[test]
+    fn other_modes_seat_no_second_and_roll_as_they_always_have() {
+        let arena = field();
+        let mut picked = entrants(&[Team::A, Team::B, Team::A, Team::B]);
+        for entrant in &mut picked {
+            entrant.second = Some(MobileKind::Sparkhorn);
+        }
+        for mode in [Mode::Solo, Mode::Score] {
+            let (mut with, mut without) = (XorShift::new(9), XorShift::new(9));
+            let a = setup(&arena, &picked, 26, None, mode, &mut with).unwrap();
+            let b = setup(&arena, &entrants(&[Team::A, Team::B, Team::A, Team::B]), 26, None, mode, &mut without).unwrap();
+            assert_eq!(a, b, "a second pick means nothing outside Tag");
+            assert_eq!(with, without, "and rolls nothing");
+            assert!(a.seats.iter().all(|seat| seat.second.is_none()));
+        }
     }
 
     #[test]

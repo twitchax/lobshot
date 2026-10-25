@@ -48,8 +48,10 @@ pub struct NewGame {
     pub map: Option<String>,
     /// Players a team, 1 to 4 (1 when left out). Your teammates are bots too.
     pub team_size: Option<u8>,
-    /// What the game is played for: solo or score (solo when left out).
+    /// What the game is played for: solo, score or tag (solo when left out).
     pub mode: Option<String>,
+    /// Your second mobile, by name, in Tag; random when left out (the bots' are random).
+    pub second: Option<String>,
     /// How well the bots play: easy, normal or hard (normal when left out).
     pub level: Option<String>,
     /// Where the game's rolls start; a fresh one when left out (every view reports it).
@@ -101,21 +103,25 @@ impl Session {
         let arena = referee::arena(maps.arenas(&map)?, &mut dice)?;
 
         let you = new.mobile.as_deref().map(mobile).transpose()?;
+        let second = new.second.as_deref().map(mobile).transpose()?;
         let against: Vec<MobileKind> = new.against.iter().map(|name| mobile(name)).collect::<Res<_>>()?;
         let mut entrants = vec![Entrant {
             team: Team::A,
             mobile: you,
             items: bot::LOADOUT,
+            second,
         }];
         entrants.extend((1..size).map(|_| Entrant {
             team: Team::A,
             mobile: None,
             items: bot::LOADOUT,
+            second: None,
         }));
         entrants.extend((0..usize::from(size)).map(|i| Entrant {
             team: Team::B,
             mobile: against.get(i).copied(),
             items: bot::LOADOUT,
+            second: None,
         }));
         let mut bots = vec![Some(level); entrants.len()];
         bots[0] = None;
@@ -242,7 +248,7 @@ fn mode(name: &str) -> Res<Mode> {
     Mode::ALL
         .into_iter()
         .find(|mode| mode.name().eq_ignore_ascii_case(name.trim()))
-        .with_context(|| format!("{name:?} isn't a mode: solo or score"))
+        .with_context(|| format!("{name:?} isn't a mode: solo, score or tag"))
 }
 
 /// A seed from the clock: an agent's game needn't be reproducible unless it asks for a seed.
@@ -505,6 +511,21 @@ pub struct PlayerView {
     /// Unused items, by loadout slot.
     pub items: Vec<SlotItem>,
     pub ss: String,
+    /// Tag: the other mobile, sitting out, with what it keeps there until it switches in.
+    pub sitting_out: Option<BenchView>,
+}
+
+/// A Tag player's mobile sitting out: it is off the map, and nothing on it changes there.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BenchView {
+    pub mobile: &'static str,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub shield: i32,
+    pub max_shield: i32,
+    pub brittle: u8,
+    /// Its own turns until its SS may fire again, once it is in play; 0 when it may.
+    pub ss_lock: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -558,6 +579,8 @@ pub struct Options {
     pub base_delay: u32,
     /// What a pass adds on top of the base delay.
     pub pass_delay: u32,
+    /// Tag: you may switch in your mobile sitting out, with `"Switch"` (once a turn).
+    pub can_switch: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -767,6 +790,18 @@ fn player_view(game: &Game, seat: u8, player: &Player, you: u8) -> PlayerView {
             Ok(SsState::Armed(item)) => format!("not with {} armed", item.name()),
             Err(_) => "unknown".to_owned(),
         },
+        sitting_out: game.bench(seat).map(|bench| {
+            let tuning = bench.mobile.tuning();
+            BenchView {
+                mobile: tuning.name,
+                hp: bench.hp,
+                max_hp: tuning.hp.value,
+                shield: bench.shield,
+                max_shield: tuning.shield.value,
+                brittle: bench.brittle,
+                ss_lock: bench.ss_lock,
+            }
+        }),
     }
 }
 
@@ -801,6 +836,7 @@ fn options(game: &Game, you: u8) -> Options {
         moves_left: player.moves_left,
         base_delay: player.tuning().base_delay.value,
         pass_delay: tuning::PASS_DELAY.value,
+        can_switch: game.can_switch(you),
     }
 }
 
@@ -916,6 +952,7 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::ItemUsed { seat, item, .. } => format!(" {} used {}.", names.who(*seat), item.name()),
         Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", names.who(*seat), to.x),
         Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", names.who(*seat), names.who(*with)),
+        Effect::Switched { seat, mobile, .. } => format!(" {} switched in {}.", names.who(*seat), mobile.tuning().name),
         Effect::Slid { seat, path, .. } => path.last().map_or_else(String::new, |to| format!(" {} slid to x={}.", names.who(*seat), to.x)),
         Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
         Effect::WeatherChanged { columns, now, .. } => match now {
@@ -1068,6 +1105,13 @@ picks where to drop back in, whenever they like, with `{\"Respawn\": {\"x\": 600
 says when you may): they fall from the sky down that column {RESPAWN} turns later, the wind nudging
 them a little, with full HP and their turn soon after. A drop that misses the ground costs no life,
 but you pick again. There is no slot machine in Score.
+
+In Tag each player brings two mobiles and plays one at a time; the other, which starts on half its
+HP, sits out off the map, keeping its HP, shield, SS lock and brittleness (`sitting_out`). Once a
+turn, on your turn (`options.can_switch`), `\"Switch\"` brings it in where the one in play stands,
+facing the same way, and sends that one out; the turn goes on, with your loadout, the steps you
+have walked and any item you used. You are out when the mobile in play dies, however much the
+other has left, and then the slot machine is yours.
 ";
 
 fn about(mobile: MobileKind) -> String {
@@ -1364,6 +1408,38 @@ mod unit {
     }
 
     #[test]
+    fn in_tag_the_view_shows_the_mobile_sitting_out_and_the_agent_switches_it_in() {
+        let new = NewGame {
+            mode: Some("tag".into()),
+            second: Some("hookclaw".into()),
+            ..flat(3)
+        };
+        let mut session = Session::new(&new, &maps()).unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert_eq!(view.mode, Mode::Tag);
+        let can_switch = |view: &View| view.options.as_ref().is_some_and(|options| options.can_switch);
+        assert!(view.your_turn && can_switch(&view), "{}", view.status);
+        let hookclaw = MobileKind::Hookclaw.tuning();
+        let bench = view.players[0].sitting_out.clone().unwrap();
+        assert_eq!((bench.mobile, bench.hp, bench.max_hp), (hookclaw.name, hookclaw.hp.value / 2, hookclaw.hp.value), "on half HP");
+        assert!(view.players[1].sitting_out.is_some(), "the bots bring two as well");
+        assert!(rules().contains("In Tag each player brings two mobiles"), "the rules say how");
+
+        session.act(Action::Switch).unwrap();
+        let view = session.view(&maps()).unwrap();
+        assert_eq!(view.players[0].mobile, hookclaw.name);
+        assert_eq!(view.players[0].sitting_out.as_ref().map(|bench| bench.mobile), Some(MobileKind::Coilback.tuning().name));
+        assert!(view.happened.iter().any(|line| line == "You switched in Hookclaw."), "{:?}", view.happened);
+        assert!(view.your_turn && !can_switch(&view), "still your turn, but once a turn");
+        assert!(session.act(Action::Switch).is_err());
+
+        let solo = Session::new(&flat(3), &maps()).unwrap().view(&maps()).unwrap();
+        assert!(!can_switch(&solo) && solo.players[0].sitting_out.is_none());
+        let bad = NewGame { second: Some("tank".into()), ..new };
+        assert!(Session::new(&bad, &maps()).is_err());
+    }
+
+    #[test]
     fn in_score_the_view_counts_lives_and_a_dead_agent_picks_where_to_drop_back_in() {
         // Ground from y = 700, with a shaft off the map just right of each spawn.
         let spawns = [200, 900, 1500, 2200];
@@ -1413,9 +1489,9 @@ mod unit {
     fn modes_go_by_name_and_only_built_ones_play() {
         assert_eq!(mode(" score ").unwrap(), Mode::Score);
         assert_eq!(mode("SOLO").unwrap(), Mode::Solo);
-        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo or score");
-        let tag = NewGame { mode: Some("tag".into()), ..flat(1) };
-        assert_eq!(Session::new(&tag, &maps()).unwrap_err().to_string(), "Tag mode isn't built yet: rooms play Solo or Score");
+        assert_eq!(mode("chess").unwrap_err().to_string(), "\"chess\" isn't a mode: solo, score or tag");
+        let jewel = NewGame { mode: Some("jewel".into()), ..flat(1) };
+        assert_eq!(Session::new(&jewel, &maps()).unwrap_err().to_string(), "Jewel mode isn't built yet: rooms play Solo, Score or Tag");
         assert_eq!(Session::new(&flat(1), &maps()).unwrap().game().mode(), Mode::Solo, "Solo when left out");
     }
 

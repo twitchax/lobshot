@@ -15,14 +15,16 @@
         "mobile": "Lodestoad",
         "spawn_x": 280,
         "facing": "Right",
-        "items": []
+        "items": [],
+        "second": null
       },
       {
         "team": "B",
         "mobile": "Coilback",
         "spawn_x": 1300,
         "facing": "Left",
-        "items": []
+        "items": [],
+        "second": null
       }
     ],
     "order": [
