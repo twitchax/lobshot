@@ -31,7 +31,7 @@ Then open http://localhost:8080. Rooms live in memory: a restart ends the games 
 cargo make dev       # a quick client bundle, then serve it on http://127.0.0.1:8080
 cargo make art       # render assets/ (SVG art, plus the sounds) into assets/gen/; review sheets in target/art-preview/
 cargo make dist      # the release bundle in dist/, precompressed
-cargo make ci        # fmt-check + clippy (native and wasm32) + nextest + wasm32 replays: the gate CI runs
+cargo make ci        # fmt-check + clippy (native and wasm32) + nextest + wasm32 replays + the balance gate: the gate CI runs
 cargo make browser   # the browser smoke test: the release bundle in headless Chrome
 cargo make uat       # ci + the release bundle + the #[ignore]d slow suites, the browser test included
 cargo make balance   # every pair of mobiles, 1v1 between bots, on every map: the win-rate matrix

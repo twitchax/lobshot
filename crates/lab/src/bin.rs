@@ -22,6 +22,7 @@ use lobshot_assets::{MAPS, maps::Maps};
 use lobshot_lab::{
     agent::{self, NewGame, Session, TraceRequest},
     balance::{self, LevelName, Shard, Spec},
+    gate,
     mcp::Server,
     report::{BAND, Band, Report},
 };
@@ -163,7 +164,8 @@ struct BalanceArgs {
     /// Print the report as JSON instead of text.
     #[arg(long)]
     json: bool,
-    /// Fail when a matchup's win rate is outside `--band`.
+    /// Fail when a matchup's win rate is outside `--band`, unless it is a known one
+    /// (`gate::KNOWN`) no worse than measured.
     #[arg(long)]
     gate: bool,
     /// The gate's band, in percent.
@@ -255,8 +257,17 @@ fn balance(args: &BalanceArgs) -> Void {
     } else {
         print!("{}", report.to_text(args.band.0));
     }
-    let outside = report.outside(args.band.0).len();
-    ensure!(!args.gate || outside == 0, "the balance gate failed: {outside} matchups outside the band");
+    if args.gate {
+        let verdict = gate::verdict(&report, args.band.0, gate::KNOWN);
+        // JSON keeps stdout to the report alone.
+        if args.json {
+            eprint!("{}", verdict.to_text(args.band.0));
+        } else {
+            print!("\n{}", verdict.to_text(args.band.0));
+        }
+        let failing = verdict.failures.len();
+        ensure!(verdict.passed(), "the balance gate failed: {failing} matchups outside the band (and not known, or worse than known)");
+    }
     Ok(())
 }
 
