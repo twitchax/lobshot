@@ -81,6 +81,41 @@ pub fn step(terrain: &Terrain, from: Footing, facing: Facing, climb: i32) -> Ste
     Step::Fell(settle(terrain, Footing { x, y: from.y }))
 }
 
+/// What a mobile slid to an edge does there (`slide`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Edge {
+    /// Stops on the very edge.
+    Holds,
+    /// Goes over it, falls, and slides on from where it lands.
+    Drops,
+}
+
+/// Slides a mobile from `from` up to `steps` 1 px steps in `direction`, by the walking rules
+/// (`step`: up its `climb`, down `DROP_PX`, stopped by walls and the map's sides) but carried, not
+/// walking, so it spends no move budget: pulled or pushed (Lodestoad's shots). At an edge it holds,
+/// or drops (`edge`): it goes over, falls to the ground below and slides on from there, a step
+/// spent on the fall. Returns the footings it passes through, a step each, with the point in the
+/// air just over each edge it goes over, before where it lands. One that falls off the map ends at
+/// that point, for `settle` to find no ground under.
+#[must_use]
+pub fn slide(terrain: &Terrain, from: Footing, direction: Facing, climb: i32, steps: u32, edge: Edge) -> Vec<Footing> {
+    let mut path = Vec::new();
+    let mut at = from;
+    for _ in 0..steps {
+        match step(terrain, at, direction, climb) {
+            Step::Walked(footing) => at = footing,
+            Step::Fell(landing) if edge == Edge::Drops => {
+                path.push(Footing { x: at.x + direction.sign(), y: at.y });
+                let Landing::On(footing) = landing else { break };
+                at = footing;
+            }
+            Step::Blocked | Step::Fell(_) => break,
+        }
+        path.push(at);
+    }
+    path
+}
+
 /// The ground's slope under a mobile, from the surface heights under its two probes (radians,
 /// counterclockwise on screen). A probe that finds no ground nearby reads the mobile's own height.
 #[must_use]
@@ -160,6 +195,45 @@ mod unit {
 
         let edge = terrain(50, 100, |_| 60);
         assert_eq!(step(&edge, Footing { x: 49, y: 60 }, Facing::Right, CLIMB), Step::Blocked, "the map's side is a wall");
+    }
+
+    #[test]
+    fn a_slide_follows_the_ground_and_stops_at_a_wall() {
+        // A 6 px step up at x = 13, a 5 px step down at x = 15, a wall at x = 20.
+        let ground = terrain(50, 100, |x| match x {
+            13 | 14 => 54,
+            15..=19 => 59,
+            20 => 30,
+            _ => 60,
+        });
+        let path = slide(&ground, Footing { x: 10, y: 60 }, Facing::Right, CLIMB, 40, Edge::Drops);
+        let expected: Vec<Footing> = [(11, 60), (12, 60), (13, 54), (14, 54), (15, 59), (16, 59), (17, 59), (18, 59), (19, 59)]
+            .map(|(x, y)| Footing { x, y })
+            .to_vec();
+        assert_eq!(path, expected);
+        assert_eq!(slide(&ground, Footing { x: 10, y: 60 }, Facing::Right, CLIMB, 2, Edge::Drops).len(), 2, "no farther than its steps");
+        assert_eq!(
+            slide(&ground, Footing { x: 10, y: 60 }, Facing::Right, 5, 40, Edge::Drops).len(),
+            2,
+            "a poor climber stops at the step up"
+        );
+    }
+
+    #[test]
+    fn a_slide_holds_at_an_edge_or_drops_over_it_and_slides_on() {
+        let cliff = terrain(50, 100, |x| if x >= 13 { 90 } else { 60 });
+        let start = Footing { x: 10, y: 60 };
+        let held = slide(&cliff, start, Facing::Right, CLIMB, 10, Edge::Holds);
+        assert_eq!(held.last(), Some(&Footing { x: 12, y: 60 }), "on the very edge");
+        let dropped = slide(&cliff, start, Facing::Right, CLIMB, 5, Edge::Drops);
+        let expected: Vec<Footing> = [(11, 60), (12, 60), (13, 60), (13, 90), (14, 90), (15, 90)].map(|(x, y)| Footing { x, y }).to_vec();
+        assert_eq!(dropped, expected, "over the edge, in the air, then down and on");
+        assert_eq!(slide(&cliff, start, Facing::Left, CLIMB, 0, Edge::Drops), [], "no steps, no slide");
+
+        let pit = terrain(50, 100, |x| if x == 13 { 100 } else { 60 });
+        let fallen = slide(&pit, start, Facing::Right, CLIMB, 10, Edge::Drops);
+        assert_eq!(fallen.last(), Some(&Footing { x: 13, y: 60 }), "over the pit, with no ground below");
+        assert_eq!(settle(&pit, Footing { x: 13, y: 60 }), Landing::OffMap);
     }
 
     #[test]

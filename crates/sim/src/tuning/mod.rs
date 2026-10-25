@@ -16,6 +16,7 @@ pub mod jewels;
 pub mod kitewyrm;
 pub mod lanternwing;
 pub mod lensowl;
+pub mod lodestoad;
 pub mod marblemole;
 pub mod modes;
 pub mod needlemouse;

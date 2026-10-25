@@ -1,0 +1,32 @@
+// Lodestoad: a toad driving a little yellow farm tractor wound with copper coil, a big red
+// horseshoe magnet on a post on its hood. Its cutout rig: the art only.
+//
+// World pixels. Body frame: origin = the center of the ground contact between the drive wheel and
+// the front wheel, +x = facing, +y = down; facing left mirrors x. Every part SVG puts its pivot at
+// its own origin, so `at` is where that pivot lands in the body frame, and `cargo xtask art`
+// renders each part with its pivot at the image's center (lobshot_assets::ART_SCALE pixels per
+// world pixel).
+//
+// Gameplay geometry (hitbox, ground probes, aim range, cannon pivot and barrel length) lives in
+// sim::tuning::lodestoad; `cargo xtask art` refuses a rig whose cannon disagrees with it.
+MobileRig(
+    name: "Lodestoad",
+    parts: [
+        // Drawn in z order, lowest first. spin: rolls as it moves; aim: turns with the cannon.
+        // The wheels sit over the frame, the drive wheel under its fender's arch.
+        (id: "body",        file: "body.svg",        at: (0.0, 0.0),    z: 2),
+        (id: "wheel_rear",  file: "wheel_big.svg",   at: (-18.0, -14.0), z: 3, spin: true),
+        (id: "wheel_front", file: "wheel_small.svg", at: (22.0, -8.0),   z: 3, spin: true),
+        // The magnet swivels on its post on the hood, ahead of the toad.
+        (id: "cannon",      file: "cannon.svg",      at: (20.0, -38.0), z: 4, aim: true),
+    ],
+    cannon: (
+        part: "cannon",
+        // Where shots leave, in the cannon's frame at aim 0 (pointing +x): the spark between the
+        // poles, one barrel length (sim::tuning) from the pivot.
+        muzzle: (26.0, 0.0),
+    ),
+    // Riders are cosmetic and swappable; a rider's origin is its seat. The rider sits on the pan
+    // seat over the drive wheel, behind the toad.
+    rider_socket: (at: (-21.0, -33.0), z: 5),
+)

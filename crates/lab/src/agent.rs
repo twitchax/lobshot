@@ -989,6 +989,7 @@ fn effect_line(names: &Names<'_>, effect: &Effect) -> String {
         Effect::Teleported { seat, to, .. } => format!(" {} teleported to x={}.", names.who(*seat), to.x),
         Effect::Swapped { seat, with } => format!(" {} swapped places with {}.", names.who(*seat), names.who(*with)),
         Effect::Switched { seat, mobile, .. } => format!(" {} switched in {}.", names.who(*seat), mobile.tuning().name),
+        Effect::Slid { seat, path, .. } => path.last().map_or_else(String::new, |to| format!(" {} slid to x={}.", names.who(*seat), to.x)),
         Effect::WindChanged(wind) => format!(" The wind is now {} toward {} degrees.", wind.strength, wind.direction),
         Effect::WeatherChanged { columns, now, .. } => match now {
             Some(WeatherKind::Lock) => " Lock came up: no items, and no shields regenerate.".to_owned(),
@@ -1238,6 +1239,15 @@ fn about(mobile: MobileKind) -> String {
                 SS_FUSE_SECONDS.value
             )
         }
+        MobileKind::Lodestoad => format!(
+            "A toad on a magnet tractor, with a shield. S1 is an electric orb whose discharge deals a flat {} to every mobile within {:.0} px of its blast, once a turn even with Dual. S2 is a magnet ball that flies through mobiles to the ground, digs a hole and pulls every mobile whose middle is within {:.0} px across and {:.0} px up or down of it (yours and you too) toward that spot along the ground: Mechanical ones all the way, Shield ones half, Bionic ones a quarter. It drags them over edges and into its hole (two pulled in meet at its bottom), and off the map if nothing is below, and pulls in mines too; a floating mobile isn't pulled. It hurts most bursting at a mobile's feet. SS is a pyramid that pushes every mobile whose middle is within {:.0} px across away along the ground to {:.0} px from where it struck (Bionic ones a quarter as far), hurting most at its center and more each one a wall or a cliff's edge stops short; it never pushes anyone over an edge. Walls stop both.",
+            tuning::lodestoad::SPLASH.value,
+            tuning::lodestoad::SPLASH_REACH.value,
+            tuning::lodestoad::PULL_REACH.value.0,
+            tuning::lodestoad::PULL_REACH.value.1,
+            tuning::lodestoad::PUSH_REACH.value.0,
+            tuning::lodestoad::PUSH_TO.value
+        ),
     }
 }
 

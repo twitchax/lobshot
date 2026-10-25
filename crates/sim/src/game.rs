@@ -30,8 +30,8 @@ use crate::{
     terrain::{DirtyRect, Terrain},
     tuning::{
         ArmorClass, BALM_BIONIC_FACTOR, BALM_HEAL_PERCENT, LOCK_SS_RECHARGE, MAX_FLIGHT_SECONDS, MobileTuning, SS_LOCK_TURNS, ShotTuning, TORNADO_HOLD_SECONDS, TURN_TIME_LIMIT, augerdillo, coilback,
-        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, lensowl, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter, thistleback,
-        tinbadger, tuskrack,
+        drops::FALL_TURNS, drops::RECHARGE_ROUNDS, flarecrow, frostfin, herdhound, hookclaw, kitewyrm, lanternwing, lensowl, lodestoad, marblemole, needlemouse, sparkhorn, spoutpot, sudsotter,
+        thistleback, tinbadger, tuskrack,
     },
     turn::{self, Clock, Ending},
     units::{Centis, Facing, Power, TICKS_PER_SECOND, Vec2, Wind, ticks},
@@ -72,11 +72,12 @@ pub enum MobileKind {
     Lensowl,
     Needlemouse,
     Tinbadger,
+    Lodestoad,
 }
 
 impl MobileKind {
     /// Every mobile, in a fixed order.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Coilback,
         Self::Lanternwing,
         Self::Hookclaw,
@@ -94,6 +95,7 @@ impl MobileKind {
         Self::Lensowl,
         Self::Needlemouse,
         Self::Tinbadger,
+        Self::Lodestoad,
     ];
 
     /// The room any mobile needs at a spawn column, in whole pixels: how far its hitbox reaches to
@@ -132,7 +134,8 @@ impl MobileKind {
             | Self::Kitewyrm
             | Self::Flarecrow
             | Self::Augerdillo
-            | Self::Tinbadger => return None,
+            | Self::Tinbadger
+            | Self::Lodestoad => return None,
         };
         Some(foot - Vec2::new(0.0, height))
     }
@@ -157,6 +160,7 @@ impl MobileKind {
             Self::Lensowl => &lensowl::MOBILE,
             Self::Needlemouse => &needlemouse::MOBILE,
             Self::Tinbadger => &tinbadger::MOBILE,
+            Self::Lodestoad => &lodestoad::MOBILE,
         }
     }
 
@@ -723,6 +727,17 @@ pub enum Effect {
     JewelTurned {
         id: JewelId,
         kind: JewelKind,
+    },
+    /// Lodestoad's magnet pulled `seat` toward where it struck, or its pyramid pushed it away:
+    /// it slid along the ground from stage tick `from` to `to`, through `path` (a footing a step,
+    /// at an even pace), and stands at its last. One dragged over an edge falls on the way (the
+    /// path has the point in the air over the edge, then where it lands) and slides on; one dragged
+    /// off the map ends in the air over the edge, and its bunge follows.
+    Slid {
+        seat: u8,
+        path: Vec<Footing>,
+        from: u32,
+        to: u32,
     },
 }
 

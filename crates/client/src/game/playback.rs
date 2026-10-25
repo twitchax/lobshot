@@ -117,6 +117,12 @@ enum Cue {
         seat: u8,
         to: Footing,
     },
+    /// Lodestoad's magnet or pyramid sliding a mobile along the ground, through `path`.
+    Slide {
+        seat: u8,
+        path: Vec<SimVec2>,
+        seconds: f32,
+    },
     Turn {
         seat: u8,
     },
@@ -257,6 +263,17 @@ fn jewel_cues(effect: &Effect, at: f32, cues: &mut Vec<(f32, jewels::Cue)>) {
     }
 }
 
+impl Cue {
+    /// A mobile sliding through `path` from stage tick `from` to `to` (`Effect::Slid`).
+    fn slide(seat: u8, path: &[Footing], from: u32, to: u32) -> Self {
+        Self::Slide {
+            seat,
+            path: path.iter().map(|footing| footing.world()).collect(),
+            seconds: ticks(to.saturating_sub(from)),
+        }
+    }
+}
+
 /// How one strand of a helix winds about its path, for `ballistics::helix_point`.
 #[derive(Debug, Clone, Copy)]
 struct Winding {
@@ -289,19 +306,63 @@ struct Flyer {
     entity: Entity,
 }
 
-/// A mobile moving in a scene, over `FALL_SECONDS`: falling (accelerating down), or gliding to
-/// where a teammate stood (a swap).
+/// A mobile moving in a scene: over `FALL_SECONDS`, falling (accelerating down) or gliding to
+/// where a teammate stood (a swap), or sliding along the ground through a path at an even pace
+/// (Lodestoad's pull and push).
 struct Move {
     seat: u8,
-    from: SimVec2,
-    to: SimVec2,
+    /// Where it goes, from where it was: a fall or a glide has two points.
+    path: Vec<SimVec2>,
     started: f32,
+    seconds: f32,
     fall: bool,
 }
 
 impl Move {
     fn new(seat: u8, from: SimVec2, to: SimVec2, started: f32, fall: bool) -> Self {
-        Self { seat, from, to, started, fall }
+        Self {
+            seat,
+            path: vec![from, to],
+            started,
+            seconds: FALL_SECONDS,
+            fall,
+        }
+    }
+
+    /// A slide from `from` through `path` over `seconds`.
+    fn slide(seat: u8, from: SimVec2, path: &[SimVec2], started: f32, seconds: f32) -> Self {
+        Self {
+            seat,
+            path: std::iter::once(from).chain(path.iter().copied()).collect(),
+            started,
+            seconds,
+            fall: false,
+        }
+    }
+
+    /// Where it is at `now`: falls accelerate, like a drop; glides and slides keep an even pace.
+    fn at(&self, now: f32) -> SimVec2 {
+        let t = if self.seconds > 0.0 {
+            f64::from(((now - self.started) / self.seconds).clamp(0.0, 1.0))
+        } else {
+            1.0
+        };
+        let (Some(&first), Some(&last)) = (self.path.first(), self.path.last()) else {
+            return SimVec2::ZERO;
+        };
+        if self.fall {
+            return SimVec2::new(first.x + (last.x - first.x) * t, first.y + (last.y - first.y) * t * t);
+        }
+        // A path is a few hundred points at most: exact as f64, and its index back in a usize.
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (index, part) = {
+            let along = t * (self.path.len() - 1) as f64;
+            (along.floor() as usize, along.fract())
+        };
+        match (self.path.get(index), self.path.get(index + 1)) {
+            (Some(&a), Some(&b)) => a + (b - a) * part,
+            _ => last,
+        }
     }
 }
 
@@ -443,11 +504,15 @@ const GUIDE: Color = Color::srgb_u8(0x7c, 0xf2, 0x9a);
 /// Needlemouse's: a bead of red thread, and its pins, steel.
 const THREAD: Color = Color::srgb_u8(0xe8, 0x43, 0x4f);
 const PIN: Color = Color::srgb_u8(0xe6, 0xea, 0xf4);
+/// Lodestoad's: electric blue orbs, and the SS's green pyramid (SW-mob).
+const SPARK: Color = Color::srgb_u8(0x8f, 0xf0, 0xff);
+const PYRAMID: Color = Color::srgb_u8(0x5e, 0xa8, 0x48);
 
 impl Shooter {
     /// Its projectiles' color: Spoutpot's are water, Kitewyrm's and Flarecrow's burn,
     /// Lanternwing's strands glow, Augerdillo's SS is a curled armadillo, Lensowl's tracers shine,
-    /// Needlemouse's are thread red, the rest are dark.
+    /// Needlemouse's are thread red, Lodestoad's orbs electric and its SS pyramid green, the rest
+    /// are dark.
     fn color(self, strand: bool) -> Color {
         match (self.mobile, self.shot) {
             (Some(MobileKind::Spoutpot), _) => WATER,
@@ -456,6 +521,8 @@ impl Shooter {
             (Some(MobileKind::Lensowl), Some(Shot::Ss)) => GUIDE,
             (Some(MobileKind::Lensowl), _) => STAR,
             (Some(MobileKind::Needlemouse), _) => THREAD,
+            (Some(MobileKind::Lodestoad), Some(Shot::Ss)) => PYRAMID,
+            (Some(MobileKind::Lodestoad), _) => SPARK,
             _ if strand => GLOW,
             _ => SHELL,
         }
@@ -648,7 +715,7 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
                 cues.push((at, Cue::Sound(Sound::Death)));
             }
         }
-        Effect::Fell { .. } | Effect::Teleported { .. } | Effect::Respawned { .. } | Effect::Swapped { .. } => moving(effect, at, cues),
+        Effect::Fell { .. } | Effect::Slid { .. } | Effect::Teleported { .. } | Effect::Respawned { .. } | Effect::Swapped { .. } => moving(effect, at, cues),
         Effect::ItemUsed { seat, item, .. } => {
             cues.push((at, Cue::Item { seat, item }));
             cues.push((at, Cue::Sound(Sound::Click)));
@@ -705,13 +772,20 @@ fn cue(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
     }
 }
 
-/// The cues of an effect that moves a mobile: falling, teleporting, dropping back in, or trading
-/// places.
+/// The cues of an effect that moves a mobile: falling, sliding, teleporting, dropping back in, or
+/// trading places.
 fn moving(effect: Effect, at: f32, cues: &mut Vec<(f32, Cue)>) {
     match effect {
         Effect::Fell { seat, to } => {
             cues.push((at, Cue::Fall { seat, to }));
             cues.push((at + FALL_SECONDS, Cue::Sound(Sound::Land)));
+        }
+        // Dust kicked up as it starts to slide.
+        Effect::Slid { seat, path, from, to } => {
+            if let Some(first) = path.first() {
+                cues.push((at, Cue::Bounce { at: first.world() }));
+            }
+            cues.push((at, Cue::slide(seat, &path, from, to)));
         }
         Effect::Teleported { seat, to, .. } => {
             cues.push((at, Cue::Teleport { seat, to }));
@@ -875,10 +949,7 @@ fn play(
         scene.next_jewel += 1;
     }
     for change in &scene.motion.moves {
-        let t = f64::from(((now - change.started) / FALL_SECONDS).clamp(0.0, 1.0));
-        // Falls accelerate, like a drop; swaps glide.
-        let down = if change.fall { t * t } else { t };
-        let foot = SimVec2::new(change.from.x + (change.to.x - change.from.x) * t, change.from.y + (change.to.y - change.from.y) * down);
+        let foot = change.at(now);
         adjust(&mut views, change.seat, |shown| shown.foot = foot);
     }
     scene.motion.descents.retain(|descent| descend(descent, now, &mut views, &mut hands));
@@ -963,12 +1034,17 @@ fn descend(descent: &Descent, now: f32, views: &mut Query<(&MobileView, &mut Sho
     false
 }
 
-/// Sets a mobile moving at `now`: falling, trading places, or dropping back in.
+/// Sets a mobile moving at `now`: falling, sliding, trading places, or dropping back in.
 fn set_moving(cue: &Cue, now: f32, motion: &mut Motion, views: &Query<(&MobileView, &mut Shown)>) {
     match *cue {
         Cue::Fall { seat, to } => {
             if let Some(from) = foot_of(views, seat) {
                 motion.moves.push(Move::new(seat, from, to.world(), now, true));
+            }
+        }
+        Cue::Slide { seat, ref path, seconds } => {
+            if let Some(from) = foot_of(views, seat) {
+                motion.moves.push(Move::slide(seat, from, path, now, seconds));
             }
         }
         Cue::Swap { seat, with } => {
@@ -1041,7 +1117,7 @@ fn run(cue: &Cue, now: f32, motion: &mut Motion, dot: &Dot, views: &mut Query<(&
             }
         }
         Cue::Die { seat } => adjust(views, seat, |shown| shown.alive = false),
-        Cue::Fall { .. } | Cue::Swap { .. } | Cue::Respawn { .. } => set_moving(cue, now, motion, views),
+        Cue::Fall { .. } | Cue::Slide { .. } | Cue::Swap { .. } | Cue::Respawn { .. } => set_moving(cue, now, motion, views),
         Cue::Teleport { seat, to } => {
             let flash = Color::srgb_u8(0x7f, 0xf0, 0xff);
             if let Some(from) = foot_of(views, seat) {
@@ -1469,6 +1545,17 @@ mod unit {
     }
 
     #[test]
+    fn lodestoads_orbs_are_electric_and_its_pyramid_green() {
+        let shooter = |shot| Shooter {
+            mobile: Some(MobileKind::Lodestoad),
+            shot: Some(shot),
+        };
+        assert_eq!(shooter(Shot::S1).color(false), SPARK);
+        assert_eq!(shooter(Shot::S2).color(false), SPARK);
+        assert_eq!(shooter(Shot::Ss).color(false), PYRAMID);
+    }
+
+    #[test]
     fn a_rocket_fired_late_waits_unseen_and_sounds_as_it_leaves() {
         let second = TICKS_PER_SECOND;
         let legs = [leg(0, second, second / 2)];
@@ -1491,6 +1578,40 @@ mod unit {
         let carried = [leg(second, 2 * second, 0)];
         assert_eq!(flyer_at(&carried, None, 0.5), None);
         assert_eq!(flyer_at(&carried, None, 1.5), Some(carried[0].flight.at(3 * second / 2)));
+    }
+
+    #[test]
+    fn a_slide_follows_its_path_at_an_even_pace_and_a_fall_accelerates() {
+        let path = [SimVec2::new(11.0, 20.0), SimVec2::new(12.0, 18.0), SimVec2::new(13.0, 18.0)];
+        // Times in f32 seconds: close, not exact.
+        let near = |a: SimVec2, b: SimVec2| a.distance(b) < 1e-4;
+        let slide = Move::slide(1, SimVec2::new(10.0, 20.0), &path, 2.0, 0.6);
+        assert!(near(slide.at(1.0), SimVec2::new(10.0, 20.0)), "where it was, until it starts");
+        assert!(near(slide.at(2.2), SimVec2::new(11.0, 20.0)), "a step a third of the way");
+        assert!(near(slide.at(2.3), SimVec2::new(11.5, 19.0)), "between two steps: {:?}", slide.at(2.3));
+        assert!(near(slide.at(9.0), SimVec2::new(13.0, 18.0)), "and stops at the last");
+        let fall = Move::new(1, SimVec2::new(0.0, 0.0), SimVec2::new(10.0, 100.0), 0.0, true);
+        assert!(near(fall.at(FALL_SECONDS / 2.0), SimVec2::new(5.0, 25.0)), "{:?}", fall.at(FALL_SECONDS / 2.0));
+    }
+
+    #[test]
+    fn a_slide_kicks_up_dust_and_glides_for_its_ticks() {
+        let mut cues = Vec::new();
+        let path = vec![Footing { x: 11, y: 20 }, Footing { x: 12, y: 20 }];
+        cue(
+            Effect::Slid {
+                seat: 1,
+                path,
+                from: 0,
+                to: TICKS_PER_SECOND / 4,
+            },
+            1.0,
+            &mut cues,
+        );
+        assert!(
+            matches!(cues[..], [(dust, Cue::Bounce { .. }), (glide, Cue::Slide { seat: 1, seconds, .. })] if dust == 1.0 && glide == 1.0 && seconds == 0.25),
+            "dust, then the slide"
+        );
     }
 
     #[test]

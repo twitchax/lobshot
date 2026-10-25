@@ -225,9 +225,8 @@ pub(crate) fn set_off(game: &mut Game, at: Vec2, reach: f64, tick: u32, effects:
 
 /// Drags every mine within `reach` of `at` to the ground under `at`, at stage tick `tick`: J.D.'s S2
 /// "sucks in surrounding mobiles, jewels and also mini-Raons" (WP06). One dragged under a mobile's
-/// middle goes off there; one with no ground under `at` is gone.
-// Lodestoad's S2 (J.D.'s) calls it once it lands; until then only the tests do.
-#[cfg_attr(not(test), expect(dead_code, reason = "Lodestoad's S2 pull calls it once it merges"))]
+/// middle goes off there; one with no ground under `at` is gone. Lodestoad's S2 (J.D.'s) calls it
+/// once its pull has moved the mobiles.
 pub(crate) fn drag(game: &mut Game, at: Vec2, reach: f64, tick: u32, effects: &mut Vec<Effect>) {
     // The pull's center is on the map, in i32 range.
     #[allow(clippy::cast_possible_truncation)]

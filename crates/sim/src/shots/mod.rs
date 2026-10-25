@@ -20,6 +20,7 @@ mod hookclaw;
 mod kitewyrm;
 mod lanternwing;
 mod lensowl;
+mod lodestoad;
 mod marblemole;
 mod needlemouse;
 mod orbit;
@@ -217,6 +218,7 @@ pub(crate) fn fire(game: &mut Game, salvo: &mut Salvo, shot: Shot, aim: i16, pow
         MobileKind::Lensowl => lensowl::fire(game, &gun, shot, effects),
         MobileKind::Needlemouse => needlemouse::fire(game, &gun, shot, effects),
         MobileKind::Tinbadger => tinbadger::fire(game, &gun, shot, effects),
+        MobileKind::Lodestoad => lodestoad::fire(game, &mut gun, shot, effects),
     }
 }
 
@@ -244,7 +246,8 @@ pub(crate) fn aim_point(game: &Game, seat: u8, shot: Shot, flight: Flight, targe
         | MobileKind::Herdhound
         | MobileKind::Thistleback
         | MobileKind::Kitewyrm
-        | MobileKind::Flarecrow => None,
+        | MobileKind::Flarecrow
+        | MobileKind::Lodestoad => None,
         MobileKind::Sudsotter => Some(sudsotter::aim_point(game, seat, shot, flight, target)),
         MobileKind::Augerdillo => augerdillo::aim_point(game, seat, shot, flight),
         MobileKind::Lensowl => Some(lensowl::aim_point(game, seat, shot, flight)),

@@ -330,8 +330,8 @@ pub fn at(game: &Game, point: Vec2) -> bool {
 
 /// Drags every jewel within `reach` of `at` to the ground under `at`, as its mobiles fall: J.D.'s
 /// S2 "sucks in surrounding mobiles, jewels and also mini-Raons" (WP06). One with no ground under
-/// `at` falls out of the map (`fell_out`).
-#[cfg_attr(not(test), expect(dead_code, reason = "Lodestoad's S2 pull calls it beside mines::drag once it merges"))]
+/// `at` falls out of the map (`fell_out`). Lodestoad's S2 (J.D.'s) calls it once its pull has moved
+/// the mobiles.
 pub(crate) fn drag(game: &mut Game, at: Vec2, reach: f64, effects: &mut Vec<Effect>) {
     // The pull's center is on the map, in i32 range.
     #[allow(clippy::cast_possible_truncation)]
